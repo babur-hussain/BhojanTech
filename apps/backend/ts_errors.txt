@@ -1,0 +1,19 @@
+src/controllers/ai.controller.ts(2,30): error TS2307: Cannot find module 'uuid' or its corresponding type declarations.
+src/controllers/ai.controller.ts(21,50): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/ai.controller.ts(83,51): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/ai.controller.ts(84,50): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/ai.controller.ts(105,50): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/analytics.controller.ts(71,26): error TS2339: Property 'createdAt' does not exist on type 'Document<unknown, {}, IInvoice, {}, {}> & IInvoice & Required<{ _id: ObjectId; }> & { __v: number; }'.
+src/controllers/analytics.controller.ts(108,30): error TS2339: Property 'createdAt' does not exist on type 'Document<unknown, {}, IInvoice, {}, {}> & IInvoice & Required<{ _id: ObjectId; }> & { __v: number; }'.
+src/controllers/analytics.controller.ts(168,27): error TS2339: Property 'createdAt' does not exist on type 'Document<unknown, {}, IInvoice, {}, {}> & IInvoice & Required<{ _id: ObjectId; }> & { __v: number; }'.
+src/controllers/analytics.controller.ts(218,25): error TS2339: Property 'createdAt' does not exist on type 'Document<unknown, {}, IInvoice, {}, {}> & IInvoice & Required<{ _id: ObjectId; }> & { __v: number; }'.
+src/controllers/auth.controller.ts(6,8): error TS2613: Module '"/Users/baburhussain/Documents/RestaurantSystem/apps/backend/src/config/redis"' has no default export. Did you mean to use 'import { redis } from "/Users/baburhussain/Documents/RestaurantSystem/apps/backend/src/config/redis"' instead?
+src/controllers/billing.controller.ts(35,14): error TS2339: Property 'toObject' does not exist on type 'IOrderItem'.
+src/controllers/billing.controller.ts(112,21): error TS2339: Property 'toObject' does not exist on type 'IOrderItem'.
+src/controllers/inventory.controller.ts(128,32): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+src/controllers/inventory.controller.ts(264,20): error TS2339: Property 'createdAt' does not exist on type 'Document<unknown, {}, IWastageLog, {}, {}> & IWastageLog & Required<{ _id: ObjectId; }> & { __v: number; }'.

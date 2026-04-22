@@ -1,0 +1,13 @@
+{
+  "name": "@restaurant/tsconfig",
+  "version": "1.0.0",
+  "private": true,
+  "main": "tsconfig.json",
+  "files": [
+    "tsconfig.json"
+  ],
+  "exports": {
+    ".": "./tsconfig.json",
+    "./package.json": "./package.json"
+  }
+}

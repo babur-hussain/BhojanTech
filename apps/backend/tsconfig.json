@@ -1,0 +1,10 @@
+{
+  "extends": "@restaurant/tsconfig",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "commonjs"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

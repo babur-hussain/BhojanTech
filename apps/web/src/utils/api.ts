@@ -1,0 +1,34 @@
+import axios from 'axios';
+
+/**
+ * Pre-configured Axios instance for the backend REST API.
+ * Base URL points to the Express backend (port 8080).
+ * A request interceptor automatically attaches the stored JWT token
+ * as a Bearer header on every outgoing request.
+ */
+export const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Attach JWT token from localStorage on every request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Global response error handler — logs 401s prominently
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      console.warn('[api] Unauthorized — token may be expired.');
+    }
+    return Promise.reject(error);
+  }
+);
