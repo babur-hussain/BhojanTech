@@ -1,36 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { EODSummary } from '@restaurant/types';
 import { TrendingUp, Banknote, CreditCard, Smartphone, Receipt, Tag, Download } from 'lucide-react';
-
-const MOCK_EOD: EODSummary = {
-  date: new Date().toISOString().slice(0, 10),
-  restaurantId: 'r1',
-  totalOrders: 47,
-  totalRevenue: 84500,
-  cashCollected: 32000,
-  cardCollected: 28500,
-  upiCollected: 24000,
-  totalGSTCollected: 4023.81,
-  cgstCollected: 2011.90,
-  sgstCollected: 2011.91,
-  totalDiscounts: 1200,
-  invoices: [
-    { invoiceNumber: 'INV-20260421-0001', grandTotal: 1140, mode: 'CASH' },
-    { invoiceNumber: 'INV-20260421-0002', grandTotal: 2380, mode: 'UPI' },
-    { invoiceNumber: 'INV-20260421-0003', grandTotal: 850,  mode: 'CARD' },
-  ],
-};
+import { api } from '../utils/api';
 
 export default function EODReport() {
   const [date, setDate]     = useState(new Date().toISOString().slice(0, 10));
-  const [eod, setEOD]       = useState<EODSummary>(MOCK_EOD);
+  const [eod, setEOD]       = useState<EODSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetch_ = async () => {
     setLoading(true);
-    // Real: const r = await fetch(`/api/billing/eod?date=${date}`); setEOD(await r.json());
-    setTimeout(() => { setEOD({ ...MOCK_EOD, date }); setLoading(false); }, 500);
+    try {
+      const res = await api.get(`/billing/eod?date=${date}`);
+      setEOD(res.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => { fetch_(); }, []);
+
+  if (!eod) {
+    return <div className="flex justify-center items-center h-96 text-gray-400">Loading EOD data…</div>;
+  }
 
   const pct = (v: number) => eod.totalRevenue ? ((v / eod.totalRevenue) * 100).toFixed(1) : '0';
 

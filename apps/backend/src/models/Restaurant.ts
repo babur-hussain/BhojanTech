@@ -7,6 +7,8 @@ export interface IRestaurant extends Document {
   gstin?: string;
   fssaiNumber?: string;
   logoUrl?: string;
+  upiId?: string;
+  printerName?: string;
 }
 
 const RestaurantSchema: Schema = new Schema(
@@ -17,6 +19,8 @@ const RestaurantSchema: Schema = new Schema(
     gstin: { type: String },
     fssaiNumber: { type: String },
     logoUrl: { type: String },
+    upiId: { type: String },
+    printerName: { type: String },
   },
   { timestamps: true }
 );

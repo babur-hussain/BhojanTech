@@ -6,6 +6,7 @@ import { Attendance } from '../models/Attendance';
 import { WeeklySchedule } from '../models/WeeklySchedule';
 import { SalaryRecord } from '../models/SalaryRecord';
 import { Invoice } from '../models/Invoice';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -13,14 +14,17 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export const getStaff = async (req: AuthRequest, res: Response) => {
   try {
-    const staff = await StaffMember.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), isActive: true }).sort('name');
+    const query = getBaseQuery(req);
+    query.isActive = true;
+    const staff = await StaffMember.find(query).sort('name');
     return res.json(staff);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
 
 export const createStaff = async (req: AuthRequest, res: Response) => {
   try {
-    const member = await StaffMember.create({ ...req.body, restaurantId: req.user!.restaurantId });
+    const branchId = getCreateBranchId(req);
+    const member = await StaffMember.create({ ...req.body, restaurantId: req.user!.restaurantId, branchId });
     // Real: send Firebase invite via firebase-admin.auth().createUser({ phoneNumber: req.body.phone })
     // then sendInviteSMS(req.body.phone, inviteLink)
     return res.status(201).json(member);
@@ -29,8 +33,10 @@ export const createStaff = async (req: AuthRequest, res: Response) => {
 
 export const updateStaff = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const member = await StaffMember.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       req.body, { new: true }
     );
     if (!member) return res.status(404).json({ error: 'Not found' });
@@ -40,8 +46,10 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
 
 export const removeStaff = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     await StaffMember.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       { isActive: false }
     );
     return res.json({ success: true });
@@ -64,7 +72,7 @@ export const clockIn = async (req: AuthRequest, res: Response) => {
     const attendance = await Attendance.findOneAndUpdate(
       { staffId, date: today() },
       {
-        $set: { restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+        $set: { restaurantId: req.user!.restaurantId, branchId: staff.branchId,
           staffName: staff.name,
           status: isLate ? 'LATE' : 'PRESENT',
           clockInTime: now,
@@ -104,7 +112,7 @@ export const manualMarkAttendance = async (req: AuthRequest, res: Response) => {
     const record = await Attendance.findOneAndUpdate(
       { staffId, date },
       {
-        $set: { restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+        $set: { restaurantId: req.user!.restaurantId, branchId: staff.branchId,
           staffName: staff.name,
           status, shift, notes,
           markedBy: req.user!.name || 'Manager',
@@ -133,9 +141,10 @@ export const getMonthlyAttendance = async (req: AuthRequest, res: Response) => {
 export const getWeekSchedule = async (req: AuthRequest, res: Response) => {
   try {
     const { weekStart } = req.params;
-    let schedule = await WeeklySchedule.findOne({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-      weekStartDate: weekStart,
-    });
+    const query = getBaseQuery(req);
+    query.weekStartDate = weekStart;
+    
+    let schedule = await WeeklySchedule.findOne(query);
     if (!schedule) {
       // Build blank 7-day skeleton
       const days = Array.from({ length: 7 }, (_, i) => {
@@ -146,11 +155,12 @@ export const getWeekSchedule = async (req: AuthRequest, res: Response) => {
           MORNING: [], AFTERNOON: [], EVENING: [], NIGHT: [],
         };
       });
-      schedule = await WeeklySchedule.create({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-        weekStartDate: weekStart,
+      const createData: any = {
+        ...query,
         days, isPublished: false,
         createdBy: req.user!.name || req.user!.userId,
-      });
+      };
+      schedule = await WeeklySchedule.create(createData);
     }
     return res.json(schedule);
   } catch { return res.status(500).json({ error: 'Server error' }); }
@@ -159,8 +169,10 @@ export const getWeekSchedule = async (req: AuthRequest, res: Response) => {
 export const saveWeekSchedule = async (req: AuthRequest, res: Response) => {
   try {
     const { weekStart } = req.params;
+    const query = getBaseQuery(req);
+    query.weekStartDate = weekStart;
     const schedule = await WeeklySchedule.findOneAndUpdate(
-      { restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), weekStartDate: weekStart },
+      query,
       { $set: { days: req.body.days } },
       { new: true }
     );
@@ -171,8 +183,10 @@ export const saveWeekSchedule = async (req: AuthRequest, res: Response) => {
 export const publishSchedule = async (req: AuthRequest, res: Response) => {
   try {
     const { weekStart } = req.params;
+    const query = getBaseQuery(req);
+    query.weekStartDate = weekStart;
     const schedule = await WeeklySchedule.findOneAndUpdate(
-      { restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), weekStartDate: weekStart },
+      query,
       { $set: { isPublished: true, publishedAt: new Date() } },
       { new: true }
     );
@@ -187,8 +201,9 @@ export const publishSchedule = async (req: AuthRequest, res: Response) => {
 export const calculatePayroll = async (req: AuthRequest, res: Response) => {
   try {
     const { month } = req.params; // YYYY-MM
-    const restaurantId = req.user!.restaurantId;
-    const staff = await StaffMember.find({ restaurantId, isActive: true });
+    const query = getBaseQuery(req);
+    query.isActive = true;
+    const staff = await StaffMember.find(query);
 
     // Working days in month (Mon-Sat, excluding Sundays)
     const [y, m] = month.split('-').map(Number);
@@ -199,7 +214,7 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
     }).filter(Boolean).length;
 
     const results = await Promise.all(staff.map(async s => {
-      const records = await Attendance.find({ staffId: s._id, restaurantId, date: { $regex: `^${month}` } });
+      const records = await Attendance.find({ staffId: s._id, restaurantId: req.user!.restaurantId, date: { $regex: `^${month}` } });
       const present  = records.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length;
       const halfDays = records.filter(r => r.status === 'HALF_DAY').length;
       const absent   = totalWorkingDays - present - halfDays;
@@ -217,7 +232,7 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
         { staffId: s._id, month },
         {
           $set: {
-            restaurantId, staffName: s.name, month,
+            restaurantId: req.user!.restaurantId, branchId: s.branchId, staffName: s.name, month,
             salaryType: s.salaryType, baseSalary: s.salaryAmount,
             totalWorkingDays, presentDays: present,
             absentDays: Math.max(0, absent), halfDays,
@@ -236,8 +251,10 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
 
 export const markSalaryPaid = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const record = await SalaryRecord.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       { $set: { isPaid: true, paidDate: new Date(), paidBy: req.user!.name || 'Manager' } },
       { new: true }
     );
@@ -249,7 +266,9 @@ export const markSalaryPaid = async (req: AuthRequest, res: Response) => {
 export const getPayroll = async (req: AuthRequest, res: Response) => {
   try {
     const { month } = req.params;
-    const records = await SalaryRecord.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), month }).sort('staffName');
+    const query = getBaseQuery(req);
+    query.month = month;
+    const records = await SalaryRecord.find(query).sort('staffName');
     return res.json(records);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -291,11 +310,15 @@ export const getStaffPerformance = async (req: AuthRequest, res: Response) => {
 
 export const getTodayDuty = async (req: AuthRequest, res: Response) => {
   try {
-    const staff = await StaffMember.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), isActive: true }).sort('name');
+    const query = getBaseQuery(req);
+    
+    const staffQuery = { ...query, isActive: true };
+    const staff = await StaffMember.find(staffQuery).sort('name');
+    
     const todayStr = today();
-    const attendance = await Attendance.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-      date: todayStr,
-    });
+    const attQuery = { ...query, date: todayStr };
+    const attendance = await Attendance.find(attQuery);
+    
     const attMap = Object.fromEntries(attendance.map(a => [a.staffId.toString(), a]));
     return res.json(staff.map(s => ({
       ...s.toObject(),

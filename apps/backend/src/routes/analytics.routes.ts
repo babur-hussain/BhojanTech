@@ -8,6 +8,7 @@ const router: Router = Router();
 router.use(requireAuth);
 router.use(requireRole([UserRole.OWNER, UserRole.MANAGER]));
 
+router.get('/live-activity', analytics.liveActivity);
 router.get('/dashboard',          analytics.liveDashboard);
 router.get('/revenue-trend',      analytics.revenueTrend);
 router.get('/hourly-volume',      analytics.hourlyVolume);

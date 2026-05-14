@@ -23,6 +23,25 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
 
     const decoded = verifyToken(token);
     req.user = decoded;
+
+    // Allow frontend branch selector to override branchId via header
+    const headerBranchId = req.headers['x-branch-id'] as string | undefined;
+    if (headerBranchId && headerBranchId !== 'all') {
+      const role = decoded.role;
+      // OWNER / SUPER_OWNER can access any branch; BRANCH_MANAGER only their accessible ones
+      if (role === 'OWNER' || role === 'SUPER_OWNER') {
+        req.user.branchId = headerBranchId;
+      } else if (role === 'BRANCH_MANAGER' && decoded.accessibleBranches?.includes(headerBranchId)) {
+        req.user.branchId = headerBranchId;
+      }
+      // Staff/waiters stay scoped to their JWT branchId — header is ignored
+    } else if (headerBranchId === 'all') {
+      const role = decoded.role;
+      if (role === 'OWNER' || role === 'SUPER_OWNER') {
+        delete req.user.branchId;
+      }
+    }
+
     next();
   } catch (error) {
     return res.status(401).json({ error: 'Unauthorized: Invalid token' });

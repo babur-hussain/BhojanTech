@@ -6,6 +6,7 @@ import { InventoryItem } from '../models/InventoryItem';
 import { Supplier } from '../models/Supplier';
 import { PurchaseLog } from '../models/PurchaseLog';
 import { WastageLog } from '../models/WastageLog';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,9 @@ async function fireAlertIfLow(item: any, restaurantId: string) {
 
 export const getItems = async (req: AuthRequest, res: Response) => {
   try {
-    const items = await InventoryItem.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), isActive: true })
-      .sort('category name');
+    const query = getBaseQuery(req);
+    query.isActive = true;
+    const items = await InventoryItem.find(query).sort('category name');
     const enriched = items.map(i => ({
       ...i.toObject(),
       status: stockStatus(i),
@@ -39,9 +41,13 @@ export const getItems = async (req: AuthRequest, res: Response) => {
 
 export const createItem = async (req: AuthRequest, res: Response) => {
   try {
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+
     const item = await InventoryItem.create({
       ...req.body,
       restaurantId: req.user!.restaurantId,
+      branchId,
     });
     return res.status(201).json({ ...item.toObject(), status: stockStatus(item) });
   } catch { return res.status(500).json({ error: 'Server error' }); }
@@ -49,8 +55,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
 
 export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const item = await InventoryItem.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       req.body, { new: true }
     );
     if (!item) return res.status(404).json({ error: 'Not found' });
@@ -60,8 +68,10 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
 
 export const deleteItem = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     await InventoryItem.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       { isActive: false }
     );
     return res.json({ success: true });
@@ -77,10 +87,9 @@ export const addStock = async (req: AuthRequest, res: Response) => {
       supplierId, invoiceNumber, purchaseDate,
     } = req.body;
 
-    const item = await InventoryItem.findOne({
-      _id: inventoryItemId,
-      restaurantId: req.user!.restaurantId,
-    });
+    const query = getBaseQuery(req);
+    query._id = inventoryItemId;
+    const item = await InventoryItem.findOne(query);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
     const totalCost = +(quantityAdded * costPerUnit).toFixed(2);
@@ -93,7 +102,8 @@ export const addStock = async (req: AuthRequest, res: Response) => {
     await item.save();
 
     const log = await PurchaseLog.create({
-      restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+      restaurantId: req.user!.restaurantId,
+      branchId: item.branchId,
       inventoryItemId: item._id,
       itemName: item.name,
       supplierId,
@@ -117,10 +127,9 @@ export const logWastage = async (req: AuthRequest, res: Response) => {
   try {
     const { inventoryItemId, quantity, reason, notes } = req.body;
 
-    const item = await InventoryItem.findOne({
-      _id: inventoryItemId,
-      restaurantId: req.user!.restaurantId,
-    });
+    const query = getBaseQuery(req);
+    query._id = inventoryItemId;
+    const item = await InventoryItem.findOne(query);
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.currentQty < quantity) return res.status(400).json({ error: 'Insufficient stock to log wastage' });
 
@@ -129,7 +138,8 @@ export const logWastage = async (req: AuthRequest, res: Response) => {
     await fireAlertIfLow(item, req.user!.restaurantId!);
 
     const log = await WastageLog.create({
-      restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+      restaurantId: req.user!.restaurantId,
+      branchId: item.branchId,
       inventoryItemId: item._id,
       itemName: item.name,
       quantity,
@@ -148,22 +158,26 @@ export const logWastage = async (req: AuthRequest, res: Response) => {
 
 export const getSuppliers = async (req: AuthRequest, res: Response) => {
   try {
-    const suppliers = await Supplier.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}) }).sort('name');
+    const query = getBaseQuery(req);
+    const suppliers = await Supplier.find(query).sort('name');
     return res.json(suppliers);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
 
 export const createSupplier = async (req: AuthRequest, res: Response) => {
   try {
-    const supplier = await Supplier.create({ ...req.body, restaurantId: req.user!.restaurantId });
+    const branchId = getCreateBranchId(req);
+    const supplier = await Supplier.create({ ...req.body, restaurantId: req.user!.restaurantId, branchId });
     return res.status(201).json(supplier);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
 
 export const updateSupplier = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const supplier = await Supplier.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       req.body, { new: true }
     );
     if (!supplier) return res.status(404).json({ error: 'Not found' });
@@ -175,7 +189,9 @@ export const updateSupplier = async (req: AuthRequest, res: Response) => {
 
 export const getLowStockSummary = async (req: AuthRequest, res: Response) => {
   try {
-    const items = await InventoryItem.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), isActive: true });
+    const query = getBaseQuery(req);
+    query.isActive = true;
+    const items = await InventoryItem.find(query);
     const low = items.filter(i => stockStatus(i) === 'LOW');
     const critical = items.filter(i => stockStatus(i) === 'CRITICAL');
     return res.json({ lowCount: low.length, criticalCount: critical.length, items: [...critical, ...low] });
@@ -193,10 +209,9 @@ const dateRange = (months: number) => {
 
 export const exportPurchaseReport = async (req: AuthRequest, res: Response) => {
   try {
-    const logs = await PurchaseLog.find({
-      restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-      createdAt: dateRange(1),
-    }).sort('-purchaseDate');
+    const query = getBaseQuery(req);
+    query.createdAt = dateRange(1);
+    const logs = await PurchaseLog.find(query).sort('-purchaseDate');
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Purchase Report');
@@ -241,10 +256,9 @@ export const exportPurchaseReport = async (req: AuthRequest, res: Response) => {
 
 export const exportWastageReport = async (req: AuthRequest, res: Response) => {
   try {
-    const logs = await WastageLog.find({
-      restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-      createdAt: dateRange(1),
-    }).sort('-createdAt');
+    const query = getBaseQuery(req);
+    query.createdAt = dateRange(1);
+    const logs = await WastageLog.find(query).sort('-createdAt');
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Wastage Report');

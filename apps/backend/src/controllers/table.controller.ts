@@ -2,10 +2,12 @@ import { Response } from 'express';
 import { Table } from '../models/Table';
 import { io } from '../index';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 export const getTables = async (req: AuthRequest, res: Response) => {
   try {
-    const tables = await Table.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}), ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}) }).populate('currentOrderId');
+    const query = getBaseQuery(req);
+    const tables = await Table.find(query).populate('currentOrderId');
     return res.json(tables);
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });
@@ -14,13 +16,13 @@ export const getTables = async (req: AuthRequest, res: Response) => {
 
 export const createTable = async (req: AuthRequest, res: Response) => {
   try {
-    const { number, capacity, branchId: bodyBranchId } = req.body;
-    const queryBranchId = req.query.branchId && typeof req.query.branchId === 'string' ? req.query.branchId : undefined;
-    const branchId = queryBranchId || bodyBranchId || req.user!.branchId;
+    const { number, capacity } = req.body;
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
 
     const table = await Table.create({
       restaurantId: req.user!.restaurantId,
-      ...(branchId ? { branchId } : {}),
+      branchId,
       number,
       capacity,
     });
@@ -35,15 +37,17 @@ export const createTable = async (req: AuthRequest, res: Response) => {
 export const updateTableStatus = async (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body;
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const table = await Table.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       { status },
       { new: true }
     ).populate('currentOrderId');
 
     if (!table) return res.status(404).json({ error: 'Not found' });
 
-    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('table_update', { type: 'STATUS_CHANGED', table });
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${table.branchId}`).emit('table_update', { type: 'STATUS_CHANGED', table });
     return res.json(table);
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });

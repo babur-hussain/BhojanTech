@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../utils/api';
 import { Users, Crown, Calendar, Search, Filter, MessageSquare, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,9 +34,7 @@ export default function Customers() {
 
     const fetchSummary = async () => {
         try {
-            const res = await axios.get('/api/customers/segment-summary', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await api.get('/customers/segments/summary');
             setSummary(res.data);
         } catch (err) {
             console.error(err);
@@ -50,10 +48,8 @@ export default function Customers() {
             if (segmentFilter) params.append('segment', segmentFilter);
             if (tierFilter) params.append('tier', tierFilter);
 
-            const res = await axios.get(`/api/customers?${params.toString()}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            setCustomers(res.data.customers);
+            const res = await api.get(`/customers?${params.toString()}`);
+            setCustomers(res.data.customers || []);
             setLoading(false);
         } catch (err) {
             console.error(err);

@@ -4,6 +4,7 @@ import { Checkout } from './pages/Checkout';
 import { Tracking } from './pages/Tracking';
 import { Login } from './pages/Login';
 import { MyAccount } from './pages/MyAccount';
+import { TableOrder } from './pages/TableOrder';
 import { useCartStore } from './store/cartStore';
 import { useEffect } from 'react';
 
@@ -36,6 +37,7 @@ function App() {
 
           <Route path="/menu" element={<Menu />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/table-order" element={<TableOrder />} />
           <Route path="/tracking/:orderId" element={<Tracking />} />
           <Route path="/login" element={<Login />} />
           <Route path="/my-account" element={<MyAccount />} />

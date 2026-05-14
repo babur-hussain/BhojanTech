@@ -12,8 +12,10 @@ router.post('/razorpay/webhook', billingCtrl.razorpayWebhook);
 router.use(requireAuth);
 
 router.get('/preview/:orderId', billingCtrl.previewBill);
+router.get('/customer/:phone', billingCtrl.billingCustomerLookup);
 router.post('/razorpay/order', billingCtrl.createRazorpayOrder);
 router.post('/pay', billingCtrl.processPayment);
+router.post('/direct', billingCtrl.createDirectBill);
 router.get('/eod', requireRole([UserRole.OWNER, UserRole.MANAGER]), billingCtrl.eodSummary);
 
 export default router;

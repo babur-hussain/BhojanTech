@@ -8,6 +8,7 @@ interface AuthUser {
   id: string;
   role: UserRole;
   restaurantId?: string;
+  branchId?: string;
   name?: string;
 }
 

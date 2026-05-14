@@ -2,16 +2,18 @@ import { Request, Response } from 'express';
 import { MenuCategory } from '../models/MenuCategory';
 import { MenuItem } from '../models/MenuItem';
 import { io } from '../index';
-import { generatePresignedUrl } from '../utils/s3';
+import { generatePresignedUrl, uploadToS3 } from '../utils/s3';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { scheduleMenuSync } from '../services/menuSync.service';
 import { redis } from '../config/redis';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 const clearMenuCache = async (restaurantId?: string, branchId?: string | null) => {
   if (!restaurantId) return;
   const bId = branchId || 'all';
   await redis.del(`menu_categories:${restaurantId}:${bId}`);
   await redis.del(`menu_items:${restaurantId}:${bId}`);
+  await redis.del(`menu_public:${restaurantId}:${bId}`);
   // If global update, probably best to clear patterns but let's stick to exact keys or wildcard
   if (!branchId) {
     const keys = await redis.keys(`menu_*:${restaurantId}:*`);
@@ -34,6 +36,30 @@ export const getUploadUrl = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * Server-side image upload — accepts multipart files, uploads them to S3,
+ * and returns the public URLs. No CORS config needed on S3.
+ */
+export const uploadImages = async (req: AuthRequest, res: Response) => {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No files provided' });
+    }
+
+    const urls: string[] = [];
+    for (const file of files) {
+      const { publicUrl } = await uploadToS3(file.buffer, file.originalname, file.mimetype);
+      urls.push(publicUrl);
+    }
+
+    return res.json({ urls });
+  } catch (error) {
+    console.error('Error uploading images', error);
+    return res.status(500).json({ error: 'Failed to upload images' });
+  }
+};
+
 // CATEGORIES
 export const getCategories = async (req: AuthRequest, res: Response) => {
   try {
@@ -42,7 +68,8 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
-    const categories = await MenuCategory.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}) }).sort('order').lean();
+    const query = getBaseQuery(req);
+    const categories = await MenuCategory.find(query).sort('order').lean();
 
     await redis.set(cacheKey, JSON.stringify(categories), 'EX', 3600);
     return res.json(categories);
@@ -53,8 +80,11 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 
 export const createCategory = async (req: AuthRequest, res: Response) => {
   try {
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
     const category = await MenuCategory.create({
-      restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+      restaurantId: req.user!.restaurantId,
+      branchId,
       name: req.body.name,
       order: req.body.order || 0,
     });
@@ -70,8 +100,10 @@ export const updateCategoryAvailability = async (req: AuthRequest, res: Response
     const { id } = req.params;
     const { isAvailable } = req.body;
 
+    const query = getBaseQuery(req);
+    query._id = id;
     const category = await MenuCategory.findOneAndUpdate(
-      { _id: id, restaurantId: req.user!.restaurantId },
+      query,
       { isAvailable },
       { new: true }
     );
@@ -100,7 +132,8 @@ export const getMenuItems = async (req: AuthRequest, res: Response) => {
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
-    const items = await MenuItem.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}) }).lean();
+    const query = getBaseQuery(req);
+    const items = await MenuItem.find(query).lean();
 
     await redis.set(cacheKey, JSON.stringify(items), 'EX', 3600);
     return res.json(items);
@@ -111,9 +144,12 @@ export const getMenuItems = async (req: AuthRequest, res: Response) => {
 
 export const createMenuItem = async (req: AuthRequest, res: Response) => {
   try {
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
     const item = await MenuItem.create({
       ...req.body,
       restaurantId: req.user!.restaurantId,
+      branchId,
     });
 
     io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('menu_update', {
@@ -130,8 +166,10 @@ export const createMenuItem = async (req: AuthRequest, res: Response) => {
 
 export const updateMenuItem = async (req: AuthRequest, res: Response) => {
   try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
     const item = await MenuItem.findOneAndUpdate(
-      { _id: req.params.id, restaurantId: req.user!.restaurantId },
+      query,
       req.body,
       { new: true }
     );
@@ -153,13 +191,34 @@ export const updateMenuItem = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const deleteMenuItem = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const item = await MenuItem.findOneAndDelete(query);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('menu_update', {
+      type: 'ITEM_DELETED',
+      itemId: item._id,
+    });
+
+    await clearMenuCache(req.user!.restaurantId, item.branchId?.toString());
+    return res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 export const updateItemAvailability = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { isAvailable } = req.body;
 
+    const query = getBaseQuery(req);
+    query._id = id;
     const item = await MenuItem.findOneAndUpdate(
-      { _id: id, restaurantId: req.user!.restaurantId },
+      query,
       { isAvailable },
       { new: true }
     );
@@ -178,6 +237,37 @@ export const updateItemAvailability = async (req: AuthRequest, res: Response) =>
 
     return res.json(item);
   } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const getPublicMenu = async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const branchId = typeof req.query.branchId === 'string' ? req.query.branchId : 'all';
+    
+    // We could use cache here as well, but for simplicity we fetch direct, or reuse the cache
+    const cacheKey = `menu_public:${restaurantId}:${branchId}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json(JSON.parse(cached));
+
+    const queryParams: any = { restaurantId, isAvailable: true };
+    if (branchId !== 'all') {
+      queryParams.branchId = branchId;
+    }
+
+    const categories = await MenuCategory.find(queryParams).sort('order').lean();
+    const items = await MenuItem.find(queryParams).lean();
+
+    const result = {
+      categories,
+      items
+    };
+
+    await redis.set(cacheKey, JSON.stringify(result), 'EX', 3600);
+    return res.json(result);
+  } catch (error) {
+    console.error('getPublicMenu error:', error);
     return res.status(500).json({ error: 'Server error' });
   }
 };

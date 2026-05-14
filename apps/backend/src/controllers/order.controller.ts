@@ -4,20 +4,35 @@ import { Table } from '../models/Table';
 import { KOT } from '../models/KOT';
 import { io } from '../index';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 import mongoose from 'mongoose';
+
+export const getActiveOrders = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    query.status = { $in: ['OPEN', 'BILLED'] };
+    const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
+    return res.json(orders);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
 
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { tableId, items } = req.body;
     const restaurantId = req.user!.restaurantId;
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
 
-    const table = await Table.findOne({ _id: tableId, restaurantId });
+    const table = await Table.findOne({ _id: tableId, restaurantId, branchId });
     if (!table) return res.status(404).json({ error: 'Table not found' });
 
     const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
 
     const order = await Order.create({
       restaurantId,
+      branchId,
       tableId,
       tableNumber: table.number,
       waiterId: req.user!.userId,
@@ -31,8 +46,8 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     table.seatedAt = new Date();
     await table.save();
 
-    io.to(`restaurant_${restaurantId}_branch_${req.user!.branchId}`).emit('table_update', { type: 'ORDER_STARTED', table });
-    io.to(`restaurant_${restaurantId}_branch_${req.user!.branchId}`).emit('order_update', { type: 'NEW_ORDER', order });
+    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('table_update', { type: 'ORDER_STARTED', table });
+    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('order_update', { type: 'NEW_ORDER', order });
 
     return res.status(201).json(order);
   } catch (error) {
@@ -43,7 +58,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 export const addItemsToOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { items } = req.body;
-    const order = await Order.findOne({ _id: req.params.id, restaurantId: req.user!.restaurantId });
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const order = await Order.findOne(query);
     
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
@@ -55,7 +72,7 @@ export const addItemsToOrder = async (req: AuthRequest, res: Response) => {
     
     await order.save();
 
-    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('order_update', { type: 'ITEMS_ADDED', order });
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'ITEMS_ADDED', order });
 
     return res.json(order);
   } catch (error) {
@@ -66,7 +83,9 @@ export const addItemsToOrder = async (req: AuthRequest, res: Response) => {
 export const generateKOT = async (req: AuthRequest, res: Response) => {
   try {
     const { itemIds } = req.body; // Array of orderItem _ids to send
-    const order = await Order.findOne({ _id: req.params.id, restaurantId: req.user!.restaurantId });
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const order = await Order.findOne(query);
     
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
@@ -90,7 +109,9 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
     const categoryIds = menuItems.map(m => m.categoryId);
     const categories = await MenuCategory.find({ _id: { $in: categoryIds } });
 
-    const kot = await KOT.create({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
+    const kot = await KOT.create({
+      restaurantId: req.user!.restaurantId,
+      branchId: order.branchId,
       orderId: order._id,
       tableNumber: order.tableNumber,
       waiterName: order.waiterName,
@@ -111,8 +132,8 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
       }),
     });
 
-    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('kot_created', kot);
-    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('order_update', { type: 'KOT_SENT', order });
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${order.branchId}`).emit('kot_created', kot);
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'KOT_SENT', order });
 
     return res.status(201).json(kot);
   } catch (error) {

@@ -4,10 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Clock, Plus, X } from 'lucide-react';
 import { api } from '../utils/api';
+import { useBranchStore } from '../store/branchStore';
 
 export default function Tables() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { selectedBranchId } = useBranchStore();
+  const isAllBranches = selectedBranchId === 'all';
   const [tables, setTables] = useState<Table[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isDownloading, setIsDownloading] = useState(false);
@@ -95,7 +98,9 @@ export default function Tables() {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-2 bg-maroon text-white px-4 py-2 rounded-lg font-semibold hover:bg-opacity-90 transition shadow"
+            disabled={isAllBranches}
+            title={isAllBranches ? "Select a specific branch to add tables" : ""}
+            className={`flex items-center gap-2 text-white px-4 py-2 rounded-lg font-semibold transition shadow ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}
           >
             <Plus size={16} /> Add Table
           </button>
@@ -119,7 +124,9 @@ export default function Tables() {
           <p className="text-gray-500 text-sm mb-6">Add your restaurant tables to get started with orders and QR codes.</p>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="bg-maroon text-white px-6 py-2 rounded-lg font-semibold hover:bg-opacity-90 transition inline-flex items-center gap-2 shadow"
+            disabled={isAllBranches}
+            title={isAllBranches ? "Select a specific branch to add tables" : ""}
+            className={`text-white px-6 py-2 rounded-lg font-semibold transition inline-flex items-center gap-2 shadow ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}
           >
             <Plus size={16} /> Add First Table
           </button>

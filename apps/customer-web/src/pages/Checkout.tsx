@@ -20,6 +20,7 @@ export const Checkout = () => {
         try {
             const payload = {
                 restaurantId: restaurantId || 'fallback_id',
+                tableId: tableNumber, // tableNumber in state holds the Mongo ID from the QR code
                 items: items.map(i => ({
                     menuItemId: i.menuItemId,
                     name: i.name,
@@ -61,7 +62,11 @@ export const Checkout = () => {
                 setIsProcessing(false);
             } else {
                 clearCart();
-                navigate(`/tracking/${res.orderId}`);
+                if (tableNumber) {
+                    navigate('/table-order');
+                } else {
+                    navigate(`/tracking/${res.orderId}`);
+                }
             }
         } catch (e) {
             console.error(e);
@@ -154,21 +159,31 @@ export const Checkout = () => {
             </main>
 
             <div className="p-4 space-y-3 mt-auto">
-                <button
-                    disabled={isProcessing}
-                    onClick={() => handlePlaceOrder(true)}
-                    className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                    {isProcessing ? 'Processing...' : `Pay ₹${finalTotal.toFixed(2)} Securely`}
-                </button>
-                {tableNumber && (
+                {tableNumber ? (
                     <button
                         disabled={isProcessing}
                         onClick={() => handlePlaceOrder(false)}
-                        className="w-full border-2 border-brand-200 text-brand-700 font-bold py-3.5 rounded-2xl hover:bg-brand-50 disabled:opacity-50"
+                        className="w-full bg-brand-600 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-brand-700 disabled:opacity-50"
                     >
-                        Pay at Counter
+                        {isProcessing ? 'Processing...' : `Send to Kitchen`}
                     </button>
+                ) : (
+                    <>
+                        <button
+                            disabled={isProcessing}
+                            onClick={() => handlePlaceOrder(true)}
+                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                            {isProcessing ? 'Processing...' : `Pay ₹${finalTotal.toFixed(2)} Securely`}
+                        </button>
+                        <button
+                            disabled={isProcessing}
+                            onClick={() => handlePlaceOrder(false)}
+                            className="w-full border-2 border-brand-200 text-brand-700 font-bold py-3.5 rounded-2xl hover:bg-brand-50 disabled:opacity-50"
+                        >
+                            Pay at Counter
+                        </button>
+                    </>
                 )}
             </div>
         </div>

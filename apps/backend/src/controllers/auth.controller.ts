@@ -42,8 +42,11 @@ export const login = async (req: Request, res: Response) => {
 
     const payload = {
       userId: user.id,
+      name: user.name,
       role: user.role,
       restaurantId: user.restaurantId?.toString(),
+      branchId: user.branchId?.toString(),
+      accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
     };
 
     const tokens = generateTokens(payload);
@@ -53,6 +56,7 @@ export const login = async (req: Request, res: Response) => {
         id: user.id,
         role: user.role,
         restaurantId: user.restaurantId,
+        branchId: user.branchId,
         name: user.name,
       },
       ...tokens,
@@ -78,8 +82,11 @@ export const devLogin = async (req: Request, res: Response) => {
 
     const payload = {
       userId: user.id,
+      name: user.name,
       role: user.role,
       restaurantId: user.restaurantId?.toString(),
+      branchId: user.branchId?.toString(),
+      accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
     };
 
     const tokens = generateTokens(payload);
@@ -89,6 +96,7 @@ export const devLogin = async (req: Request, res: Response) => {
         id: user.id,
         role: user.role,
         restaurantId: user.restaurantId,
+        branchId: user.branchId,
         name: user.name,
       },
       ...tokens,

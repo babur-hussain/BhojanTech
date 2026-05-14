@@ -57,9 +57,9 @@ const InvoiceSchema: Schema = new Schema(
   {
     invoiceNumber: { type: String, required: true, unique: true },
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
-    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true, index: true },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', index: true },
     orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
-    tableNumber: { type: String, required: true },
+    tableNumber: { type: String, default: 'DIRECT' },
     waiterName: { type: String, required: true },
     orderType: { type: String, enum: ['DINE_IN', 'TAKEAWAY', 'DELIVERY'], default: 'DINE_IN' },
     lineItems: [{ name: String, hindiName: String, variantName: String, quantity: Number, unitPrice: Number, gstSlab: Number, lineTotal: Number, hsnCode: String }],
@@ -83,12 +83,7 @@ const InvoiceSchema: Schema = new Schema(
   { timestamps: true }
 );
 
-// Daily sequence helper: count today's invoices for this branch
-InvoiceSchema.statics.todaySequence = async function (restaurantId: mongoose.Types.ObjectId, branchId: mongoose.Types.ObjectId) {
-  const start = new Date(); start.setHours(0, 0, 0, 0);
-  const end = new Date(); end.setHours(23, 59, 59, 999);
-  const count = await this.countDocuments({ restaurantId, branchId, createdAt: { $gte: start, $lte: end } });
-  return count + 1;
-};
+// NOTE: Daily sequence generation is now handled by the InvoiceSequence model
+// which uses atomic $inc operations for collision-free numbering.
 
 export const Invoice = mongoose.model<IInvoice>('Invoice', InvoiceSchema);

@@ -7,6 +7,7 @@ interface RestaurantInfo {
   gstin: string;
   fssai: string;
   logoUrl?: string;
+  upiId?: string;
 }
 
 interface Props {
@@ -25,13 +26,6 @@ interface Props {
   restaurant: RestaurantInfo;
 }
 
-/**
- * 80mm thermal printer–optimised invoice component.
- * Renders in a fixed ~302px width, using tight spacing, monospace
- * sections and a print CSS class.  
- * Call window.print() to send directly to a Star / Epson thermal printer
- * (set paper size to 80mm in browser print settings).
- */
 export default function InvoicePrint({
   preview, finalTotal, discountFlat, roundOff, paymentMode, invoiceNumber, restaurant,
 }: Props) {
@@ -45,146 +39,209 @@ export default function InvoicePrint({
   const totalGST = preview.gstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0);
 
   return (
-    <div
-      id="invoice-print"
-      className="bg-white text-black"
-      style={{ width: '302px', fontFamily: 'monospace', fontSize: '11px', padding: '8px', lineHeight: 1.4 }}
-    >
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', marginBottom: 8 }}>
-        {restaurant.logoUrl && (
-          <img src={restaurant.logoUrl} alt="logo" style={{ height: 40, marginBottom: 4 }} />
-        )}
-        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: 1 }}>{restaurant.name}</div>
-        <div style={{ fontSize: 10 }}>{restaurant.address}</div>
-        <div style={{ fontSize: 10 }}>GSTIN: {restaurant.gstin}</div>
-        <div style={{ fontSize: 10 }}>FSSAI: {restaurant.fssai}</div>
-      </div>
+    <div className="bg-white shadow-2xl rounded-sm border border-gray-200 mx-auto relative overflow-hidden" style={{ width: '302px' }}>
+      <style>{`
+        @page {
+          margin: 0;
+          size: 80mm auto;
+        }
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #invoice-print, #invoice-print * {
+            visibility: visible;
+          }
+          #invoice-print {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%; /* Use 100% of 80mm */
+            padding: 0;
+            margin: 0;
+            box-shadow: none;
+            border: none;
+          }
+        }
+      `}</style>
+      
+      {/* Zig-zag top border for realistic receipt look (optional CSS trick) */}
+      <div className="absolute top-0 left-0 w-full h-2 bg-repeat-x" style={{ backgroundImage: 'radial-gradient(circle at 50% 0, transparent 4px, white 5px)', backgroundSize: '10px 10px' }}></div>
 
-      <Dashes />
-
-      {/* ── Meta ────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
-        <div>
-          <div><b>Invoice:</b> {invoiceNumber}</div>
-          <div><b>Table:</b> {preview.order.tableNumber}</div>
-          <div><b>Waiter:</b> {preview.order.waiterName}</div>
+      <div
+        id="invoice-print"
+        className="text-black bg-white pt-6 pb-8 px-5"
+        style={{ fontFamily: '"Courier New", Courier, monospace', fontSize: '12px', lineHeight: 1.4 }}
+      >
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <div className="text-center mb-4">
+          {restaurant.logoUrl && (
+            <img src={restaurant.logoUrl} alt="logo" className="mx-auto object-contain mb-2" style={{ height: '48px' }} />
+          )}
+          <div className="text-xl font-bold uppercase tracking-wider mb-1 leading-tight">{restaurant.name}</div>
+          <div className="text-xs text-gray-700 leading-snug max-w-[250px] mx-auto">{restaurant.address}</div>
+          <div className="text-xs text-gray-700 mt-1">GSTIN: {restaurant.gstin}</div>
+          <div className="text-xs text-gray-700">FSSAI: {restaurant.fssai}</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div>{dateStr}</div>
-          <div>{timeStr}</div>
-          <div style={{ textTransform: 'uppercase', fontSize: 9, marginTop: 2, background: '#000', color: '#fff', padding: '1px 4px', borderRadius: 2 }}>
-            {paymentMode}
+
+        <DottedLine />
+
+        {/* ── Meta ────────────────────────────────────────────────────── */}
+        <div className="flex justify-between items-start text-xs my-3">
+          <div className="space-y-0.5">
+            <div><span className="font-bold text-gray-600">INV:</span> {invoiceNumber}</div>
+            <div><span className="font-bold text-gray-600">TBL:</span> {preview.order.tableNumber || 'Takeaway'}</div>
+            <div><span className="font-bold text-gray-600">USR:</span> {preview.order.waiterName || 'Staff'}</div>
+          </div>
+          <div className="text-right space-y-0.5">
+            <div>{dateStr}</div>
+            <div>{timeStr}</div>
+            <div className="inline-block px-1.5 py-0.5 border border-black rounded text-[10px] font-bold mt-1">
+              {paymentMode}
+            </div>
           </div>
         </div>
-      </div>
 
-      <Dashes />
+        <DottedLine />
 
-      {/* ── Column Headings ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', fontWeight: 'bold', fontSize: 10 }}>
-        <span style={{ flex: 3 }}>Item</span>
-        <span style={{ flex: 1, textAlign: 'center' }}>Qty</span>
-        <span style={{ flex: 1, textAlign: 'right' }}>Rate</span>
-        <span style={{ flex: 1, textAlign: 'right' }}>Amt</span>
-      </div>
-      <Dashes char="-" />
+        {/* ── Column Headings ─────────────────────────────────────────── */}
+        <div className="flex font-bold text-xs my-2 uppercase tracking-wide border-b border-black pb-1">
+          <span className="flex-[3]">Item</span>
+          <span className="flex-1 text-center">Qty</span>
+          <span className="flex-1 text-right">Rate</span>
+          <span className="flex-1 text-right">Amt</span>
+        </div>
 
-      {/* ── Line Items ──────────────────────────────────────────────── */}
-      {preview.lineItems.map((item, i) => (
-        <div key={i}>
-          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-            <span style={{ flex: 3 }}>
-              {item.name}
-              {item.variantName && item.variantName !== 'Regular'
-                ? ` (${item.variantName})` : ''}
-              {item.hindiName ? <><br/><span style={{ fontSize: 9, color: '#555' }}>{item.hindiName}</span></> : null}
-            </span>
-            <span style={{ flex: 1, textAlign: 'center' }}>{item.quantity}</span>
-            <span style={{ flex: 1, textAlign: 'right' }}>{item.unitPrice}</span>
-            <span style={{ flex: 1, textAlign: 'right', fontWeight: 600 }}>{item.lineTotal}</span>
+        {/* ── Line Items ──────────────────────────────────────────────── */}
+        <div className="py-1 space-y-2">
+          {preview.lineItems.map((item, i) => (
+            <div key={i} className="flex flex-col">
+              <div className="flex items-start text-xs font-semibold">
+                <span className="flex-[3] pr-1">
+                  {item.name}
+                  {item.variantName && item.variantName !== 'Regular' ? ` (${item.variantName})` : ''}
+                </span>
+                <span className="flex-1 text-center">{item.quantity}</span>
+                <span className="flex-1 text-right pr-2">{item.unitPrice}</span>
+                <span className="flex-1 text-right">{item.lineTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-500 pl-1 mt-0.5">
+                <span>{item.hindiName || ''}</span>
+                <span>HSN:{item.hsnCode} | GST:{item.gstSlab}%</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <DottedLine />
+
+        {/* ── Subtotal / Discount / Totals ────────────────────────────── */}
+        <div className="my-2 space-y-1">
+          <Row label="Sub-total" value={`₹${preview.subtotalINR.toFixed(2)}`} />
+          {discountFlat > 0 && <Row label="Discount" value={`-₹${discountFlat.toFixed(2)}`} />}
+          {roundOff !== 0 && <Row label="Round-off" value={`${roundOff > 0 ? '+' : ''}₹${roundOff.toFixed(2)}`} small />}
+        </div>
+        
+        <div className="border-t-2 border-black border-dashed pt-2 pb-1 mt-1">
+          <div className="flex justify-between items-center font-black text-lg">
+            <span>TOTAL PAYABLE</span>
+            <span>₹{finalTotal}</span>
           </div>
-          <div style={{ fontSize: 9, color: '#666', paddingLeft: 2 }}>
-            HSN: {item.hsnCode} | GST @{item.gstSlab}%
+        </div>
+
+        <DottedLine />
+
+        {/* ── GST Breakup ─────────────────────────────────────────────── */}
+        <div className="mt-3">
+          <div className="text-[11px] font-bold uppercase tracking-wider mb-1 text-center">Tax Summary</div>
+          <div className="flex text-[9px] font-bold border-b border-gray-400 pb-1 mb-1">
+            <span className="flex-1">Slab</span>
+            <span className="flex-[1.5] text-right">Taxable</span>
+            <span className="flex-1 text-right">CGST</span>
+            <span className="flex-1 text-right">SGST</span>
+            <span className="flex-[1.5] text-right">Total Tax</span>
+          </div>
+          {preview.gstBreakup.map((g, i) => (
+            <div key={i} className="flex text-[10px] my-0.5">
+              <span className="flex-1 font-semibold">{g.slab}%</span>
+              <span className="flex-[1.5] text-right">{g.taxableAmount.toFixed(2)}</span>
+              <span className="flex-1 text-right">{g.cgst.toFixed(2)}</span>
+              <span className="flex-1 text-right">{g.sgst.toFixed(2)}</span>
+              <span className="flex-[1.5] text-right">{(g.cgst+g.sgst).toFixed(2)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between text-[10px] font-bold mt-1 pt-1 border-t border-gray-300">
+            <span>Total GST Included</span>
+            <span>₹{totalGST.toFixed(2)}</span>
           </div>
         </div>
-      ))}
 
-      <Dashes />
+        <DottedLine />
 
-      {/* ── Subtotal / Discount / Totals ────────────────────────────── */}
-      <Row label="Sub-total" value={`₹${preview.subtotalINR.toFixed(2)}`} />
-      {discountFlat > 0 && <Row label="Discount" value={`-₹${discountFlat.toFixed(2)}`} />}
-      {roundOff !== 0 && <Row label="Round-off" value={`${roundOff > 0 ? '+' : ''}₹${roundOff.toFixed(2)}`} small />}
-      <Row label="TOTAL" value={`₹${finalTotal}`} bold />
-
-      <Dashes char="-" />
-
-      {/* ── GST Breakup ─────────────────────────────────────────────── */}
-      <div style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 2 }}>GST Breakup</div>
-      <div style={{ display: 'flex', fontSize: 9, fontWeight: 'bold', borderBottom: '1px dashed #ccc', paddingBottom: 2, marginBottom: 2 }}>
-        <span style={{ flex: 1 }}>Slab</span>
-        <span style={{ flex: 2, textAlign: 'right' }}>Taxable</span>
-        <span style={{ flex: 1, textAlign: 'right' }}>CGST</span>
-        <span style={{ flex: 1, textAlign: 'right' }}>SGST</span>
-        <span style={{ flex: 1.5, textAlign: 'right' }}>Tax Total</span>
-      </div>
-      {preview.gstBreakup.map((g, i) => (
-        <div key={i} style={{ display: 'flex', fontSize: 9 }}>
-          <span style={{ flex: 1 }}>@{g.slab}%</span>
-          <span style={{ flex: 2, textAlign: 'right' }}>{g.taxableAmount.toFixed(2)}</span>
-          <span style={{ flex: 1, textAlign: 'right' }}>{g.cgst.toFixed(2)}</span>
-          <span style={{ flex: 1, textAlign: 'right' }}>{g.sgst.toFixed(2)}</span>
-          <span style={{ flex: 1.5, textAlign: 'right' }}>{(g.cgst+g.sgst).toFixed(2)}</span>
+        {/* ── Total in Words ──────────────────────────────────────────── */}
+        <div className="text-[10px] italic text-center text-gray-700 my-3 leading-tight space-y-1">
+          <div>{totalWords}</div>
+          <div>{totalHindi}</div>
         </div>
-      ))}
-      <Row label="Total GST" value={`₹${totalGST.toFixed(2)}`} small />
 
-      <Dashes />
+        <DottedLine />
 
-      {/* ── Total in Words ──────────────────────────────────────────── */}
-      <div style={{ fontSize: 10, fontStyle: 'italic', marginBottom: 4 }}>
-        <b>Amount:</b> {totalWords}
-      </div>
-      <div style={{ fontSize: 10, fontStyle: 'italic', marginBottom: 8 }}>
-        {totalHindi}
-      </div>
+        {/* ── UPI QR & Footer ─────────────────────────────────────────── */}
+        <div className="text-center mt-4 space-y-1">
+          {/* Live UPI QR Code */}
+          <div className="mb-4">
+            {restaurant.upiId ? (
+              <>
+                <div className="inline-block p-1 bg-white border-2 border-black rounded-lg">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${restaurant.upiId}&pn=${restaurant.name.replace(/ /g, '+')}&am=${finalTotal}&cu=INR`)}`}
+                    alt="UPI QR"
+                    className="w-24 h-24"
+                  />
+                </div>
+                <div className="text-[10px] font-bold mt-1">Scan to Pay via UPI</div>
+                <div className="text-[9px] text-gray-500 font-mono">{restaurant.upiId}</div>
+              </>
+            ) : (
+              <div className="text-[10px] text-gray-400 italic">UPI not configured</div>
+            )}
+          </div>
 
-      {/* ── UPI QR Placeholder ──────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', marginBottom: 8 }}>
-        <div style={{ width: 80, height: 80, border: '2px dashed #999', margin: '0 auto 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#999' }}>
-          UPI QR
+          <div className="font-bold text-sm tracking-wide">THANK YOU!</div>
+          <div className="font-bold text-sm tracking-wide">धन्यवाद, फिर पधारें! 🙏</div>
+          
+          <div className="mt-4 flex flex-col items-center">
+             {/* Mock Barcode using a font or border trick */}
+             <div className="w-48 h-10 border-l-2 border-r-4 border-black bg-[repeating-linear-gradient(90deg,#000,#000_2px,transparent_2px,transparent_4px)]"></div>
+             <div className="text-[9px] tracking-[0.2em] mt-1">{invoiceNumber}</div>
+          </div>
+          
+          <div className="text-[9px] text-gray-500 mt-4">
+            ~ Powered by RestoOS ~
+          </div>
         </div>
-        <div style={{ fontSize: 9, color: '#555' }}>Scan to pay / verify</div>
-      </div>
 
-      <Dashes />
-
-      {/* ── Footer ──────────────────────────────────────────────────── */}
-      <div style={{ textAlign: 'center', fontSize: 10, marginTop: 4 }}>
-        <div>Thank you, visit again!</div>
-        <div style={{ fontWeight: 700 }}>धन्यवाद, फिर पधारें! 🙏</div>
-        <div style={{ fontSize: 9, color: '#888', marginTop: 4 }}>
-          This is a computer-generated invoice
-        </div>
       </div>
+      
+      {/* Zig-zag bottom border */}
+      <div className="absolute bottom-0 left-0 w-full h-2 bg-repeat-x" style={{ backgroundImage: 'radial-gradient(circle at 50% 100%, transparent 4px, white 5px)', backgroundSize: '10px 10px', backgroundPosition: 'bottom' }}></div>
     </div>
   );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const Dashes = ({ char = '=' }: { char?: string }) => (
-  <div style={{ borderTop: char === '=' ? '2px solid #000' : '1px dashed #aaa', margin: '4px 0' }} />
+const DottedLine = () => (
+  <div className="w-full border-t border-dashed border-gray-400 my-3" />
 );
 
 const Row = ({ label, value, bold, small }: { label: string; value: string; bold?: boolean; small?: boolean }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: bold ? 900 : 400, fontSize: small ? 9 : 11 }}>
+  <div className={`flex justify-between ${bold ? 'font-black text-sm' : 'font-semibold text-xs'} ${small ? 'text-[10px] text-gray-600' : ''}`}>
     <span>{label}</span>
     <span>{value}</span>
   </div>
 );
 
-// ─── Mini number-to-words (client side, for print) ───────────────────────────
+// ─── Mini number-to-words ───────────────────────────
 const ones_en = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
 const tens_en = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
 

@@ -7,12 +7,14 @@ import {
     updateCustomer,
     getSegmentSummary,
     getBirthdayList,
+    customerAnalytics,
 } from '../controllers/customer.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
 
 router.get('/lookup/:phone', lookupCustomerByPhone);
+router.get('/analytics', customerAnalytics);
 router.get('/segments/summary', getSegmentSummary);
 router.get('/birthdays/this-month', getBirthdayList);
 router.get('/', listCustomers);

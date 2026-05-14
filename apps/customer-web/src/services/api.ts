@@ -11,12 +11,32 @@ export const api = axios.create({
 });
 
 export const fetchMenu = async (restaurantId: string) => {
-    const { data } = await api.get(`/menu/${restaurantId}`);
+    const { data } = await api.get(`/menu/public/${restaurantId}`);
     return data;
 };
 
 export const createOrder = async (orderData: any) => {
     const { data } = await api.post('/online-orders/create', orderData);
+    return data;
+};
+
+export const getLiveTableOrder = async (tableId: string) => {
+    const { data } = await api.get(`/online-orders/table/${tableId}`);
+    return data;
+};
+
+export const getTableInfo = async (tableId: string) => {
+    const { data } = await api.get(`/online-orders/table-info/${tableId}`);
+    return data;
+};
+
+export const payOnlineOrder = async (orderId: string) => {
+    const { data } = await api.post(`/online-orders/${orderId}/pay`);
+    return data;
+};
+
+export const requestBill = async (orderId: string) => {
+    const { data } = await api.post(`/online-orders/${orderId}/request-bill`);
     return data;
 };
 

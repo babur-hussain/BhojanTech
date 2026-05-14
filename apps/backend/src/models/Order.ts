@@ -37,7 +37,7 @@ export interface IOrder extends Document {
 const OrderSchema: Schema = new Schema(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
-    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true, index: true },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: false, index: true },
     tableId: { type: Schema.Types.ObjectId, ref: 'Table', required: function () { return !this.isOnlineOrder; } },
     tableNumber: { type: String, required: function () { return !this.isOnlineOrder; } },
     waiterId: { type: Schema.Types.ObjectId, ref: 'User', required: function () { return !this.isOnlineOrder; } },

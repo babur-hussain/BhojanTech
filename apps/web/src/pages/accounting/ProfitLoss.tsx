@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PageLoader from '../../components/PageLoader';
 import { api } from '../../utils/api';
 import { RefreshCw, Download, PiggyBank } from 'lucide-react';
 

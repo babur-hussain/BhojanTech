@@ -6,7 +6,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 export const getActiveKOTs = async (req: AuthRequest, res: Response) => {
   try {
     const kots = await KOT.find({ restaurantId: req.user!.restaurantId, ...(req.query.branchId && typeof req.query.branchId === 'string' ? { branchId: req.query.branchId } : {}),
-      status: { $in: ['PENDING', 'PREPARING'] } 
+      status: { $in: ['PENDING', 'PREPARING', 'READY'] } 
     }).sort('createdAt');
     return res.json(kots);
   } catch (error) {

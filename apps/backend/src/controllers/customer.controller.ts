@@ -252,3 +252,131 @@ export const getBirthdayList = async (req: AuthRequest, res: Response) => {
         return res.status(500).json({ error: 'Server error' });
     }
 };
+
+// ─── Customer Analytics (deep dashboard) ─────────────────────────────────────
+
+export const customerAnalytics = async (req: AuthRequest, res: Response) => {
+    try {
+        const restaurantId = req.user!.restaurantId;
+        const rid = new mongoose.Types.ObjectId(restaurantId as string);
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now); thirtyDaysAgo.setDate(now.getDate() - 30);
+        const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
+
+        // All customers
+        const all = await Customer.find({ restaurantId }).lean();
+
+        // Segment counts
+        const segments: Record<string, number> = { VIP: 0, REGULAR: 0, OCCASIONAL: 0, NEW: 0, LAPSED: 0 };
+        const tiers: Record<string, number> = { PLATINUM: 0, GOLD: 0, SILVER: 0, BRONZE: 0 };
+        all.forEach(c => {
+            if (c.segment && segments[c.segment] !== undefined) segments[c.segment]++;
+            if (c.tier && tiers[c.tier] !== undefined) tiers[c.tier]++;
+        });
+
+        // Top 10 by spend
+        const top10BySpend = [...all]
+            .sort((a, b) => b.totalSpend - a.totalSpend)
+            .slice(0, 10)
+            .map(c => ({ _id: c._id, name: c.name, phone: c.phone, tier: c.tier, segment: c.segment, totalSpend: c.totalSpend, totalVisits: c.totalVisits, loyaltyPoints: c.loyaltyPoints }));
+
+        // Top 10 by visits
+        const top10ByVisits = [...all]
+            .sort((a, b) => b.totalVisits - a.totalVisits)
+            .slice(0, 10)
+            .map(c => ({ _id: c._id, name: c.name, phone: c.phone, tier: c.tier, segment: c.segment, totalSpend: c.totalSpend, totalVisits: c.totalVisits, loyaltyPoints: c.loyaltyPoints }));
+
+        // New customers per week (last 8 weeks)
+        const weeksData = await Customer.aggregate([
+            { $match: { restaurantId: rid, firstVisitDate: { $gte: new Date(now.getTime() - 56 * 24 * 3600000) } } },
+            {
+                $group: {
+                    _id: { $week: '$firstVisitDate' },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id': 1 } }
+        ]);
+
+        // Monthly new customers (last 6 months)
+        const monthlyNew = await Customer.aggregate([
+            { $match: { restaurantId: rid, firstVisitDate: { $gte: new Date(now.getFullYear(), now.getMonth() - 5, 1) } } },
+            {
+                $group: {
+                    _id: { year: { $year: '$firstVisitDate' }, month: { $month: '$firstVisitDate' } },
+                    count: { $sum: 1 },
+                    revenue: { $sum: '$totalSpend' }
+                }
+            },
+            { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ]);
+
+        // Loyalty points totals
+        const totalLoyaltyPoints = all.reduce((s, c) => s + (c.loyaltyPoints || 0), 0);
+        const avgLoyaltyPoints = all.length > 0 ? Math.round(totalLoyaltyPoints / all.length) : 0;
+        const totalSpend = all.reduce((s, c) => s + (c.totalSpend || 0), 0);
+        const avgSpend = all.length > 0 ? Math.round(totalSpend / all.length) : 0;
+        const avgVisits = all.length > 0 ? +(all.reduce((s, c) => s + (c.totalVisits || 0), 0) / all.length).toFixed(1) : 0;
+
+        // Visit frequency buckets
+        const visitBuckets = { once: 0, twoToFive: 0, sixToTen: 0, moreThanTen: 0 };
+        all.forEach(c => {
+            if (c.totalVisits === 1) visitBuckets.once++;
+            else if (c.totalVisits <= 5) visitBuckets.twoToFive++;
+            else if (c.totalVisits <= 10) visitBuckets.sixToTen++;
+            else visitBuckets.moreThanTen++;
+        });
+
+        // SMS/WhatsApp opt-in counts
+        const smsOptIn = all.filter(c => c.smsOptIn).length;
+        const whatsappOptIn = all.filter((c: any) => c.whatsappOptIn).length;
+
+        // Spend distribution buckets
+        const spendBuckets = [
+            { label: '< ₹500', min: 0, max: 500, count: 0 },
+            { label: '₹500–2k', min: 500, max: 2000, count: 0 },
+            { label: '₹2k–5k', min: 2000, max: 5000, count: 0 },
+            { label: '₹5k–10k', min: 5000, max: 10000, count: 0 },
+            { label: '₹10k+', min: 10000, max: Infinity, count: 0 },
+        ];
+        all.forEach(c => {
+            const bucket = spendBuckets.find(b => c.totalSpend >= b.min && c.totalSpend < b.max);
+            if (bucket) bucket.count++;
+        });
+
+        // Birthday this month
+        const currentMonth = now.getMonth() + 1;
+        const birthdayCount = all.filter(c => c.birthdayMonth === currentMonth).length;
+        const newThisMonth = all.filter(c => new Date(c.firstVisitDate) >= new Date(now.getFullYear(), now.getMonth(), 1)).length;
+        const lapsedCount = segments.LAPSED;
+        const retentionRate = all.length > 0 ? +((1 - lapsedCount / all.length) * 100).toFixed(1) : 0;
+
+        return res.json({
+            totalCustomers: all.length,
+            newThisMonth,
+            totalSpend,
+            avgSpend,
+            avgVisits,
+            totalLoyaltyPoints,
+            avgLoyaltyPoints,
+            smsOptIn,
+            whatsappOptIn,
+            retentionRate,
+            birthdayCount,
+            segments,
+            tiers,
+            top10BySpend,
+            top10ByVisits,
+            visitBuckets,
+            spendBuckets: spendBuckets.map(b => ({ label: b.label, count: b.count })),
+            monthlyNew: monthlyNew.map(m => ({
+                label: new Date(m._id.year, m._id.month - 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+                count: m.count,
+                revenue: m.revenue,
+            })),
+        });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Server error' });
+    }
+};

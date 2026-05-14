@@ -1,82 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import PageLoader from '../components/PageLoader';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ShoppingBag, Users,
-  Table, Activity, RefreshCw, Share2,
+  Table, Activity, RefreshCw, Share2, FileText, MonitorPlay, FileBarChart, PlusCircle, ListOrdered, Receipt
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { inrFormat, pctFormat, shortInr } from '../utils/format';
 import InsightsWidget from '../components/AI/InsightsWidget';
 import { useBranchStore } from '../store/branchStore';
 import { Building2, Award } from 'lucide-react';
 
-// ─── Mock Data (replace with fetch('/api/analytics/...')) ────────────────────
-
-const MOCK_KPI = {
-  todayRevenue: 84500, todayOrders: 47, avgOrderValue: 1798,
-  vsYesterday: 12.4, vsLastWeek: -3.2,
-  occupancyRate: 68, occupiedTables: 11, totalTables: 16, activeOrders: 8,
-  recentOrders: [
-    { invoiceNumber: 'INV-20260421-0047', tableNumber: '12', waiterName: 'Rahul', grandTotal: 2380, paymentMode: 'UPI', createdAt: new Date() },
-    { invoiceNumber: 'INV-20260421-0046', tableNumber: '7', waiterName: 'Amit', grandTotal: 1140, paymentMode: 'CASH', createdAt: new Date(Date.now() - 5 * 60000) },
-    { invoiceNumber: 'INV-20260421-0045', tableNumber: '3', waiterName: 'Rahul', grandTotal: 3200, paymentMode: 'CARD', createdAt: new Date(Date.now() - 12 * 60000) },
-  ],
-};
-
-const MOCK_TREND = [
-  { date: 'Apr 15', revenue: 72000, orders: 38 },
-  { date: 'Apr 16', revenue: 88000, orders: 51 },
-  { date: 'Apr 17', revenue: 65000, orders: 34 },
-  { date: 'Apr 18', revenue: 94000, orders: 56 },
-  { date: 'Apr 19', revenue: 78000, orders: 42 },
-  { date: 'Apr 20', revenue: 75000, orders: 40 },
-  { date: 'Apr 21', revenue: 84500, orders: 47 },
-];
-
-const MOCK_HOURLY = [
-  { hour: '9AM', orders: 3, revenue: 4200 }, { hour: '10AM', orders: 5, revenue: 7100 },
-  { hour: '11AM', orders: 8, revenue: 12500 }, { hour: '12PM', orders: 14, revenue: 23000 },
-  { hour: '1PM', orders: 18, revenue: 31000 }, { hour: '2PM', orders: 12, revenue: 19500 },
-  { hour: '3PM', orders: 6, revenue: 9200 }, { hour: '4PM', orders: 4, revenue: 6100 },
-  { hour: '5PM', orders: 7, revenue: 11000 }, { hour: '6PM', orders: 11, revenue: 18200 },
-  { hour: '7PM', orders: 16, revenue: 27500 }, { hour: '8PM', orders: 15, revenue: 24800 },
-  { hour: '9PM', orders: 9, revenue: 15200 }, { hour: '10PM', orders: 5, revenue: 8400 },
-];
-
-const MOCK_PIE = [
-  { name: 'Mains', value: 38000, color: '#800000' },
-  { name: 'Starters', value: 18000, color: '#FF9933' },
-  { name: 'Drinks', value: 12000, color: '#FFD700' },
-  { name: 'Desserts', value: 6500, color: '#4f46e5' },
-  { name: 'Breads', value: 10000, color: '#10b981' },
-];
-
-const MOCK_MONTHLY = [
-  { month: 'Nov', revenue: 182000, orders: 310 },
-  { month: 'Dec', revenue: 224000, orders: 378 },
-  { month: 'Jan', revenue: 198000, orders: 340 },
-  { month: 'Feb', revenue: 215000, orders: 362 },
-  { month: 'Mar', revenue: 241000, orders: 401 },
-  { month: 'Apr', revenue: 84500, orders: 47 },
-].map(m => m); // typing fix below
-
-const MONTHLY_DATA = [
-  { month: 'Nov', revenue: 182000 },
-  { month: 'Dec', revenue: 224000 },
-  { month: 'Jan', revenue: 198000 },
-  { month: 'Feb', revenue: 215000 },
-  { month: 'Mar', revenue: 241000 },
-  { month: 'Apr', revenue: 84500 },
-];
-
-const BRANCH_COMPARISON = [
-  { name: 'Main Branch - CP', revenue: 47000, orders: 25, occupancy: 75 },
-  { name: 'South Ex Branch', revenue: 37500, orders: 22, occupancy: 60 },
-];
+import { api } from '../utils/api';
 
 const MODE_COLORS: Record<string, string> = { CASH: '#16a34a', CARD: '#3b82f6', UPI: '#8b5cf6', SPLIT: '#f59e0b' };
+const PIE_COLORS = ['#800000', '#FF9933', '#FFD700', '#4f46e5', '#10b981'];
 
 function timeAgo(d: Date) {
   const mins = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
@@ -103,14 +44,80 @@ const RevenueTooltip = ({ active, payload, label }: any) => {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function AnalyticsDashboard() {
   const { selectedBranchId } = useBranchStore();
-  const [kpi] = useState(MOCK_KPI);
+  const [kpi, setKpi] = useState<any>(null);
+  const [error, setError] = useState(false);
+  const [trend, setTrend] = useState<any[]>([]);
+  const [hourly, setHourly] = useState<any[]>([]);
+  const [pie, setPie] = useState<any[]>([]);
+  const [monthly, setMonthly] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  // Simulated Socket.io updates (real: useSocket hook + 'analytics_update' event)
+  const fetchData = async () => {
+    try {
+      setError(false);
+      const qs = selectedBranchId !== 'all' ? `?branchId=${selectedBranchId}` : '';
+
+      const [dashRes, trendRes, hourlyRes, catRes, monthRes] = await Promise.all([
+        api.get(`/analytics/dashboard${qs}`),
+        api.get(`/analytics/revenue-trend${qs}`),
+        api.get(`/analytics/hourly-volume${qs}`),
+        api.get(`/analytics/revenue-by-category${qs}`),
+        api.get(`/analytics/monthly-comparison${qs}`)
+      ]);
+
+      setKpi(dashRes.data);
+      setTrend(trendRes.data.map((d: any) => ({ ...d, date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) })));
+
+      // Map hours 0-23 to readable format
+      setHourly(hourlyRes.data.map((d: any) => {
+        const ampm = d.hour >= 12 ? 'PM' : 'AM';
+        const h = d.hour % 12 || 12;
+        return { ...d, hour: `${h}${ampm}` };
+      }));
+
+      // Map category data
+      setPie(catRes.data.map((d: any, idx: number) => ({
+        name: d._id || 'General',
+        value: d.total,
+        color: PIE_COLORS[idx % PIE_COLORS.length]
+      })));
+
+      setMonthly(monthRes.data.map((d: any) => {
+        const [y, m] = d.month.split('-');
+        const date = new Date(parseInt(y), parseInt(m) - 1);
+        return { ...d, month: date.toLocaleDateString('en-US', { month: 'short' }) };
+      }));
+
+      setLastUpdate(new Date());
+    } catch (e) {
+      console.error('Failed to fetch analytics', e);
+      setError(true);
+    }
+  };
+
   useEffect(() => {
-    const t = setInterval(() => setLastUpdate(new Date()), 30000);
+    fetchData();
+    const t = setInterval(fetchData, 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [selectedBranchId]);
+
+  if (!kpi) {
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4 text-gray-500">
+          <p className="text-lg font-semibold">Failed to load analytics</p>
+          <p className="text-sm text-gray-400">The server may be starting up. Please try again.</p>
+          <button
+            onClick={fetchData}
+            className="flex items-center gap-2 px-4 py-2 bg-maroon text-white rounded-xl text-sm font-semibold hover:bg-opacity-90 transition-colors"
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
+      );
+    }
+    return <PageLoader />;
+  }
 
   const shareWhatsApp = () => {
     const msg = `📊 *Saffron Palace - Today's Summary*\n\n` +
@@ -134,7 +141,7 @@ export default function AnalyticsDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setLastUpdate(new Date())}
+          <button onClick={fetchData}
             className="flex items-center gap-2 px-3 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50">
             <RefreshCw size={14} /> Refresh
           </button>
@@ -148,11 +155,39 @@ export default function AnalyticsDashboard() {
       {/* AI Insights Widget */}
       <InsightsWidget />
 
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Link to="/live-orders" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          <div className="p-3 bg-red-50 text-maroon rounded-full mb-3 group-hover:scale-110 transition-transform">
+            <ListOrdered size={24} />
+          </div>
+          <span className="text-sm font-bold text-gray-700">View Orders</span>
+        </Link>
+        <Link to="/pos" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+            <Receipt size={24} />
+          </div>
+          <span className="text-sm font-bold text-gray-700">Create Invoice</span>
+        </Link>
+        <Link to="/tables" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+            <Table size={24} />
+          </div>
+          <span className="text-sm font-bold text-gray-700">Tables</span>
+        </Link>
+        <Link to="/reports" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          <div className="p-3 bg-green-50 text-green-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+            <FileBarChart size={24} />
+          </div>
+          <span className="text-sm font-bold text-gray-700">Reports</span>
+        </Link>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
-          title={selectedBranchId === 'all' ? "Consolidated Revenue" : "Today's Revenue"}
-          value={inrFormat(selectedBranchId === 'all' ? kpi.todayRevenue + 37500 : kpi.todayRevenue)}
+          title={selectedBranchId === 'all' ? "Consolidated Revenue" : "Revenue"}
+          value={inrFormat(kpi.todayRevenue)}
           sub={`${pctFormat(kpi.vsYesterday)} vs yesterday`}
           subColor={kpi.vsYesterday >= 0 ? 'text-green-600' : 'text-red-500'}
           icon={<TrendingUp size={22} className="text-saffron" />}
@@ -160,7 +195,7 @@ export default function AnalyticsDashboard() {
         />
         <KPICard
           title="Orders Today"
-          value={String(selectedBranchId === 'all' ? kpi.todayOrders + 22 : kpi.todayOrders)}
+          value={String(kpi.todayOrders)}
           sub={`Avg ${inrFormat(kpi.avgOrderValue)} / order`}
           icon={<ShoppingBag size={22} className="text-blue-500" />}
           accent="border-blue-400"
@@ -182,40 +217,7 @@ export default function AnalyticsDashboard() {
         />
       </div>
 
-      {/* Cross-Branch Leaderboard (Only for Consolidated View) */}
-      {selectedBranchId === 'all' && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 animate-fade-in">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="text-brand-500" size={20} />
-            <h2 className="font-bold text-gray-700">Cross-Branch Leaderboard</h2>
-          </div>
-          <div className="grid md:grid-cols-2 gap-6">
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={BRANCH_COMPARISON} layout="vertical" margin={{ left: 40, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
-                <XAxis type="number" tickFormatter={v => shortInr(v)} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: any) => inrFormat(v)} />
-                <Bar dataKey="revenue" fill="#800000" radius={[0, 4, 4, 0]} barSize={24} />
-              </BarChart>
-            </ResponsiveContainer>
-            <div className="space-y-4 flex flex-col justify-center">
-              {BRANCH_COMPARISON.map((branch, idx) => (
-                <div key={branch.name} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl font-black text-gray-300">#{idx + 1}</span>
-                    <span className="font-bold text-gray-800">{branch.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="block font-black text-brand-600">{inrFormat(branch.revenue)}</span>
-                    <span className="text-xs text-gray-500">{branch.orders} Orders · {branch.occupancy}% Occupancy</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Charts Row 1 */}
       <div className="grid lg:grid-cols-3 gap-4">
@@ -223,7 +225,7 @@ export default function AnalyticsDashboard() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="font-bold text-gray-700 mb-4">7-Day Revenue Trend</h2>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={MOCK_TREND}>
+            <LineChart data={trend}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={v => shortInr(v)} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -239,15 +241,15 @@ export default function AnalyticsDashboard() {
           <h2 className="font-bold text-gray-700 mb-2">Revenue by Category</h2>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={MOCK_PIE} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
+              <Pie data={pie} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
                 dataKey="value" nameKey="name" paddingAngle={3}>
-                {MOCK_PIE.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                {pie.map((entry, i) => <Cell key={i} fill={entry.color} />)}
               </Pie>
               <Tooltip formatter={(v: any) => inrFormat(v)} />
             </PieChart>
           </ResponsiveContainer>
           <div className="space-y-1 mt-1">
-            {MOCK_PIE.map(p => (
+            {pie.map(p => (
               <div key={p.name} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
@@ -267,7 +269,7 @@ export default function AnalyticsDashboard() {
           <h2 className="font-bold text-gray-700 mb-1">Hourly Order Volume</h2>
           <p className="text-xs text-gray-400 mb-4">Peak hours — useful for staffing decisions</p>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={MOCK_HOURLY} barSize={18}>
+            <BarChart data={hourly} barSize={18}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
               <XAxis dataKey="hour" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -281,7 +283,7 @@ export default function AnalyticsDashboard() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="font-bold text-gray-700 mb-4">6-Month Revenue</h2>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={MONTHLY_DATA} barSize={28}>
+            <BarChart data={monthly} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
               <YAxis tickFormatter={v => shortInr(v)} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -301,7 +303,7 @@ export default function AnalyticsDashboard() {
           </span>
         </div>
         <div className="divide-y">
-          {kpi.recentOrders.map((order, i) => (
+          {kpi.recentOrders.map((order: any, i: number) => (
             <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-cream rounded-lg flex items-center justify-center text-maroon font-bold text-sm">

@@ -1,15 +1,12 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { ExpenseModel } from '../models/Expense';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 export const getExpenses = async (req: AuthRequest, res: Response) => {
     try {
-        const { branchId, month, year } = req.query;
-        let query: any = { restaurantId: req.user!.restaurantId };
-
-        if (branchId && branchId !== 'all') {
-            query.branchId = branchId;
-        }
+        const { month, year } = req.query;
+        let query = getBaseQuery(req);
 
         if (month && year) {
             const m = parseInt(month as string) - 1;
@@ -29,9 +26,13 @@ export const getExpenses = async (req: AuthRequest, res: Response) => {
 
 export const createExpense = async (req: AuthRequest, res: Response) => {
     try {
+        const branchId = getCreateBranchId(req);
+        if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+
         const expense = new ExpenseModel({
             ...req.body,
             restaurantId: req.user!.restaurantId,
+            branchId,
             recordedBy: req.user!.userId
         });
         await expense.save();
@@ -43,10 +44,9 @@ export const createExpense = async (req: AuthRequest, res: Response) => {
 
 export const deleteExpense = async (req: AuthRequest, res: Response) => {
     try {
-        await ExpenseModel.findOneAndDelete({
-            _id: req.params.id,
-            restaurantId: req.user!.restaurantId
-        });
+        const query = getBaseQuery(req);
+        query._id = req.params.id;
+        await ExpenseModel.findOneAndDelete(query);
         return res.json({ success: true });
     } catch (error) {
         return res.status(500).json({ error: 'Failed to delete expense.' });

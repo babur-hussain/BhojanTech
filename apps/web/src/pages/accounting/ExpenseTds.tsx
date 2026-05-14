@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { Plus, Receipt, FileSignature, Trash2 } from 'lucide-react';
+import { useBranchStore } from '../../store/branchStore';
 
 export default function ExpenseTds() {
+    const { selectedBranchId } = useBranchStore();
+    const isAllBranches = selectedBranchId === 'all';
     const [activeTab, setActiveTab] = useState<'EXPENSE' | 'TDS'>('EXPENSE');
     const [expenses, setExpenses] = useState<any[]>([]);
     const [tdsLogs, setTdsLogs] = useState<any[]>([]);
@@ -91,7 +94,7 @@ export default function ExpenseTds() {
                                 <label className="block text-sm font-medium text-gray-600 mb-1">Date</label>
                                 <input required value={expDate} onChange={(e) => setExpDate(e.target.value)} type="date" className="w-full border rounded px-3 py-2" />
                             </div>
-                            <button type="submit" className="w-full bg-maroon text-white font-semibold py-2 rounded shadow hover:bg-opacity-90">
+                            <button type="submit" disabled={isAllBranches} title={isAllBranches ? "Select a specific branch to add expenses" : ""} className={`w-full text-white font-semibold py-2 rounded shadow ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
                                 Save Expense
                             </button>
                         </form>

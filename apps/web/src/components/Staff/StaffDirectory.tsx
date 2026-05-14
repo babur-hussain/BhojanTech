@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StaffMember, UserRole } from '@restaurant/types';
 import { Plus, Phone, Edit2, UserCheck, UserX, ArrowRightLeft } from 'lucide-react';
+import { useBranchStore } from '../../store/branchStore';
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-purple-100 text-purple-700',
@@ -12,6 +13,8 @@ const ROLE_COLORS: Record<string, string> = {
 interface Props { staff: (StaffMember & { status: string })[]; }
 
 export default function StaffDirectory({ staff }: Props) {
+  const { selectedBranchId } = useBranchStore();
+  const isAllBranches = selectedBranchId === 'all';
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
@@ -32,7 +35,9 @@ export default function StaffDirectory({ staff }: Props) {
           className="flex-1 border rounded-lg px-4 py-2 text-sm focus:ring-saffron focus:border-saffron"
         />
         <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90">
+          disabled={isAllBranches}
+          title={isAllBranches ? "Select a specific branch to invite staff" : ""}
+          className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
           <Plus size={16} /> Invite Staff
         </button>
       </div>

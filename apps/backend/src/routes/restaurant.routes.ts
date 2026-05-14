@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { createRestaurant } from '../controllers/restaurant.controller';
+import { createRestaurant, getRestaurantInfo, updateRestaurantInfo } from '../controllers/restaurant.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
-const router: import('express').Router = Router();
+const router: Router = Router();
 
 router.post('/', requireAuth, createRestaurant);
+router.get('/info', requireAuth, getRestaurantInfo);
+router.patch('/info', requireAuth, updateRestaurantInfo);
 
 export default router;

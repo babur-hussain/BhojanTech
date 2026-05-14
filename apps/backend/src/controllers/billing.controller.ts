@@ -5,6 +5,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { Order } from '../models/Order';
 import { Table } from '../models/Table';
 import { Invoice } from '../models/Invoice';
+import { InvoiceSequence } from '../models/InvoiceSequence';
 import { Branch } from '../models/Branch';
 import { Restaurant } from '../models/Restaurant';
 import { MenuItem } from '../models/MenuItem';
@@ -202,17 +203,28 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     const roundOff = +(rounded - raw).toFixed(2);
     const grandTotal = rounded;
 
-    // Invoice number
-    const seq = await (Invoice as any).todaySequence(new mongoose.Types.ObjectId(restaurantId));
-    const invoiceNumber = generateInvoiceNumber(seq);
+    // Invoice number (atomic sequence)
+    const branchId = req.user!.branchId;
+    const seq = await (InvoiceSequence as any).getNextSequence(
+      new mongoose.Types.ObjectId(restaurantId as string),
+      branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
+    );
+    // Look up branch prefix for invoice numbering
+    let branchPrefix: string | undefined;
+    if (branchId) {
+      const branch = await Branch.findById(branchId).select('invoicePrefix').lean();
+      branchPrefix = branch?.invoicePrefix;
+    }
+    const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
 
     const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
 
     const invoice = await Invoice.create({
       invoiceNumber,
       restaurantId,
+      branchId: branchId || undefined,
       orderId: order._id,
-      tableNumber: order.tableNumber,
+      tableNumber: order.tableNumber || 'DIRECT',
       waiterName: order.waiterName,
       orderType,
       lineItems,
@@ -391,6 +403,185 @@ export const eodSummary = async (req: AuthRequest, res: Response) => {
 
     return res.json(summary);
   } catch (err) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ─── Create Direct Bill (POS) ────────────────────────────────────────────────
+export const createDirectBill = async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      items,
+      orderType = 'TAKEAWAY',
+      discount,
+      payments,
+      paymentMode,
+      amountPaidINR,
+      customerPhone,
+      customerName,
+      redeemPoints: pointsToRedeem,
+    } = req.body;
+
+    const restaurantId = req.user!.restaurantId;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'No items provided' });
+    }
+
+    // 1. Create a "Direct" Order
+    const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
+    
+    const order = await Order.create({
+      restaurantId,
+      branchId: req.user!.branchId,
+      isOnlineOrder: true, // Bypass table requirement
+      deliveryPlatform: 'MANUAL',
+      waiterId: req.user!.userId,
+      waiterName: req.user!.name || 'Staff',
+      items: items.map((i: any) => ({ ...i, _id: new mongoose.Types.ObjectId(), sentToKitchen: true })),
+      totalAmountINR,
+      status: 'PAID', // Directly marked as paid
+      customerName,
+      customerPhone,
+      paymentMode,
+      paymentStatus: 'PAID',
+    });
+
+    // 2. Compute Invoice Data
+    const menuItemIds = order.items.map(i => i.menuItemId);
+    const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+
+    const enrichedItems = order.items.map(i => {
+      const mi = menuItems.find(m => m._id.toString() === i.menuItemId.toString());
+      return { ...(i as any).toObject(), gstSlab: mi?.gstSlab ?? 5, hindiName: mi?.hindiName };
+    });
+
+    const lineItems = buildLineItems(enrichedItems as any);
+    const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2);
+
+    // 3. Loyalty & Discounts
+    const loyaltySettings = await getOrInitSettings(restaurantId as string);
+    let tierDiscountINR = 0;
+    let loyaltyRedemptionDiscount = 0;
+
+    if (customerPhone) {
+      const loyaltyCustomer = await Customer.findOne({ restaurantId, phone: customerPhone });
+      if (loyaltyCustomer) {
+        const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
+        tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
+
+        if (pointsToRedeem && pointsToRedeem >= loyaltySettings.minimumRedemptionPoints) {
+          loyaltyRedemptionDiscount = +(pointsToRedeem / loyaltySettings.pointsPerRupeeRedemption).toFixed(2);
+        }
+      }
+    }
+
+    let flatDiscount = tierDiscountINR + loyaltyRedemptionDiscount;
+    if (discount) {
+      flatDiscount += discount.type === 'FLAT'
+        ? discount.value
+        : +(subtotal * discount.value / 100).toFixed(2);
+    }
+
+    const gstBreakup = computeGSTBreakup(lineItems, flatDiscount);
+    const totalGST = +gstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0).toFixed(2);
+    const raw = subtotal - flatDiscount;
+    const rounded = Math.round(raw);
+    const roundOff = +(rounded - raw).toFixed(2);
+    const grandTotal = rounded;
+
+    // 4. Generate Invoice (atomic sequence)
+    const branchId = req.user!.branchId;
+    const seq = await (InvoiceSequence as any).getNextSequence(
+      new mongoose.Types.ObjectId(restaurantId as string),
+      branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
+    );
+    // Look up branch prefix for invoice numbering
+    let branchPrefix: string | undefined;
+    if (branchId) {
+      const branch = await Branch.findById(branchId).select('invoicePrefix').lean();
+      branchPrefix = branch?.invoicePrefix;
+    }
+    const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
+    const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
+
+    const invoice = await Invoice.create({
+      invoiceNumber,
+      restaurantId,
+      branchId: branchId || undefined,
+      orderId: order._id,
+      tableNumber: 'DIRECT',
+      waiterName: order.waiterName,
+      orderType,
+      lineItems,
+      subtotalINR: subtotal,
+      gstBreakup,
+      totalGSTINR: totalGST,
+      discount: discount
+        ? { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy }
+        : undefined,
+      roundOff,
+      grandTotalINR: grandTotal,
+      payments: payments ?? [{ mode: paymentMode, amountINR: grandTotal }],
+      paymentMode,
+      amountPaidINR: amountPaidINR ?? grandTotal,
+      changeINR: Math.max(0, (amountPaidINR ?? grandTotal) - grandTotal),
+      totalInWords,
+      totalInWordHindi,
+      customerPhone,
+      dailySequence: seq,
+    });
+
+    // 5. Update Loyalty (similar to processPayment)
+    let loyaltyInfo: any = null;
+    if (customerPhone && grandTotal > 0) {
+      try {
+        const { customer, isFirstVisit, isBirthdayMonth } = await upsertCustomer(
+          restaurantId as string,
+          customerPhone,
+          customerName || order.customerName || 'Guest',
+          grandTotal,
+          (order._id as any).toString(),
+          order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity }))
+        );
+
+        if (pointsToRedeem && loyaltyRedemptionDiscount > 0) {
+          await redeemPoints(
+            customer._id.toString(),
+            restaurantId as string,
+            pointsToRedeem,
+            (order._id as any).toString(),
+            loyaltySettings
+          );
+        }
+
+        const { pointsEarned, newBalance } = await earnPoints(
+          customer,
+          grandTotal,
+          (order._id as any).toString(),
+          loyaltySettings,
+          isFirstVisit,
+          isBirthdayMonth
+        );
+
+        loyaltyInfo = {
+          customerId: customer._id,
+          customerName: customer.name,
+          tier: customer.tier,
+          pointsEarned,
+          pointsRedeemed: pointsToRedeem || 0,
+          newBalance,
+          tierDiscountINR,
+          loyaltyRedemptionDiscountINR: loyaltyRedemptionDiscount,
+        };
+      } catch (loyaltyErr) {
+        console.error('[Loyalty] Error processing loyalty:', loyaltyErr);
+      }
+    }
+
+    return res.status(201).json({ invoice, loyaltyInfo, order });
+  } catch (err) {
+    console.error('Error creating direct bill:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };

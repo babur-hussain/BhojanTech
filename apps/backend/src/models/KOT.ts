@@ -26,7 +26,7 @@ export interface IKOT extends Document {
 const KOTSchema: Schema = new Schema(
   {
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
-    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true, index: true },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: false, index: true },
     orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
     tableNumber: { type: String, required: function () { return !this.isOnlineOrder; } },
     waiterName: { type: String, required: function () { return !this.isOnlineOrder; } },

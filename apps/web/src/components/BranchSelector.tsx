@@ -3,30 +3,61 @@ import { useAuth } from '../context/AuthContext';
 import { useBranchStore } from '../store/branchStore';
 import { ChevronDown, Building2 } from 'lucide-react';
 import { UserRole } from '@restaurant/types';
+import { api } from '../utils/api';
+
+interface BranchOption {
+    _id: string;
+    name: string;
+    isActive: boolean;
+    invoicePrefix: string;
+}
 
 export default function BranchSelector() {
     const { user } = useAuth();
     const { selectedBranchId, setSelectedBranchId } = useBranchStore();
-    const [branches, setBranches] = useState<{ id: string, name: string, isActive: boolean }[]>([]);
+    const [branches, setBranches] = useState<BranchOption[]>([]);
 
     useEffect(() => {
-        // Stub fetch: In real app, make API call to /api/branches
-        setBranches([
-            { id: 'all', name: 'All Branches (Consolidated)', isActive: true },
-            { id: '1', name: 'Main Branch - CP', isActive: true },
-            { id: '2', name: 'South Ex Branch', isActive: false },
-        ]);
+        if (!user?.restaurantId) return;
 
-        // Default to 'all' if SUPER_OWNER and no branch is selected
-        if (!selectedBranchId && user?.role === UserRole.SUPER_OWNER) {
-            setSelectedBranchId('all');
-        }
-    }, [user, selectedBranchId, setSelectedBranchId]);
+        const fetchBranches = async () => {
+            try {
+                const res = await api.get('/branches');
+                const data: BranchOption[] = res.data;
+                setBranches(data);
 
-    if (!user || (user.role !== UserRole.SUPER_OWNER && user.role !== UserRole.BRANCH_MANAGER)) return null;
+                // Auto-select logic
+                if (!selectedBranchId || selectedBranchId === 'all') {
+                    if (user.branchId) {
+                        // Staff/waiters are scoped to a single branch
+                        setSelectedBranchId(user.branchId);
+                    } else if (data.length === 1) {
+                        // Only one branch — auto-select it
+                        setSelectedBranchId(data[0]._id);
+                    } else {
+                        // Owner with multiple branches — default to consolidated
+                        setSelectedBranchId('all');
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load branches', err);
+            }
+        };
+
+        fetchBranches();
+    }, [user]);
+
+    // Only show for users who can switch branches
+    const canSwitch = user && (
+        user.role === UserRole.SUPER_OWNER ||
+        user.role === UserRole.OWNER ||
+        user.role === UserRole.BRANCH_MANAGER
+    );
+
+    if (!canSwitch || branches.length === 0) return null;
 
     return (
-        <div className="relative inline-block text-left group">
+        <div className="relative inline-block text-left">
             <div className="flex items-center gap-2">
                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-orange-100 text-orange-600">
                     <Building2 size={16} />
@@ -34,11 +65,14 @@ export default function BranchSelector() {
                 <select
                     value={selectedBranchId || ''}
                     onChange={(e) => setSelectedBranchId(e.target.value)}
-                    className="appearance-none bg-transparent font-bold text-gray-800 pr-6 py-1 cursor-pointer outline-none focus:outline-none"
+                    className="appearance-none bg-transparent font-bold text-gray-800 pr-6 py-1 cursor-pointer outline-none focus:outline-none text-sm"
                 >
+                    {branches.length > 1 && (
+                        <option value="all">All Branches (Consolidated)</option>
+                    )}
                     {branches.map(b => (
-                        <option key={b.id} value={b.id}>
-                            {b.name} {b.id !== 'all' ? (b.isActive ? '🟢' : '🔴') : ''}
+                        <option key={b._id} value={b._id}>
+                            {b.name} {b.isActive ? '🟢' : '🔴'}
                         </option>
                     ))}
                 </select>

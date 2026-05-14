@@ -77,7 +77,7 @@ export interface GSTDetails {
   sgst: number;
   totalGst: number;
   hsnCode?: string;
-  gstSlab: 5 | 12 | 18; // 5%, 12%, or 18% slab
+  gstSlab: 0 | 5 | 12 | 18; // 0%, 5%, 12%, or 18% slab
 }
 
 export interface MenuCategory {
@@ -94,6 +94,7 @@ export interface MenuCategory {
 export interface ItemVariant {
   name: string; // e.g., 'Quarter', 'Half', 'Full'
   priceINR: number;
+  specialPriceINR?: number;
 }
 
 export interface BranchMenuOverride {
@@ -112,15 +113,23 @@ export interface MenuItem {
   description?: string;
   isVeg: boolean;
   variants: ItemVariant[];
-  gstSlab: 5 | 12 | 18;
+  gstSlab: 0 | 5 | 12 | 18;
   isAvailable: boolean; // default central availability
   isAvailableOnline: boolean;
   isBestseller: boolean;
   isChefSpecial: boolean;
   spiceLevel?: 'MILD' | 'MEDIUM' | 'SPICY';
   imageUrl?: string;
+  imageUrls?: string[];
   thumbnailUrl?: string;
   allergenTags: string[];
+  dietaryTags?: string[];
+  preparationTime?: number; // in minutes
+  packingCharges?: number;
+  barcode?: string;
+  shortCode?: string;
+  costPriceINR?: number;
+  calories?: number;
   branchOverrides?: BranchMenuOverride[]; // Controls availability & pricing per branch
   zomatoItemId?: string;
   swiggyItemId?: string;
@@ -236,7 +245,7 @@ export interface InvoiceLineItem {
   variantName?: string;
   quantity: number;
   unitPrice: number;
-  gstSlab: 5 | 12 | 18;
+  gstSlab: 0 | 5 | 12 | 18;
   lineTotal: number;
   hsnCode: string;        // 9963 for restaurant services
 }

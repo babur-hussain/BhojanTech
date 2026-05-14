@@ -9,6 +9,7 @@ import MenuManagement from './pages/Menu';
 import Tables from './pages/Tables';
 import OrderDetails from './pages/OrderDetails';
 import KDS from './pages/KDS';
+import LiveOrders from './pages/LiveOrders';
 import BillingScreen from './pages/BillingScreen';
 import EODReport from './pages/EODReport';
 import Inventory from './pages/Inventory';
@@ -19,13 +20,17 @@ import DeliveryOrdersLive from './pages/DeliveryOrdersLive';
 import IntegrationsSettings from './pages/IntegrationsSettings';
 import Customers from './pages/Customers';
 import Campaigns from './pages/Campaigns';
-import CustomerAnalytics from './pages/Analytics';
+import CustomerAnalytics from './pages/CustomerAnalytics';
+import LiveAnalytics from './pages/LiveAnalytics';
 import FloatingChatWidget from './components/AI/FloatingChatWidget';
 import AccountantDashboard from './pages/accounting/AccountantDashboard';
 import GSTFiling from './pages/accounting/GSTFiling';
 import ProfitLoss from './pages/accounting/ProfitLoss';
 import ExpenseTds from './pages/accounting/ExpenseTds';
 import InvoiceRegister from './pages/accounting/InvoiceRegister';
+
+import DirectPOS from './pages/DirectPOS';
+import RestaurantSettings from './pages/RestaurantSettings';
 
 const DashboardHome = () => <AnalyticsDashboard />;
 
@@ -39,22 +44,26 @@ function App() {
 
           <Route path="/" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
+            <Route path="pos" element={<DirectPOS />} />
             <Route path="branches" element={<BranchManagement />} />
             <Route path="menu" element={<MenuManagement />} />
             <Route path="tables" element={<Tables />} />
             <Route path="order/:tableId" element={<OrderDetails />} />
             <Route path="bill/:orderId" element={<BillingScreen />} />
             <Route path="kds" element={<KDS />} />
+            <Route path="live-orders" element={<LiveOrders />} />
             <Route path="eod" element={<EODReport />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="staff" element={<StaffManagement />} />
-            <Route path="analytics" element={<AnalyticsDashboard />} />
+            <Route path="analytics" element={<LiveAnalytics />} />
+            <Route path="dashboard" element={<AnalyticsDashboard />} />
             <Route path="customers" element={<Customers />} />
             <Route path="campaigns" element={<Campaigns />} />
             <Route path="customer-analytics" element={<CustomerAnalytics />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="delivery-orders" element={<DeliveryOrdersLive />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
+            <Route path="settings" element={<RestaurantSettings />} />
             <Route path="ca" element={<AccountantDashboard />} />
             <Route path="ca/gst" element={<GSTFiling />} />
             <Route path="ca/pnl" element={<ProfitLoss />} />

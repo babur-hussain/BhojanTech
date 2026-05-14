@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { MessageSquare, X, Send, Mic, RefreshCw } from 'lucide-react';
+import { MessageSquare, X, Send, Mic, RefreshCw, Menu, PlusCircle, Clock } from 'lucide-react';
 
 interface Message {
     id: string;
@@ -27,7 +27,47 @@ export default function FloatingChatWidget() {
     const [inputValue, setInputValue] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
     const [isListening, setIsListening] = useState(false);
+    const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+    const [sessions, setSessions] = useState<{ sessionId: string, firstMessage: string, updatedAt: string }[]>([]);
+    const [showSidebar, setShowSidebar] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const fetchSessions = () => {
+        fetch(`http://localhost:8080/api/ai/chat/sessions?restaurantId=${DUMMY_RESTAURANT_ID}`)
+            .then(r => r.json())
+            .then(data => {
+                if (Array.isArray(data)) setSessions(data);
+            })
+            .catch(e => console.error("Could not load sessions", e));
+    };
+
+    useEffect(() => {
+        if (isOpen) fetchSessions();
+    }, [isOpen]);
+
+    const loadSession = async (sid: string) => {
+        setSessionId(sid);
+        setShowSidebar(false);
+        try {
+            const res = await fetch(`http://localhost:8080/api/ai/chat/sessions/${sid}`);
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                setMessages(data.map((m: any, i: number) => ({
+                    id: m._id || `${sid}-${i}`,
+                    role: m.role,
+                    content: m.content
+                })));
+            }
+        } catch (e) {
+            console.error("Could not load session", e);
+        }
+    };
+
+    const startNewSession = () => {
+        setSessionId(undefined);
+        setMessages([]);
+        setShowSidebar(false);
+    };
 
     // Initialize Speech Recognition if supported
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -60,7 +100,8 @@ export default function FloatingChatWidget() {
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Use instant snap scrolling instead of 'smooth'. Calling 'smooth' dozens of times a second during streaming causes browser compositor ghosting artifacts!
+        messagesEndRef.current?.scrollIntoView();
     };
 
     useEffect(() => {
@@ -69,6 +110,8 @@ export default function FloatingChatWidget() {
 
     const sendMessage = async (text: string) => {
         if (!text.trim() || isStreaming) return;
+
+        const apiMessages = [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }];
 
         const newMessageId = Date.now().toString();
         setMessages(prev => [...prev, { id: `u-${newMessageId}`, role: 'user', content: text }]);
@@ -84,7 +127,8 @@ export default function FloatingChatWidget() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     restaurantId: DUMMY_RESTAURANT_ID, // Use real restaurantId from user context in prod
-                    message: text
+                    messages: apiMessages,
+                    sessionId: sessionId
                 }),
             });
 
@@ -105,6 +149,11 @@ export default function FloatingChatWidget() {
                             if (dataStr === '[DONE]') break;
                             try {
                                 const data = JSON.parse(dataStr);
+                                if (data.sessionId) {
+                                    setSessionId(data.sessionId);
+                                    fetchSessions(); // refresh the sidebar
+                                    continue;
+                                }
                                 if (data.error) {
                                     setMessages(prev => prev.map(m => m.id === assistantMsgId ? { ...m, content: m.content + '\\n**Error:** ' + data.error } : m));
                                     break;
@@ -136,11 +185,14 @@ export default function FloatingChatWidget() {
             </button>
 
             {/* Chat Drawer Widget */}
-            <div className={`fixed bottom-6 right-6 w-[400px] h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 transition-all duration-300 origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
+            <div className={`fixed bottom-6 right-6 w-[400px] h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 transition-all duration-300 origin-bottom-right ${isOpen ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'} overflow-hidden`}>
 
                 {/* Header */}
-                <div className="bg-[#F47E3E] text-white p-4 rounded-t-2xl flex justify-between items-center shadow-md">
+                <div className="bg-[#F47E3E] text-white p-4 flex justify-between items-center shadow-md z-30 relative">
                     <div className="flex items-center space-x-2">
+                        <button onClick={() => setShowSidebar(!showSidebar)} className="hover:bg-white/20 p-1 rounded transition-colors mr-1">
+                            <Menu size={20} />
+                        </button>
                         <MessageSquare size={20} />
                         <h3 className="font-semibold text-lg">AI Assistant</h3>
                     </div>
@@ -149,8 +201,36 @@ export default function FloatingChatWidget() {
                     </button>
                 </div>
 
+                {/* Sidebar Overlay */}
+                <div className={`absolute top-[60px] left-0 bottom-[60px] w-3/4 bg-white shadow-2xl z-20 border-r border-gray-100 transition-transform duration-300 flex flex-col ${showSidebar ? 'translate-x-0' : '-translate-x-full'}`}>
+                    <div className="p-4 border-b border-gray-100">
+                        <button onClick={startNewSession} className="w-full flex items-center justify-center space-x-2 py-2 bg-orange-50 text-[#F47E3E] rounded-lg hover:bg-orange-100 transition-colors">
+                            <PlusCircle size={18} />
+                            <span className="font-medium">New Chat</span>
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2">
+                        <div className="text-xs font-semibold text-gray-400 uppercase mb-2 px-2 flex items-center space-x-1"><Clock size={12} /> <span>Past Chats</span></div>
+                        {sessions.length === 0 ? (
+                            <p className="text-xs text-gray-400 px-2">No history yet.</p>
+                        ) : (
+                            sessions.map(s => (
+                                <button key={s.sessionId} onClick={() => loadSession(s.sessionId)} className={`w-full text-left p-3 rounded-lg flex flex-col mb-1 transition-colors ${sessionId === s.sessionId ? 'bg-orange-50 border border-orange-100' : 'hover:bg-gray-50 border border-transparent'}`}>
+                                    <span className="text-sm font-medium text-gray-700 truncate line-clamp-1 break-all">{s.firstMessage}</span>
+                                    <span className="text-xs text-gray-400 mt-1">{new Date(s.updatedAt).toLocaleDateString()}</span>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Darken overlay for chat when sidebar is open */}
+                {showSidebar && (
+                    <div className="absolute inset-0 bg-black/10 z-10 top-[60px] bottom-[60px] transition-opacity" onClick={() => setShowSidebar(false)}></div>
+                )}
+
                 {/* Messages list */}
-                <div className="flex-1 p-4 overflow-y-auto bg-gray-50/50">
+                <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-gray-50/50">
                     {messages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-6 text-center text-gray-500 h-full mt-[-20px]">
                             <MessageSquare size={48} className="text-[#F47E3E] opacity-50 mb-4" />
@@ -160,22 +240,24 @@ export default function FloatingChatWidget() {
                     ) : (
                         messages.map((m) => (
                             <div key={m.id} className={`flex mb-4 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[85%] rounded-2xl p-3 ${m.role === 'user' ? 'bg-[#F47E3E] text-white rounded-tr-sm' : 'bg-white shadow-sm border border-gray-100 text-gray-800 rounded-tl-sm prose prose-sm'}`}>
+                                <div className={`max-w-[85%] rounded-2xl p-3 ${m.role === 'user' ? 'bg-[#F47E3E] text-white rounded-tr-sm' : 'bg-white shadow-sm border border-gray-100 text-gray-800 rounded-tl-sm prose prose-sm min-h-[44px]'}`}>
                                     {m.role === 'assistant' ? (
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                                        (m.content === '' && isStreaming) ? (
+                                            <div className="flex space-x-1.5 items-center justify-center h-full pt-1.5 px-1">
+                                                <span className="sr-only">Thinking...</span>
+                                                <div className="w-2 h-2 bg-[#F47E3E] rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_5px_#F47E3E80]"></div>
+                                                <div className="w-2 h-2 bg-[#F47E3E] rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_5px_#F47E3E80]"></div>
+                                                <div className="w-2 h-2 bg-[#F47E3E] rounded-full animate-bounce shadow-[0_0_5px_#F47E3E80]"></div>
+                                            </div>
+                                        ) : (
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                                        )
                                     ) : (
                                         <p className="whitespace-pre-wrap">{m.content}</p>
                                     )}
                                 </div>
                             </div>
                         ))
-                    )}
-                    {isStreaming && messages[messages.length - 1]?.role !== 'assistant' && (
-                        <div className="flex justify-start mb-4">
-                            <div className="bg-white shadow-sm border border-gray-100 p-3 rounded-2xl rounded-tl-sm flex space-x-2 items-center text-gray-400">
-                                <RefreshCw className="animate-spin" size={16} /><span>Thinking...</span>
-                            </div>
-                        </div>
                     )}
                     <div ref={messagesEndRef} />
                 </div>

@@ -1,15 +1,17 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { handleAIChatStream, generateDailyInsights, generateMenuSuggestions } from '../services/aiService';
 import AIInsight from '../models/AIInsight';
+import { AIConversation } from '../models/AIModels';
 
 // Simple in-memory queue to handle rate limits
 let activeRequests = 0;
 const MAX_CONCURRENT = 5;
 
 export const chatStream = async (req: Request, res: Response) => {
-    const { restaurantId, message } = req.body;
-    if (!restaurantId || !message) {
+    const { restaurantId, message, messages, sessionId } = req.body;
+    if (!restaurantId || (!message && !messages)) {
         return res.status(400).json({ error: 'restaurantId and message are required' });
     }
 
@@ -24,9 +26,12 @@ export const chatStream = async (req: Request, res: Response) => {
     res.setHeader('Connection', 'keep-alive');
 
     try {
-        await handleAIChatStream(new mongoose.Types.ObjectId(restaurantId), message, (chunk) => {
+        const inputData = messages || message;
+        const sid = sessionId || uuidv4();
+        await handleAIChatStream(new mongoose.Types.ObjectId(restaurantId), inputData, sid, (chunk) => {
             res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
         });
+        res.write(`data: ${JSON.stringify({ sessionId: sid })}\n\n`);
         res.write('data: [DONE]\n\n');
         res.end();
     } catch (err: any) {
@@ -55,5 +60,37 @@ export const generateMenuSuggestionsHandler = async (req: Request, res: Response
         res.json({ suggestions });
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate menu suggestions' });
+    }
+};
+
+export const getConversationsList = async (req: Request, res: Response) => {
+    const { restaurantId } = req.query;
+    try {
+        const conversations = await AIConversation.find({ restaurantId: new mongoose.Types.ObjectId(restaurantId as string) })
+            .sort({ updatedAt: -1 })
+            .select('sessionId messages updatedAt')
+            .lean();
+
+        // Return only summary (first message)
+        const summary = conversations.map(c => ({
+            sessionId: c.sessionId,
+            firstMessage: (c as any).messages && (c as any).messages.length > 0 ? (c as any).messages[0].content : 'New Chat',
+            updatedAt: c.updatedAt
+        }));
+
+        res.json(summary);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+};
+
+export const getConversationMessagesHandler = async (req: Request, res: Response) => {
+    const { sessionId } = req.params;
+    try {
+        const conversation = await AIConversation.findOne({ sessionId }).lean();
+        if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+        res.json((conversation as any).messages);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch messages' });
     }
 };

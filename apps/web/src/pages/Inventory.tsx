@@ -8,6 +8,7 @@ import ItemModal from '../components/Inventory/ItemModal';
 import AddStockModal from '../components/Inventory/AddStockModal';
 import WastageModal from '../components/Inventory/WastageModal';
 import SupplierModal from '../components/Inventory/SupplierModal';
+import { useBranchStore } from '../store/branchStore';
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -48,6 +49,8 @@ function statusBadge(status: StockStatus) {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Inventory() {
+  const { selectedBranchId } = useBranchStore();
+  const isAllBranches = selectedBranchId === 'all';
   const [items, setItems]             = useState<EnrichedItem[]>(MOCK_ITEMS);
   const [search, setSearch]           = useState('');
   const [categoryFilter, setCat]      = useState('All');
@@ -137,7 +140,9 @@ export default function Inventory() {
           </a>
           <button
             onClick={() => setItemModal({ open: true, item: null })}
-            className="flex items-center gap-2 px-4 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90"
+            disabled={isAllBranches}
+            title={isAllBranches ? "Select a specific branch to add items" : ""}
+            className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}
           >
             <Plus size={16}/> Add Item
           </button>
@@ -256,7 +261,7 @@ export default function Inventory() {
       )}
 
       {activeTab === 'suppliers' && (
-        <SuppliersTab onAdd={() => setSupplier(true)} />
+        <SuppliersTab onAdd={() => setSupplier(true)} isAllBranches={isAllBranches} />
       )}
 
       {/* Modals */}
@@ -288,7 +293,7 @@ export default function Inventory() {
   );
 }
 
-function SuppliersTab({ onAdd }: { onAdd: () => void }) {
+function SuppliersTab({ onAdd, isAllBranches }: { onAdd: () => void, isAllBranches: boolean }) {
   const MOCK_SUPPLIERS = [
     { id:'s1', name:'Fresh Farms Pvt. Ltd.', contactName:'Ramesh Kumar', phone:'9876543210', email:'ramesh@freshfarms.in', address:'Azadpur Mandi, Delhi' },
     { id:'s2', name:'Spice Garden Traders',  contactName:'Priya Singh',  phone:'8765432109', email:'priya@spicegarden.in',  address:'Khari Baoli, Delhi' },
@@ -298,7 +303,7 @@ function SuppliersTab({ onAdd }: { onAdd: () => void }) {
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-bold text-gray-700">Suppliers ({MOCK_SUPPLIERS.length})</h2>
-        <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90">
+        <button onClick={onAdd} disabled={isAllBranches} title={isAllBranches ? "Select a specific branch to add suppliers" : ""} className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
           <Plus size={16}/> Add Supplier
         </button>
       </div>

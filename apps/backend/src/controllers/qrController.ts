@@ -13,7 +13,7 @@ export const generateTableQrCodeSVG = async (req: Request, res: Response) => {
         }
 
         const baseUrl = process.env.CUSTOMER_APP_URL || 'http://localhost:3001';
-        const orderUrl = `${baseUrl}/order/${table.restaurantId}/${tableId}`;
+        const orderUrl = `${baseUrl}/table/${table.restaurantId}/${tableId}`;
 
         // Generate high resolution SVG
         const svgString = await QRCode.toString(orderUrl, {
@@ -67,7 +67,7 @@ export const downloadAllTableQRsPDF = async (req: Request, res: Response) => {
 
         for (let i = 0; i < tables.length; i++) {
             const table = tables[i];
-            const url = `${baseUrl}/order/${table.restaurantId}/${table._id}`;
+            const url = `${baseUrl}/table/${table.restaurantId}/${table._id}`;
 
             // Use toDataURL for image embedded inside PDF
             const qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: qrSize });

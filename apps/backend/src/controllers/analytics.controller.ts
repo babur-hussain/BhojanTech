@@ -9,6 +9,7 @@ import { Attendance } from '../models/Attendance';
 import { WastageLog } from '../models/WastageLog';
 import { PurchaseLog } from '../models/PurchaseLog';
 import { redis } from '../config/redis';
+import { getBaseQuery } from '../utils/queryHelpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,14 +27,118 @@ function monthRange(ym: string) { // YYYY-MM
   return { start: new Date(y, m - 1, 1), end: new Date(y, m, 0, 23, 59, 59) };
 }
 
+// ─── Live Activity (Deep Real-Time Monitor) ───────────────────────────────────
+
+export const liveActivity = async (req: AuthRequest, res: Response) => {
+  try {
+    const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
+    const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+    const query = getBaseQuery(req);
+
+    const [tables, openOrders, todayInvoices, recentInvoices] = await Promise.all([
+      Table.find(query).populate('currentOrderId').lean(),
+      Order.find({ ...query, status: { $in: ['OPEN', 'BILLED'] } }).sort({ createdAt: -1 }).lean(),
+      Invoice.find({ ...query, createdAt: { $gte: todayStart, $lte: todayEnd } }).lean(),
+      Invoice.find(query).sort({ createdAt: -1 }).limit(15).lean(),
+    ]);
+
+    // Table enrichment
+    const enrichedTables = tables.map(t => {
+      const order = openOrders.find(o => o._id.toString() === (t.currentOrderId as any)?._id?.toString() || o._id.toString() === t.currentOrderId?.toString());
+      const seatedMins = t.seatedAt ? Math.floor((now.getTime() - new Date(t.seatedAt).getTime()) / 60000) : null;
+      return {
+        ...t,
+        seatedMins,
+        currentOrder: order || null,
+      };
+    });
+
+    // Hourly revenue for today (last 12 active hours)
+    const hourMap: Record<number, { orders: number; revenue: number }> = {};
+    todayInvoices.forEach(inv => {
+      const h = new Date(inv.createdAt as Date).getHours();
+      if (!hourMap[h]) hourMap[h] = { orders: 0, revenue: 0 };
+      hourMap[h].orders++;
+      hourMap[h].revenue += inv.grandTotalINR;
+    });
+    const currentHour = now.getHours();
+    const hourlyData = Array.from({ length: currentHour + 1 }, (_, h) => ({
+      hour: h,
+      label: `${h % 12 || 12}${h >= 12 ? 'PM' : 'AM'}`,
+      orders: hourMap[h]?.orders || 0,
+      revenue: hourMap[h]?.revenue || 0,
+    })).filter(h => h.hour >= 6);
+
+    // Payment mode split today
+    const modeMap: Record<string, { count: number; amount: number }> = {};
+    todayInvoices.forEach(inv => {
+      const m = inv.paymentMode || 'CASH';
+      if (!modeMap[m]) modeMap[m] = { count: 0, amount: 0 };
+      modeMap[m].count++;
+      modeMap[m].amount += inv.grandTotalINR;
+    });
+
+    // Active order aging buckets
+    const agingBuckets = { fresh: 0, moderate: 0, long: 0, critical: 0 };
+    openOrders.forEach(o => {
+      const mins = Math.floor((now.getTime() - new Date((o as any).createdAt as Date).getTime()) / 60000);
+      if (mins < 20) agingBuckets.fresh++;
+      else if (mins < 35) agingBuckets.moderate++;
+      else if (mins < 50) agingBuckets.long++;
+      else agingBuckets.critical++;
+    });
+
+    // Avg dine time (from billed orders today)
+    const billedToday = openOrders.filter(o => o.status === 'BILLED');
+
+    const payload = {
+      sessionStart: todayStart,
+      now,
+      tables: enrichedTables,
+      openOrdersCount: openOrders.filter(o => o.status === 'OPEN').length,
+      billedOrdersCount: openOrders.filter(o => o.status === 'BILLED').length,
+      totalActiveOrders: openOrders.length,
+      occupiedTables: tables.filter(t => t.status === 'OCCUPIED').length,
+      availableTables: tables.filter(t => t.status === 'AVAILABLE').length,
+      reservedTables: tables.filter(t => t.status === 'RESERVED').length,
+      totalTables: tables.length,
+      todayRevenue: todayInvoices.reduce((s, i) => s + i.grandTotalINR, 0),
+      todayOrders: todayInvoices.length,
+      todayAvgBill: todayInvoices.length > 0 ? +(todayInvoices.reduce((s, i) => s + i.grandTotalINR, 0) / todayInvoices.length).toFixed(2) : 0,
+      liveTabValue: openOrders.reduce((s, o) => s + o.totalAmountINR, 0),
+      hourlyData,
+      paymentModeSplit: Object.entries(modeMap).map(([mode, v]) => ({ mode, ...v })),
+      agingBuckets,
+      recentInvoices: recentInvoices.map(i => ({
+        invoiceNumber: i.invoiceNumber,
+        tableNumber: i.tableNumber,
+        waiterName: i.waiterName,
+        grandTotal: i.grandTotalINR,
+        paymentMode: i.paymentMode,
+        createdAt: i.createdAt,
+      })),
+    };
+
+    return res.json(payload);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 // ─── Live Dashboard KPIs ──────────────────────────────────────────────────────
 
 export const liveDashboard = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
-    const cacheKey = `analytics:liveDashboard:${rid.toString()}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+    const bId = req.user!.branchId || 'all';
+    const cacheKey = `analytics:liveDashboard:${rid.toString()}:${bId}`;
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json(JSON.parse(cached));
+    } catch { /* Redis unavailable — fall through to DB */ }
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const { start: todayStart, end: todayEnd } = dayRange(todayStr);
@@ -41,13 +146,15 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
     const yday = new Date(todayStart); yday.setDate(yday.getDate() - 1);
     const lastWeekSameDay = new Date(todayStart); lastWeekSameDay.setDate(lastWeekSameDay.getDate() - 7);
 
+    const query = getBaseQuery(req);
+
     const [todayInvoices, ydayInvoices, lwInvoices, tables, activeOrders, recentOrders] = await Promise.all([
-      Invoice.find({ restaurantId: rid, createdAt: { $gte: todayStart, $lte: todayEnd } }).read('secondaryPreferred').lean(),
-      Invoice.find({ restaurantId: rid, createdAt: { $gte: new Date(yday.setHours(0, 0, 0, 0)), $lte: new Date(yday.setHours(23, 59, 59, 999)) } }).read('secondaryPreferred').lean(),
-      Invoice.find({ restaurantId: rid, createdAt: { $gte: new Date(lastWeekSameDay.setHours(0, 0, 0, 0)), $lte: new Date(lastWeekSameDay.setHours(23, 59, 59, 999)) } }).read('secondaryPreferred').lean(),
-      Table.find({ restaurantId: rid }).lean(),
-      Order.countDocuments({ restaurantId: rid, status: 'OPEN' }),
-      Invoice.find({ restaurantId: rid }).sort('-createdAt').limit(10),
+      Invoice.find({ ...query, createdAt: { $gte: todayStart, $lte: todayEnd } }).lean(),
+      Invoice.find({ ...query, createdAt: { $gte: new Date(yday.setHours(0, 0, 0, 0)), $lte: new Date(yday.setHours(23, 59, 59, 999)) } }).lean(),
+      Invoice.find({ ...query, createdAt: { $gte: new Date(lastWeekSameDay.setHours(0, 0, 0, 0)), $lte: new Date(lastWeekSameDay.setHours(23, 59, 59, 999)) } }).lean(),
+      Table.find(query).lean(),
+      Order.countDocuments({ ...query, status: 'OPEN' }),
+      Invoice.find(query).sort('-createdAt').limit(10),
     ]);
 
     const todayRevenue = todayInvoices.reduce((s, i) => s + i.grandTotalINR, 0);
@@ -77,7 +184,7 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
       })),
     };
 
-    await redis.set(cacheKey, JSON.stringify(payload), 'EX', 300);
+    try { await redis.set(cacheKey, JSON.stringify(payload), 'EX', 300); } catch { /* ignore */ }
     return res.json(payload);
   } catch (e) { console.error(e); return res.status(500).json({ error: 'Server error' }); }
 };
@@ -87,22 +194,27 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
 export const revenueTrend = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
-    const cacheKey = `analytics:revenueTrend:${rid.toString()}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+    const bId = req.user!.branchId || 'all';
+    const cacheKey = `analytics:revenueTrend:${rid.toString()}:${bId}`;
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json(JSON.parse(cached));
+    } catch { /* Redis unavailable — fall through to DB */ }
 
     const days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d.toISOString().slice(0, 10);
     });
 
+    const query = getBaseQuery(req);
+
     const data = await Promise.all(days.map(async date => {
       const { start, end } = dayRange(date);
-      const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } }).read('secondaryPreferred').lean();
+      const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } }).lean();
       const revenue = invoices.reduce((s, i) => s + i.grandTotalINR, 0);
       return { date, revenue: +revenue.toFixed(2), orders: invoices.length };
     }));
 
-    await redis.set(cacheKey, JSON.stringify(data), 'EX', 300);
+    try { await redis.set(cacheKey, JSON.stringify(data), 'EX', 300); } catch { /* ignore */ }
     return res.json(data);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -112,14 +224,18 @@ export const revenueTrend = async (req: AuthRequest, res: Response) => {
 export const hourlyVolume = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
-    const cacheKey = `analytics:hourlyVolume:${rid.toString()}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+    const bId = req.user!.branchId || 'all';
+    const cacheKey = `analytics:hourlyVolume:${rid.toString()}:${bId}`;
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json(JSON.parse(cached));
+    } catch { /* Redis unavailable — fall through to DB */ }
 
     const todayStr = new Date().toISOString().slice(0, 10);
     const { start, end } = dayRange(todayStr);
 
-    const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } }).read('secondaryPreferred').lean();
+    const query = getBaseQuery(req);
+    const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } }).lean();
     const hourMap = Array.from({ length: 24 }, (_, h) => ({ hour: h, orders: 0, revenue: 0 }));
     invoices.forEach(inv => {
       const h = new Date(inv.createdAt as Date).getHours();
@@ -128,8 +244,8 @@ export const hourlyVolume = async (req: AuthRequest, res: Response) => {
     });
 
     const payload = hourMap.filter(h => h.hour >= 7 && h.hour <= 23);
-    await redis.set(cacheKey, JSON.stringify(payload), 'EX', 300);
-    return res.json(payload); // restaurant hours
+    try { await redis.set(cacheKey, JSON.stringify(payload), 'EX', 300); } catch { /* ignore */ }
+    return res.json(payload);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
 
@@ -138,20 +254,28 @@ export const hourlyVolume = async (req: AuthRequest, res: Response) => {
 export const revenueByCategory = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
+    const bId = req.user!.branchId || 'all';
     const dateStr = (req.query.date as string) || new Date().toISOString().slice(0, 10);
-    const cacheKey = `analytics:revenueByCategory:${rid.toString()}:${dateStr}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+    const cacheKey = `analytics:revenueByCategory:${rid.toString()}:${bId}:${dateStr}`;
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json(JSON.parse(cached));
+    } catch { /* Redis unavailable — fall through to DB */ }
 
     const { start, end } = dayRange(dateStr);
+    const query = getBaseQuery(req);
+    // aggregate match needs raw object
+    const matchQuery = { ...query, createdAt: { $gte: start, $lte: end } };
+    // Mongoose convert objectid
+    matchQuery.restaurantId = rid;
+    if (matchQuery.branchId) matchQuery.branchId = new mongoose.Types.ObjectId(matchQuery.branchId as string);
 
     const result = await Invoice.aggregate([
-      { $match: { restaurantId: rid, createdAt: { $gte: start, $lte: end } } },
+      { $match: matchQuery },
       { $unwind: '$lineItems' },
       { $group: { _id: '$lineItems.hsnCode', total: { $sum: '$lineItems.lineTotal' } } },
-    ]).read('secondaryPreferred');
-    // Category info would come from MenuItem.categoryId join — simplified here
-    await redis.set(cacheKey, JSON.stringify(result), 'EX', 300);
+    ]);
+    try { await redis.set(cacheKey, JSON.stringify(result), 'EX', 300); } catch { /* ignore */ }
     return res.json(result);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -164,7 +288,8 @@ export const gstReport = async (req: AuthRequest, res: Response) => {
     const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
     const { start, end } = monthRange(month);
 
-    const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } });
+    const query = getBaseQuery(req);
+    const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } });
 
     // Aggregate by slab
     const slabMap: Record<number, { taxable: number; cgst: number; sgst: number; count: number }> = {};
@@ -211,7 +336,8 @@ export const exportGSTExcel = async (req: AuthRequest, res: Response) => {
     const month = (req.query.month as string) || new Date().toISOString().slice(0, 7);
     const { start, end } = monthRange(month);
 
-    const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } });
+    const query = getBaseQuery(req);
+    const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } });
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Restaurant Management System';
@@ -298,8 +424,9 @@ export const exportGSTExcel = async (req: AuthRequest, res: Response) => {
 export const salesReport = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
+    const bId = req.user!.branchId || 'all';
     const { from, to } = req.query as { from: string; to: string };
-    const cacheKey = `analytics:salesReport:${rid.toString()}:${from || 'all'}:${to || 'all'}`;
+    const cacheKey = `analytics:salesReport:${rid.toString()}:${bId}:${from || 'all'}:${to || 'all'}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
@@ -307,7 +434,8 @@ export const salesReport = async (req: AuthRequest, res: Response) => {
     const end = to ? new Date(to) : new Date();
     end.setHours(23, 59, 59, 999);
 
-    const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } }).read('secondaryPreferred').lean();
+    const query = getBaseQuery(req);
+    const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } }).read('secondaryPreferred').lean();
 
     // Payment mode split
     const modeMap: Record<string, number> = { CASH: 0, CARD: 0, UPI: 0, SPLIT: 0 };
@@ -341,18 +469,23 @@ export const salesReport = async (req: AuthRequest, res: Response) => {
 export const monthlyComparison = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
-    const cacheKey = `analytics:monthlyComparison:${rid.toString()}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json(JSON.parse(cached));
+    const bId = req.user!.branchId || 'all';
+    const cacheKey = `analytics:monthlyComparison:${rid.toString()}:${bId}`;
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return res.json(JSON.parse(cached));
+    } catch { /* Redis unavailable — fall through to DB */ }
 
     const months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
 
+    const query = getBaseQuery(req);
+
     const data = await Promise.all(months.map(async m => {
       const { start, end } = monthRange(m);
-      const invoices = await Invoice.find({ restaurantId: rid, createdAt: { $gte: start, $lte: end } }).read('secondaryPreferred').lean();
+      const invoices = await Invoice.find({ ...query, createdAt: { $gte: start, $lte: end } }).lean();
       const revenue = invoices.reduce((s, i) => s + i.grandTotalINR, 0);
       return { month: m, revenue: +revenue.toFixed(2), orders: invoices.length };
     }));

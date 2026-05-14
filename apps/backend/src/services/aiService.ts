@@ -10,6 +10,7 @@ const openai = new OpenAI({
 });
 
 const getModel = () => process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
+const FALLBACK_MODEL = 'minimax/minimax-m2.5:free';
 
 export const gatherRestaurantContext = async (restaurantId: mongoose.Types.ObjectId) => {
     const startOfDay = new Date();
@@ -52,36 +53,97 @@ const SYSTEM_PROMPT = `You are an expert restaurant management consultant for an
 // Simple rate limit / queue simulation map
 const userQueue = new Map<string, boolean>();
 
-export const handleAIChatStream = async (restaurantId: mongoose.Types.ObjectId, userMessage: string, onUpdate: (chunk: string) => void) => {
+export const handleAIChatStream = async (restaurantId: mongoose.Types.ObjectId, userMessage: string | any[], sessionId: string, onUpdate: (chunk: string) => void) => {
     const contextStr = await gatherRestaurantContext(restaurantId);
-    const fullPrompt = `${contextStr}\n\nUser Question: ${userMessage}`;
+
+    let chatMessages: any[] = [{ role: 'system', content: SYSTEM_PROMPT }];
+    let lastUserMessageString = '';
+    let messagesToSave: any[] = [];
+
+    if (Array.isArray(userMessage)) {
+        const messagesHistory = [...userMessage];
+        messagesToSave = [...userMessage];
+        if (messagesHistory.length > 0) {
+            const lastMsg = messagesHistory[messagesHistory.length - 1];
+            lastUserMessageString = lastMsg.content;
+            lastMsg.content = `${contextStr}\n\nUser Question: ${lastMsg.content}`;
+        }
+        chatMessages = chatMessages.concat(messagesHistory);
+    } else {
+        lastUserMessageString = userMessage;
+        const fullPrompt = `${contextStr}\n\nUser Question: ${userMessage}`;
+        chatMessages.push({ role: 'user', content: fullPrompt });
+        messagesToSave.push({ role: 'user', content: userMessage, timestamp: new Date() });
+    }
 
     let fullResponse = '';
 
-    const stream = await openai.chat.completions.create({
-        model: getModel(),
-        max_tokens: 1024,
-        messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: fullPrompt }
-        ],
-        stream: true,
-    });
+    try {
+        const stream = await openai.chat.completions.create({
+            model: getModel(),
+            max_tokens: 1024,
+            messages: chatMessages,
+            stream: true,
+        });
 
-    for await (const chunk of stream) {
-        const text = chunk.choices[0]?.delta?.content || '';
-        if (text) {
-            fullResponse += text;
-            onUpdate(text);
+        for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content || '';
+            if (text) {
+                fullResponse += text;
+                onUpdate(text);
+            }
+        }
+    } catch (err: any) {
+        if (err.status === 429) {
+            console.log("Primary model rate limited, retrying with fallback model:", FALLBACK_MODEL);
+            const fallbackStream = await openai.chat.completions.create({
+                model: FALLBACK_MODEL,
+                max_tokens: 1024,
+                messages: chatMessages,
+                stream: true,
+            });
+
+            for await (const chunk of fallbackStream) {
+                const text = chunk.choices[0]?.delta?.content || '';
+                if (text) {
+                    fullResponse += text;
+                    onUpdate(text);
+                }
+            }
+        } else {
+            throw err;
         }
     }
 
-    // Log conversation to MongoDB asynchronously
-    AIChatLog.create({
-        userMessage,
-        aiResponse: fullResponse,
-        contextUsed: [contextStr]
-    }).catch(err => console.error("Could not save AI chat log:", err));
+    // Save to AIConversation
+    try {
+        const { AIConversation } = await import('../models/AIModels');
+        // If it's a new session, messagesToSave will be exactly what was sent, else just the Delta could be saved.
+        // Wait, if front-end sends the entire history every time, we should override or intelligently push.
+        // The front-end sends the entire history. We'll findOneAndUpdate and just replace the messages array entirely with the updated history for simplicity, avoiding duplicates.
+
+        let allMessages = [...messagesToSave];
+
+        // ensure timestamps
+        allMessages = allMessages.map(m => ({ ...m, timestamp: m.timestamp || new Date() }));
+        // add assistant response
+        allMessages.push({ role: 'assistant', content: fullResponse, timestamp: new Date() });
+
+        await AIConversation.findOneAndUpdate(
+            { restaurantId, sessionId },
+            {
+                $set: {
+                    messages: allMessages,
+                    contextSnapshot: { generatedFor: lastUserMessageString },
+                    userId: 'dummy_user', // since we don't have auth context in the basic widget yet
+                    branchId: new mongoose.Types.ObjectId(restaurantId) // using restaurantId as branchId dummy
+                }
+            },
+            { upsert: true, new: true }
+        );
+    } catch (err) {
+        console.error("Could not save AI Conversation log:", err);
+    }
 
     return fullResponse;
 };
@@ -91,14 +153,31 @@ export const generateDailyInsights = async (restaurantId: mongoose.Types.ObjectI
 
     const prompt = `Based on the following data, generate exactly 3 concise, specific, and actionable insights for today. E.g. "Paneer Tikka sales dropped 40% vs last week — consider a promotion" or "Inventory alert: tomatoes will run out in 2 days". Format as 3 clear bullet points using markdown.\n\nData:\n${contextStr}`;
 
-    const response = await openai.chat.completions.create({
-        model: getModel(),
-        max_tokens: 500,
-        messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: prompt }
-        ],
-    });
+    let response;
+    try {
+        response = await openai.chat.completions.create({
+            model: getModel(),
+            max_tokens: 500,
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: prompt }
+            ],
+        });
+    } catch (err: any) {
+        if (err.status === 429) {
+            console.log("Primary model rate limited, retrying insights with fallback model:", FALLBACK_MODEL);
+            response = await openai.chat.completions.create({
+                model: FALLBACK_MODEL,
+                max_tokens: 500,
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: prompt }
+                ],
+            });
+        } else {
+            throw err;
+        }
+    }
 
     const textResponse = response.choices[0]?.message?.content || '';
     const insights = textResponse.split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('*')).slice(0, 3);
@@ -119,14 +198,31 @@ export const generateMenuSuggestions = async (restaurantId: mongoose.Types.Objec
 
     const prompt = `Based on the restaurant data and the competitor context provided, suggest which items to add as specials, which slow-moving items to bundle, and optimal pricing.\n\nRestaurant Data:\n${contextStr}\n\nCompetitor Context:\n${competitorContext}`;
 
-    const response = await openai.chat.completions.create({
-        model: getModel(),
-        max_tokens: 800,
-        messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: prompt }
-        ],
-    });
+    let response;
+    try {
+        response = await openai.chat.completions.create({
+            model: getModel(),
+            max_tokens: 800,
+            messages: [
+                { role: 'system', content: SYSTEM_PROMPT },
+                { role: 'user', content: prompt }
+            ],
+        });
+    } catch (err: any) {
+        if (err.status === 429) {
+            console.log("Primary model rate limited, retrying menu suggestions with fallback model:", FALLBACK_MODEL);
+            response = await openai.chat.completions.create({
+                model: FALLBACK_MODEL,
+                max_tokens: 800,
+                messages: [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: prompt }
+                ],
+            });
+        } else {
+            throw err;
+        }
+    }
 
     const textResponse = response.choices[0]?.message?.content || '';
     return textResponse;

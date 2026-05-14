@@ -8,17 +8,25 @@ import axios from 'axios';
  */
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Attach JWT token from localStorage on every request
+// Attach JWT token and branch context on every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Inject the selected branch so the backend can scope data per-outlet
+  const selectedBranchId = localStorage.getItem('selectedBranchId');
+  if (selectedBranchId) {
+    config.headers['x-branch-id'] = selectedBranchId;
+  }
+
   return config;
 });
 

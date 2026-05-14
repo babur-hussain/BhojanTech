@@ -64,11 +64,13 @@ export function computeGSTBreakup(
 }
 
 /**
- * Generate invoice number: INV-YYYYMMDD-XXXX
+ * Generate invoice number: {PREFIX}-YYYYMMDD-XXXX
+ * PREFIX defaults to 'INV' if no branch prefix is provided.
  * XXXX is the daily sequence, padded to 4 digits.
  */
-export function generateInvoiceNumber(sequence: number): string {
+export function generateInvoiceNumber(sequence: number, branchPrefix?: string): string {
+  const prefix = branchPrefix || 'INV';
   const d = new Date();
   const datePart = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
-  return `INV-${datePart}-${String(sequence).padStart(4, '0')}`;
+  return `${prefix}-${datePart}-${String(sequence).padStart(4, '0')}`;
 }

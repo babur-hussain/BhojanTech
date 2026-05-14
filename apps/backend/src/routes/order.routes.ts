@@ -8,6 +8,7 @@ const router: Router = express.Router();
 
 router.use(requireAuth);
 
+router.get('/active', orderCtrl.getActiveOrders);
 router.post('/', orderCtrl.createOrder);
 router.post('/:id/items', orderCtrl.addItemsToOrder);
 router.post('/:id/kot', orderCtrl.generateKOT);

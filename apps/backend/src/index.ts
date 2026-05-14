@@ -144,6 +144,8 @@ import integrationRoutes from './routes/integration.routes';
 import accountingRoutes from './routes/accounting.routes';
 import expenseRoutes from './routes/expense.routes';
 import tdsRoutes from './routes/tds.routes';
+import customerRoutes from './routes/customer.routes';
+import branchRoutes from './routes/branch.routes';
 
 app.use('/api/restaurant', restaurantRoutes);
 import { initCronJobs } from './utils/cronJobs';
@@ -165,6 +167,8 @@ app.use('/api/integrations', integrationRoutes);
 app.use('/api/accounting', accountingRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/tds', tdsRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/branches', branchRoutes);
 
 // Initialize scheduled tasks
 initCronJobs();

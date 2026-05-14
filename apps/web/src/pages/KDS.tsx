@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { KOT } from '@restaurant/types';
-import { Bell, Volume2, VolumeX, CheckCircle, Clock, ChefHat, FlameKindling } from 'lucide-react';
+import { Bell, Volume2, VolumeX, CheckCircle, Clock, ChefHat, FlameKindling, Printer } from 'lucide-react';
 import { useSocket } from '../hooks/useSocket';
+import { useQZTray } from '../hooks/useQZTray';
+import { api } from '../utils/api';
+import { printKOT, type KOTData } from '../utils/thermalPrint';
 
 // ─── Audio helpers ────────────────────────────────────────────────────────────
 
@@ -64,39 +67,12 @@ function getElapsedInfo(createdAt: Date, now: Date) {
 
 const STATIONS = ['ALL', 'Tandoor', 'Curry', 'Drinks', 'Dessert', 'General'];
 
-const MOCK_KOTS: KOT[] = [
-  {
-    id: 'k1', restaurantId: 'r1', branchId: 'b1', orderId: 'o1', tableNumber: '12', waiterName: 'Raju',
-    status: 'PENDING', createdAt: new Date(Date.now() - 5 * 60000),
-    items: [
-      { orderItemId: '1', menuItemId: 'm1', categoryId: 'c1', station: 'Tandoor', name: 'Paneer Tikka', quantity: 2, status: 'PENDING', notes: 'Extra spicy' },
-      { orderItemId: '2', menuItemId: 'm2', categoryId: 'c2', station: 'Curry', name: 'Dal Makhani', quantity: 1, status: 'PENDING' },
-    ],
-  },
-  {
-    id: 'k2', restaurantId: 'r1', branchId: 'b1', orderId: 'o2', tableNumber: '8', waiterName: 'Amit',
-    status: 'PREPARING', createdAt: new Date(Date.now() - 14 * 60000),
-    isOnlineOrder: true, deliveryPlatform: 'ZOMATO', customerName: 'Ravi',
-    items: [
-      { orderItemId: '3', menuItemId: 'm3', categoryId: 'c3', station: 'Curry', name: 'Butter Chicken', variantName: 'Full', quantity: 1, status: 'READY', notes: 'No bone' },
-      { orderItemId: '4', menuItemId: 'm4', categoryId: 'c1', station: 'Tandoor', name: 'Garlic Naan', quantity: 4, status: 'PREPARING' },
-    ],
-  },
-  {
-    id: 'k3', restaurantId: 'r1', branchId: 'b1', orderId: 'o3', tableNumber: '4', waiterName: 'Rahul',
-    status: 'PENDING', createdAt: new Date(Date.now() - 22 * 60000),
-    isOnlineOrder: true, deliveryPlatform: 'SWIGGY', customerName: 'Neha',
-    items: [
-      { orderItemId: '5', menuItemId: 'm5', categoryId: 'c4', station: 'Drinks', name: 'Mango Lassi', quantity: 2, status: 'PENDING' },
-    ],
-  },
-];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function KDS() {
   const { subscribe } = useSocket();
-  const [kots, setKots] = useState<KOT[]>(MOCK_KOTS);
+  const { qzConnected, kitchenPrinter } = useQZTray();
+  const [kots, setKots] = useState<any[]>([]);
   const [now, setNow] = useState(new Date());
   const [stationFilter, setStationFilter] = useState('ALL');
   const [volume, setVolume] = useState(0.5);
@@ -109,6 +85,20 @@ export default function KDS() {
     return () => clearInterval(t);
   }, []);
 
+  // Fetch live KOTs on mount
+  useEffect(() => {
+    api.get('/kots/active')
+      .then(res => {
+        // Map string dates to Date objects
+        const liveKots = res.data.map((k: any) => ({
+          ...k,
+          createdAt: new Date(k.createdAt)
+        }));
+        setKots(liveKots);
+      })
+      .catch(console.error);
+  }, []);
+
   // Unlock audio context on first user click (browser policy)
   useEffect(() => {
     const unlock = () => { getAudioCtx(); };
@@ -118,32 +108,57 @@ export default function KDS() {
 
   // ── Socket.io subscriptions ──────────────────────────────────────────────
   useEffect(() => {
-    const unsub1 = subscribe('kot_created', (kot: KOT) => {
-      setKots(prev => [kot, ...prev]);
+    const unsub1 = subscribe('kot_created', (kot: any) => {
+      const parsed = { ...kot, createdAt: new Date(kot.createdAt) };
+      setKots(prev => [parsed, ...prev]);
       setNewOrderFlash(true);
       setTimeout(() => setNewOrderFlash(false), 800);
       if (!muted) playNewOrderAlert(volume);
+
+      // ── Auto-print KOT slip to kitchen printer via QZ Tray ────────────────
+      const printer = kitchenPrinter || localStorage.getItem('qz_kitchen_printer') || '';
+      if (printer && qzConnected) {
+        const now = new Date();
+        const kotData: KOTData = {
+          kotNumber: (kot._id || kot.id)?.slice(-6),
+          tableNumber: kot.tableNumber || 'Takeaway',
+          waiterName: kot.waiterName,
+          isOnlineOrder: !!kot.isOnlineOrder,
+          deliveryPlatform: kot.deliveryPlatform,
+          customerName: kot.customerName,
+          items: (kot.items || []).map((i: any) => ({
+            name: i.name,
+            variantName: i.variantName,
+            quantity: i.quantity,
+            notes: i.notes,
+            station: i.station,
+          })),
+          time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        };
+        printKOT(kotData, printer).catch(console.warn);
+      }
     });
 
-    const unsub2 = subscribe('kot_update', ({ kot }: { type: string; kot: KOT }) => {
-      setKots(prev => prev.map(k => (k.id === kot.id ? kot : k)));
+    const unsub2 = subscribe('kot_update', ({ kot }: { type: string; kot: any }) => {
+      setKots(prev => prev.map(k => ((k._id || k.id) === (kot._id || kot.id) ? {...kot, createdAt: new Date(kot.createdAt)} : k)));
     });
 
     return () => { unsub1(); unsub2(); };
-  }, [subscribe, muted, volume]);
+  }, [subscribe, muted, volume, kitchenPrinter, qzConnected]);
 
   // ── Item tap cycles PENDING → PREPARING → READY ──────────────────────────
-  const handleItemTap = useCallback((kotId: string, itemId: string, current: string) => {
+  const handleItemTap = useCallback(async (kotId: string, itemId: string, current: string) => {
     const next = current === 'PENDING' ? 'PREPARING' : current === 'PREPARING' ? 'READY' : 'READY';
 
+    // Optimistic update
     setKots(prev =>
       prev.map(k => {
-        if (k.id !== kotId) return k;
-        const items = k.items.map(i =>
-          i.orderItemId === itemId ? { ...i, status: next as any } : i
+        if ((k._id || k.id) !== kotId) return k;
+        const items = k.items.map((i: any) =>
+          (i._id || i.orderItemId) === itemId ? { ...i, status: next } : i
         );
-        const allReady = items.every(i => i.status === 'READY');
-        const anyActive = items.some(i => i.status === 'PREPARING' || i.status === 'READY');
+        const allReady = items.every((i: any) => i.status === 'READY');
+        const anyActive = items.some((i: any) => i.status === 'PREPARING' || i.status === 'READY');
         if (allReady && !muted) playReadyAlert(volume);
         return {
           ...k,
@@ -152,47 +167,26 @@ export default function KDS() {
         };
       })
     );
-    // Real app: PATCH /api/kots/:kotId/items/:itemId/status { status: next }
+
+    try {
+      await api.patch(`/kots/${kotId}/items/${itemId}/status`, { status: next });
+    } catch (e) {
+      console.error('Failed to update item status', e);
+    }
   }, [muted, volume]);
 
-  const handleNotifyWaiter = (kot: KOT) => {
-    // Real app: POST /api/kots/:id/notify → fires FCM push
-    alert(`🔔 Waiter ${kot.waiterName} notified — Table ${kot.tableNumber} ready!`);
-    setKots(prev => prev.filter(k => k.id !== kot.id));
+  const handleNotifyWaiter = async (kot: any) => {
+    try {
+      await api.post(`/kots/${kot._id || kot.id}/notify`);
+      // Optimistically remove it from UI
+      setKots(prev => prev.filter(k => (k._id || k.id) !== (kot._id || kot.id)));
+      alert(`🔔 Waiter ${kot.waiterName || 'Staff'} notified — Table ${kot.tableNumber} ready!`);
+    } catch (e) {
+      console.error('Failed to notify waiter', e);
+    }
   };
 
-  const handleSimulateKOT = () => {
-    const fakeKot: KOT = {
-      id: String(Date.now()),
-      restaurantId: 'r1',
-      branchId: 'b1',
-      orderId: 'dummy-order',
-      tableNumber: String(Math.floor(Math.random() * 20) + 1),
-      waiterName: 'Demo',
-      status: 'PENDING',
-      createdAt: new Date(),
-      isOnlineOrder: true,
-      deliveryPlatform: 'ONDC',
-      customerName: 'Sanjay',
-      items: [
-        {
-          orderItemId: String(Date.now()),
-          menuItemId: 'm9',
-          categoryId: 'c1',
-          station: 'Tandoor',
-          name: 'Chicken Tandoori',
-          variantName: 'Full',
-          quantity: 1,
-          status: 'PENDING',
-          notes: 'Less oil',
-        },
-      ],
-    };
-    setKots(prev => [fakeKot, ...prev]);
-    setNewOrderFlash(true);
-    setTimeout(() => setNewOrderFlash(false), 800);
-    if (!muted) playNewOrderAlert(volume);
-  };
+
 
   const COLUMNS: KOT['status'][] = ['PENDING', 'PREPARING', 'READY'];
 
@@ -212,6 +206,13 @@ export default function KDS() {
         </div>
 
         <div className="flex items-center gap-6">
+          {/* QZ Tray status indicator */}
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
+            <Printer size={14} className={qzConnected ? 'text-green-400' : 'text-gray-600'} />
+            <span className={qzConnected ? 'text-green-400' : 'text-gray-600'}>
+              {qzConnected ? 'KOT Print: ON' : 'KOT Print: OFF'}
+            </span>
+          </div>
           {/* Station filter */}
           <div className="flex items-center gap-2">
             <FlameKindling size={16} className="text-gray-500" />
@@ -247,13 +248,6 @@ export default function KDS() {
             </button>
           </div>
 
-          {/* Demo trigger */}
-          <button
-            onClick={handleSimulateKOT}
-            className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded border border-gray-700 transition-colors"
-          >
-            + Simulate KOT
-          </button>
         </div>
       </div>
 
@@ -261,7 +255,7 @@ export default function KDS() {
       <div className="flex-1 flex gap-4 overflow-x-auto p-4 min-h-0">
         {COLUMNS.map(col => {
           const colKots = kots.filter(k => k.status === col && (
-            stationFilter === 'ALL' || k.items.some(i => i.station === stationFilter)
+            stationFilter === 'ALL' || k.items.some((i: any) => i.station === stationFilter)
           ));
 
           return (
@@ -290,11 +284,11 @@ export default function KDS() {
                   const displayItems =
                     stationFilter === 'ALL'
                       ? kot.items
-                      : kot.items.filter(i => i.station === stationFilter);
+                      : kot.items.filter((i: any) => i.station === stationFilter);
 
                   return (
                     <div
-                      key={kot.id}
+                      key={kot._id || kot.id}
                       className={`rounded-xl border-2 overflow-hidden transition-shadow
                         ${allReady
                           ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.25)]'
@@ -331,7 +325,7 @@ export default function KDS() {
                               )}
                             </p>
                             <p className="text-gray-600 text-xs mt-0.5">
-                              #{kot.id.slice(-6)}
+                              #{(kot._id || kot.id).slice(-6)}
                             </p>
                           </div>
                         </div>
@@ -343,10 +337,10 @@ export default function KDS() {
 
                       {/* Items */}
                       <div className="px-3 py-2 space-y-1.5 bg-gray-950">
-                        {displayItems.map(item => (
+                        {displayItems.map((item: any) => (
                           <button
-                            key={item.orderItemId}
-                            onClick={() => handleItemTap(kot.id, item.orderItemId, item.status)}
+                            key={item._id || item.orderItemId}
+                            onClick={() => handleItemTap(kot._id || kot.id, item._id || item.orderItemId, item.status)}
                             className={`w-full text-left px-3 py-2.5 rounded-lg border-l-4 flex items-start justify-between gap-3 transition-all active:scale-[0.98]
                               ${item.status === 'PENDING' ? 'bg-gray-900  border-red-500   hover:bg-gray-800' : ''}
                               ${item.status === 'PREPARING' ? 'bg-yellow-950 border-yellow-500 hover:bg-yellow-900' : ''}
