@@ -126,6 +126,58 @@ export const logout = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Customer Phone OTP Login
+ * -------------------------
+ * 1. Receives a Firebase ID token obtained after phone OTP verification on the frontend.
+ * 2. Verifies it with Firebase Admin SDK to get the phone number.
+ * 3. Returns a short-lived JWT (customerToken) for use in the customer-web app.
+ *
+ * No Customer document is created here — that happens on first order placement.
+ */
+export const customerLogin = async (req: Request, res: Response) => {
+  try {
+    const { firebaseToken } = req.body;
+    if (!firebaseToken) {
+      return res.status(400).json({ error: 'Firebase token is required' });
+    }
+
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(firebaseToken);
+    const { uid, phone_number } = decodedToken;
+
+    if (!phone_number) {
+      return res.status(400).json({ error: 'Phone number not found in token. Ensure phone auth was used.' });
+    }
+
+    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
+    const jwt = require('jsonwebtoken');
+
+    const token = jwt.sign(
+      {
+        uid,
+        phoneNumber: phone_number,
+        type: 'customer',
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(200).json({
+      token,
+      phoneNumber: phone_number,
+    });
+  } catch (error: any) {
+    console.error('Customer login error:', error);
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Token expired. Please try again.' });
+    }
+    if (error.code === 'auth/argument-error' || error.code === 'auth/invalid-id-token') {
+      return res.status(401).json({ error: 'Invalid token.' });
+    }
+    return res.status(500).json({ error: 'Internal server error during customer login' });
+  }
+};
+
 export const inviteStaff = async (req: Request, res: Response) => {
   try {
     const { phoneNumber, role, name } = req.body;

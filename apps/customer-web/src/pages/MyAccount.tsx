@@ -1,22 +1,32 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Gift, Crown, History, LogOut, ChevronRight, Share2 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 export const MyAccount = () => {
     const navigate = useNavigate();
+    const { user, isAuthenticated, logout } = useAuthStore();
+
+    // Redirect to login if not authenticated
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate('/login', { state: { from: '/my-account' }, replace: true });
+        }
+    }, [isAuthenticated, navigate]);
 
     const handleLogout = () => {
-        localStorage.removeItem('customer_token');
-        navigate('/menu');
+        logout();
+        navigate('/menu', { replace: true });
     };
 
-    // Mock Customer profile
+    // Display profile data from auth store
     const profile = {
-        name: 'Rahul Sharma',
-        phone: '+91 98765 43210',
-        tier: 'GOLD',
-        points: 450,
-        visits: 8,
-        referralCode: 'RAHUL50',
+        name: user?.displayName || 'Guest',
+        phone: user?.phoneNumber || '',
+        tier: 'BRONZE',
+        points: 0,
+        visits: 0,
+        referralCode: '',
     };
 
     return (
