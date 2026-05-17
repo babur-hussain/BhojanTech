@@ -5,8 +5,10 @@ import { api } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
+import { useNavigate } from 'react-router-dom';
 
 export default function DirectPOS() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,38 +24,19 @@ export default function DirectPOS() {
   const [customerName, setCustomerName] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [customerLoading, setCustLoading] = useState(false);
-  const [redeemPoints, setRedeemPoints] = useState('');
-  const [pointValue, setPointValue] = useState(0);
-
-  const [discountType, setDcType] = useState<'FLAT' | 'PERCENT'>('PERCENT');
-  const [discountVal, setDcVal] = useState('');
-  const [showDiscount, setShowDc] = useState(false);
-  const [showPrint, setShowPrint] = useState(false);
-  const receiptRef = useRef<HTMLDivElement>(null);
-
-  const [paymentMode, setMode] = useState<'CASH' | 'CARD' | 'UPI' | 'SPLIT'>('CASH');
-  const [cashReceived, setCash] = useState('');
-  const [splits, setSplits] = useState<{ mode: string; amountINR: number }[]>([]);
-  
   // Submit state
   const [paying, setPaying] = useState(false);
-  const [paid, setPaid] = useState(false);
-  const [invoiceData, setInvoiceData] = useState<any>(null);
-  const [orderData, setOrderData] = useState<any>(null);
-  const [restaurant, setRestaurant] = useState<any>(null);
 
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const [catRes, itemRes, restRes] = await Promise.all([
+        const [catRes, itemRes] = await Promise.all([
           api.get('/menu/categories'),
           api.get('/menu/items'),
-          api.get('/restaurant/info')
         ]);
         setCategories(catRes.data);
         setItems(itemRes.data.filter((i: any) => i.isAvailable));
-        setRestaurant(restRes.data);
       } catch (err) {
         console.error('Failed to load menu', err);
       } finally {
@@ -70,7 +53,6 @@ export default function DirectPOS() {
       if (res.data.found) {
         setCustomer(res.data.customer);
         setCustomerName(res.data.customer.name);
-        setPointValue(res.data.pointsPerRupeeRedemption || 1);
       } else {
         setCustomer(null);
       }
@@ -108,18 +90,9 @@ export default function DirectPOS() {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.priceAtOrderTime * item.quantity), 0);
   
-  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), subtotal) : 0;
-  const discountFlat = (() => {
-    let dc = 0;
-    if (discountVal) {
-      dc = discountType === 'FLAT' ? Math.min(+discountVal, subtotal) : +(subtotal * Math.min(+discountVal, 100) / 100).toFixed(2);
-    }
-    return dc + pointsDiscount;
-  })();
-  
   // Quick GST estimate for frontend display (backend does accurate)
   const gstEstimate = cart.reduce((sum, item) => sum + ((item.priceAtOrderTime * item.quantity) * (item.gstSlab || 5) / 100), 0);
-  const grandTotalEstimate = Math.round(subtotal - discountFlat + gstEstimate);
+  const grandTotalEstimate = Math.round(subtotal + gstEstimate);
 
   const handlePay = async () => {
     if (cart.length === 0) return;
@@ -134,22 +107,14 @@ export default function DirectPOS() {
           quantity: c.quantity,
           priceAtOrderTime: c.priceAtOrderTime
         })),
-        paymentMode,
-        amountPaidINR: paymentMode === 'CASH' ? +cashReceived || grandTotalEstimate : grandTotalEstimate,
-        payments: paymentMode === 'SPLIT' ? splits : undefined,
+        customerPhone,
+        customerName
       };
-      if (discountFlat > pointsDiscount && discountVal) {
-        body.discount = { type: discountType, value: +discountVal };
-      }
-      if (customerPhone) { body.customerPhone = customerPhone; body.customerName = customerName; }
-      if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
 
-      const res = await api.post('/billing/direct', body);
-      setInvoiceData(res.data.invoice);
-      setOrderData(res.data.order);
-      setPaid(true);
+      const res = await api.post('/orders/takeaway', body);
+      navigate(`/bill/${res.data._id}`);
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Payment failed');
+      alert(e?.response?.data?.error || 'Failed to create order');
     } finally {
       setPaying(false);
     }
@@ -160,90 +125,9 @@ export default function DirectPOS() {
     setCustomer(null);
     setCustomerPhone('');
     setCustomerName('');
-    setDcVal('');
-    setRedeemPoints('');
-    setPaid(false);
-    setInvoiceData(null);
   };
 
   if (loading) return <PageLoader message="Loading POS..." />;
-
-  if (paid) {
-    return (
-      <div className="h-[calc(100vh-80px)] overflow-y-auto bg-gray-50 flex flex-col items-center py-8 -m-4 p-4">
-        <div className="flex flex-col items-center mb-8">
-          <CheckCircle size={64} className="text-green-500 mb-2" />
-          <h2 className="text-2xl font-black text-gray-800">Payment Successful!</h2>
-          <p className="text-gray-500 mt-1">Invoice {invoiceData?.invoiceNumber || ''} generated.</p>
-          
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={() => {
-                const now = new Date();
-                const receiptData: ReceiptData = {
-                  restaurantName: restaurant?.name || '',
-                  address: restaurant?.address || '',
-                  gstin: restaurant?.gstin || '',
-                  fssai: restaurant?.fssaiNumber || '',
-                  upiId: restaurant?.upiId || '',
-                  invoiceNumber: invoiceData.invoiceNumber,
-                  tableNumber: 'Takeaway',
-                  waiterName: 'Staff',
-                  paymentMode: invoiceData.paymentMode,
-                  date: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-                  time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                  items: (invoiceData.lineItems || []).map((li: any) => ({
-                    name: li.name, variantName: li.variantName, quantity: li.quantity,
-                    unitPrice: li.unitPrice, lineTotal: li.lineTotal, gstSlab: li.gstSlab,
-                  })),
-                  subtotal: invoiceData.subtotalINR,
-                  discountFlat: invoiceData.discount?.flatAmount || 0,
-                  roundOff: invoiceData.roundOff,
-                  grandTotal: invoiceData.grandTotalINR,
-                  gstBreakup: invoiceData.gstBreakup || [],
-                  totalGST: (invoiceData.gstBreakup || []).reduce((s: number, g: any) => s + g.cgst + g.sgst, 0),
-                  amountInWords: toWordsEN(invoiceData.grandTotalINR),
-                };
-                printReceipt({
-                  receiptData,
-                  receiptContainerRef: receiptRef.current,
-                  printerName: restaurant?.printerName || '',
-                });
-              }}
-              className="flex items-center gap-2 px-8 py-3 bg-maroon text-white rounded-xl font-bold shadow-lg hover:bg-opacity-90 transition-transform active:scale-95"
-            >
-              <Printer size={20} /> Print Receipt
-            </button>
-            <button onClick={resetPOS} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
-              New Order
-            </button>
-          </div>
-        </div>
-
-        {/* Display the thermal receipt inline so the cashier can see it perfectly */}
-        <div className="relative">
-          <div className="absolute -inset-4 bg-gradient-to-b from-gray-200/50 to-transparent blur-xl -z-10 rounded-full"></div>
-          <div ref={receiptRef}>
-            <InvoicePrint
-              preview={{ order: orderData, lineItems: invoiceData.lineItems, gstBreakup: invoiceData.gstBreakup, totalGSTINR: invoiceData.totalGSTINR, subtotalINR: invoiceData.subtotalINR }}
-              finalTotal={invoiceData.grandTotalINR}
-              discountFlat={invoiceData.discount?.flatAmount || 0}
-              roundOff={invoiceData.roundOff}
-              paymentMode={invoiceData.paymentMode}
-              invoiceNumber={invoiceData.invoiceNumber}
-              restaurant={{
-                name: restaurant?.name || '',
-                address: restaurant?.address || '',
-                gstin: restaurant?.gstin || '',
-                fssai: restaurant?.fssaiNumber || '',
-                upiId: restaurant?.upiId || '',
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const filteredItems = items.filter(i => 
     (selectedCategory === 'all' || i.categoryId === selectedCategory) &&
@@ -364,43 +248,16 @@ export default function DirectPOS() {
             <input type="text" placeholder="Name" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
           </div>
 
-          {/* Discount Toggle */}
-          <button onClick={() => setShowDc(d => !d)} className="text-xs font-medium text-maroon flex items-center gap-1"><Tag size={12}/> {showDiscount ? 'Remove Discount' : 'Apply Discount'}</button>
-          {showDiscount && (
-            <div className="flex gap-2">
-              <select value={discountType} onChange={e => setDcType(e.target.value as any)} className="border rounded px-2 py-1 text-sm bg-white">
-                <option value="PERCENT">%</option><option value="FLAT">₹</option>
-              </select>
-              <input type="number" value={discountVal} onChange={e => setDcVal(e.target.value)} placeholder="Value" className="flex-1 border rounded px-2 py-1 text-sm bg-white" />
-            </div>
-          )}
-
-          {/* Payment Mode */}
-          <div className="grid grid-cols-4 gap-1">
-            {[
-              { mode: 'CASH', Icon: Banknote },
-              { mode: 'CARD', Icon: CreditCard },
-              { mode: 'UPI', Icon: Smartphone },
-              { mode: 'SPLIT', Icon: Split },
-            ].map(({ mode, Icon }) => (
-              <button key={mode} onClick={() => setMode(mode as any)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 text-xs font-bold transition-all ${paymentMode === mode ? 'border-maroon bg-red-50 text-maroon' : 'border-gray-200 text-gray-500 bg-white hover:border-gray-300'}`}>
-                <Icon size={16} className="mb-1" /> {mode}
-              </button>
-            ))}
-          </div>
-
-          {/* Totals & Pay */}
-          <div className="pt-2">
+          {/* Totals & Proceed */}
+          <div className="pt-2 border-t border-gray-200 mt-2">
             <div className="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span></div>
             <div className="flex justify-between text-sm text-gray-600 mb-1"><span>Est. Tax</span><span>₹{gstEstimate.toFixed(2)}</span></div>
-            {discountFlat > 0 && <div className="flex justify-between text-sm text-green-600 mb-1"><span>Discount</span><span>-₹{discountFlat.toFixed(2)}</span></div>}
             <button 
               onClick={handlePay} disabled={cart.length === 0 || paying}
-              className="w-full mt-2 py-3 bg-green-600 hover:bg-green-700 text-white font-black text-lg rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-4 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-lg rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               {paying ? <Loader2 size={20} className="animate-spin" /> : null}
-              {paying ? 'Processing...' : `GENERATE INVOICE ₹${grandTotalEstimate}`}
+              {paying ? 'Processing...' : `PROCEED TO BILLING`}
             </button>
           </div>
 

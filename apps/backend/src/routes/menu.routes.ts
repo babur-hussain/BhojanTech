@@ -21,6 +21,8 @@ router.post('/upload', requireRole([UserRole.OWNER, UserRole.MANAGER]), upload.a
 // Categories
 router.get('/categories', menuCtrl.getCategories); // Waiters can read
 router.post('/categories', requireRole([UserRole.OWNER, UserRole.MANAGER]), menuCtrl.createCategory);
+router.put('/categories/:id', requireRole([UserRole.OWNER, UserRole.MANAGER]), menuCtrl.updateCategory);
+router.delete('/categories/:id', requireRole([UserRole.OWNER, UserRole.MANAGER]), menuCtrl.deleteCategory);
 router.patch('/categories/:id/availability', requireRole([UserRole.OWNER, UserRole.MANAGER]), menuCtrl.updateCategoryAvailability);
 
 // Items

@@ -18,6 +18,56 @@ export const getActiveOrders = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getAllOrders = async (req: AuthRequest, res: Response) => {
+  try {
+    const restaurantId = req.user!.restaurantId;
+    const { branchId, status, type, dateFrom, dateTo, search, page = '1', limit = '50' } = req.query as any;
+
+    const query: any = { restaurantId };
+
+    // Branch filter – SUPER_OWNER/OWNER can see all or filter, others are scoped
+    if (branchId && branchId !== 'all') {
+      query.branchId = branchId;
+    } else if (req.user!.branchId) {
+      query.branchId = req.user!.branchId;
+    }
+
+    if (status && status !== 'all') query.status = status;
+    if (type === 'online') query.isOnlineOrder = true;
+    if (type === 'dine-in') query.isOnlineOrder = { $ne: true };
+    if (type === 'takeaway') query.tableNumber = 'TAKEAWAY';
+
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    if (search) {
+      query.$or = [
+        { tableNumber: { $regex: search, $options: 'i' } },
+        { waiterName: { $regex: search, $options: 'i' } },
+        { customerName: { $regex: search, $options: 'i' } },
+        { customerPhone: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [orders, total] = await Promise.all([
+      Order.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean(),
+      Order.countDocuments(query),
+    ]);
+
+    return res.json({ orders, total, page: parseInt(page), limit: parseInt(limit) });
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { tableId, items } = req.body;
@@ -76,6 +126,64 @@ export const addItemsToOrder = async (req: AuthRequest, res: Response) => {
 
     return res.json(order);
   } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
+  try {
+    const { items, customerName, customerPhone } = req.body;
+    const restaurantId = req.user!.restaurantId;
+    const branchId = getCreateBranchId(req);
+    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+
+    const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
+
+    const formattedItems = items.map((i: any) => ({ ...i, _id: new mongoose.Types.ObjectId(), sentToKitchen: true }));
+
+    const order = await Order.create({
+      restaurantId,
+      branchId,
+      tableId: new mongoose.Types.ObjectId(), // placeholder – takeaway has no real table
+      tableNumber: 'TAKEAWAY',
+      waiterId: req.user!.userId,
+      waiterName: req.user!.name || 'Staff',
+      items: formattedItems,
+      totalAmountINR,
+      customerName,
+      customerPhone,
+      status: 'OPEN',
+      isOnlineOrder: false,
+    });
+
+    // Create KOT for Kitchen
+    const kotItems = formattedItems.map((item: any) => ({
+        orderItemId: item._id,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        variantName: item.variantName,
+        quantity: item.quantity,
+        status: 'PENDING'
+    }));
+
+    const newKOT = new KOT({
+        restaurantId: order.restaurantId,
+        branchId: order.branchId,
+        orderId: order._id,
+        tableNumber: order.tableNumber,
+        isOnlineOrder: false,
+        customerName: order.customerName,
+        items: kotItems,
+        status: 'PENDING'
+    });
+    await newKOT.save();
+
+    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('kot_created', newKOT);
+    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('order_update', { type: 'NEW_ORDER', order });
+
+    return res.status(201).json(order);
+  } catch (error) {
+    console.error('Error creating takeaway order:', error);
     return res.status(500).json({ error: 'Server error' });
   }
 };

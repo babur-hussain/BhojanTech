@@ -48,15 +48,29 @@ export const updateKOTItemStatus = async (req: AuthRequest, res: Response) => {
 export const notifyWaiter = async (req: AuthRequest, res: Response) => {
   try {
     const { kotId } = req.params;
-    // const kot = await KOT.findById(kotId);
+    const kot = await KOT.findOne({ _id: kotId, restaurantId: req.user!.restaurantId });
+    if (!kot) return res.status(404).json({ error: 'KOT not found' });
+    
+    // Mark as completed so it clears from the KDS screen
+    kot.status = 'COMPLETED';
+    kot.items.forEach(item => {
+      item.status = 'COMPLETED';
+    });
+    await kot.save();
+
     // Real implementation: trigger FCM push notification to the waiter's device using firebase-admin
 
     io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('waiter_notification', {
       type: 'KOT_READY',
       kotId
     });
+    
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('kot_update', {
+      type: 'KOT_COMPLETED',
+      kot
+    });
 
-    return res.json({ success: true });
+    return res.json({ success: true, kot });
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });
   }

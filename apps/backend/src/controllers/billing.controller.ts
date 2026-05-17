@@ -22,7 +22,18 @@ import {
   applyTierDiscount,
 } from '../services/loyaltyService';
 import { Feedback } from '../models/Feedback';
+import { RetailItem } from '../models/RetailItem';
 
+export const getInvoice = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const invoice = await Invoice.findOne({ _id: id, restaurantId: req.user!.restaurantId });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    return res.json(invoice);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_key',
   key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret',
@@ -129,6 +140,31 @@ export const billingCustomerLookup = async (req: AuthRequest, res: Response) => 
   }
 };
 
+// ─── Generate Bill (No payment yet, just lock order) ─────────────────────────
+export const generateBill = async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const restaurantId = req.user!.restaurantId;
+
+    const order = await Order.findOne({ _id: orderId, restaurantId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.status !== 'OPEN') return res.status(400).json({ error: 'Order is not open' });
+
+    order.status = 'BILLED';
+    await order.save();
+
+    // Notify Waiter/Customer via Socket.io
+    io.to(`restaurant_${restaurantId}_branch_${req.user!.branchId}`).emit('order_update', { type: 'BILL_GENERATED', order });
+    io.to(`restaurant_${restaurantId}_branch_${req.user!.branchId}`).emit('bill_requested', { tableNumber: order.tableNumber, orderId: order._id });
+    
+    io.to(`order_${order._id}`).emit('order_update', { type: 'BILL_GENERATED', order });
+
+    return res.json({ message: 'Bill generated successfully', order });
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 // ─── Process Payment & Generate Invoice ─────────────────────────────────────
 
 export const processPayment = async (req: AuthRequest, res: Response) => {
@@ -145,6 +181,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       redeemPoints: pointsToRedeem,
       razorpayOrderId,
       razorpayPaymentId,
+      retailItems = [],    // [{ _id, quantity }]
     } = req.body;
 
     const restaurantId = req.user!.restaurantId;
@@ -155,7 +192,17 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     ]);
 
     if (!order) return res.status(404).json({ error: 'Order not found' });
-    if (order.status !== 'OPEN') return res.status(400).json({ error: 'Order already closed' });
+    // Allow CANCELLED but nothing else outside the normal flow
+    if (order.status === 'CANCELLED') return res.status(400).json({ error: 'Order is cancelled' });
+
+    // If already PAID, return the most-recent invoice immediately (idempotent re-print)
+    if (order.status === 'PAID') {
+      const existingInvoice = await Invoice.findOne({ orderId: order._id }).sort({ createdAt: -1 });
+      if (existingInvoice) {
+        return res.status(200).json({ invoice: existingInvoice });
+      }
+      // Edge case: PAID but no invoice found — fall through to create one
+    }
 
     // Enrich items
     const menuItemIds = order.items.map(i => i.menuItemId);
@@ -167,6 +214,37 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     });
 
     const lineItems = buildLineItems(enrichedItems as any);
+
+    // ─ Retail items ──────────────────────────────────────────────────────────
+    let retailLineItems: any[] = [];
+    if (retailItems && retailItems.length > 0) {
+      const retailIds = retailItems.map((r: any) => r._id);
+      const retailDocs = await RetailItem.find({ _id: { $in: retailIds }, restaurantId });
+      retailLineItems = retailItems.map((r: any) => {
+        const doc = retailDocs.find((d: any) => d._id.toString() === r._id);
+        if (!doc) return null;
+        const lineTotal = +(doc.priceINR * r.quantity).toFixed(2);
+        return {
+          name: doc.name,
+          variantName: undefined,
+          quantity: r.quantity,
+          unitPrice: doc.priceINR,
+          gstSlab: doc.gstSlab,
+          lineTotal,
+          hsnCode: '',
+        };
+      }).filter(Boolean);
+
+      // Deduct stock for each retail item sold
+      for (const r of retailItems) {
+        await RetailItem.findOneAndUpdate(
+          { _id: r._id, restaurantId },
+          { $inc: { stock: -r.quantity } }
+        );
+      }
+    }
+
+    const allLineItems = [...lineItems, ...retailLineItems];
     const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2);
 
     // ─ Loyalty settings & customer ─────────────────────────────────────────
@@ -196,9 +274,11 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
         : +(subtotal * discount.value / 100).toFixed(2);
     }
 
-    const gstBreakup = computeGSTBreakup(lineItems, flatDiscount);
+    const allSubtotal = +allLineItems.reduce((s: number, l: any) => s + l.lineTotal, 0).toFixed(2);
+
+    const gstBreakup = computeGSTBreakup(allLineItems as any, flatDiscount);
     const totalGST = +gstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0).toFixed(2);
-    const raw = subtotal - flatDiscount;
+    const raw = allSubtotal - flatDiscount;
     const rounded = Math.round(raw);
     const roundOff = +(rounded - raw).toFixed(2);
     const grandTotal = rounded;
@@ -225,10 +305,10 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       branchId: branchId || undefined,
       orderId: order._id,
       tableNumber: order.tableNumber || 'DIRECT',
-      waiterName: order.waiterName,
+      waiterName: order.waiterName || req.user!.name || 'Staff',
       orderType,
-      lineItems,
-      subtotalINR: subtotal,
+      lineItems: allLineItems,
+      subtotalINR: allSubtotal,
       gstBreakup,
       totalGSTINR: totalGST,
       discount: discount
@@ -331,11 +411,22 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     io.to(`restaurant_${restaurantId}_branch_${req.user!.branchId}`).emit('order_update', {
       type: 'ORDER_PAID', orderId: order._id,
     });
+    io.to(`order_${order._id}`).emit('order_update', {
+      type: 'ORDER_PAID', orderId: order._id,
+    });
 
-    return res.status(201).json({ invoice, loyaltyInfo });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(201).json({ invoice });
+  } catch (error: any) {
+    console.error('Payment Error:', error);
+    // Handle duplicate invoice number (race condition / retry)
+    if (error?.code === 11000) {
+      // Unique key violation — invoice already exists, return it
+      try {
+        const dup = await Invoice.findOne({ orderId: req.body.orderId }).sort({ createdAt: -1 });
+        if (dup) return res.status(200).json({ invoice: dup });
+      } catch (_) {}
+    }
+    return res.status(500).json({ error: 'Server error: ' + (error as Error).message });
   }
 };
 

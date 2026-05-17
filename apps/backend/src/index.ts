@@ -1,4 +1,7 @@
-// ⚠️ Sentry MUST be imported/initialised before any other modules
+// ⚠️ Load environment variables FIRST before any other imports
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { initSentry, Sentry } from './config/sentry';
 initSentry();
 
@@ -9,15 +12,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
-import dotenv from 'dotenv';
 import morgan from 'morgan';
 import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
 import { connectDB } from './config/db';
 import logger from './utils/logger';
 import { errorHandler } from './middleware/error.middleware';
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
@@ -36,10 +36,11 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https://*.firebase.io", "https://*.googleapis.com"],
     },
   },
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
@@ -74,7 +75,13 @@ app.use(
 );
 
 // Database Connection
+import mongoose from 'mongoose';
 connectDB();
+
+// Log Mongoose connection lifecycle events
+mongoose.connection.on('disconnected', () => console.warn('MongoDB disconnected — will attempt to reconnect...'));
+mongoose.connection.on('reconnected', () => console.log('MongoDB reconnected ✅'));
+mongoose.connection.on('error', (err) => console.error('MongoDB connection error:', err.message));
 
 import { verifyToken } from './utils/jwt';
 
@@ -82,11 +89,12 @@ import { verifyToken } from './utils/jwt';
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-    if (!token) {
-      return next(new Error('Authentication error'));
+    if (token) {
+      const decoded = verifyToken(token as string);
+      (socket as any).user = decoded;
+    } else {
+      (socket as any).user = null;
     }
-    const decoded = verifyToken(token as string);
-    (socket as any).user = decoded;
     next();
   } catch (err) {
     next(new Error('Authentication error'));
@@ -123,6 +131,11 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('join_order', (orderId: string) => {
+    socket.join(`order_${orderId}`);
+    console.log(`Socket ${socket.id} joined order room order_${orderId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
@@ -146,6 +159,7 @@ import expenseRoutes from './routes/expense.routes';
 import tdsRoutes from './routes/tds.routes';
 import customerRoutes from './routes/customer.routes';
 import branchRoutes from './routes/branch.routes';
+import retailItemRoutes from './routes/retailItem.routes';
 
 app.use('/api/restaurant', restaurantRoutes);
 import { initCronJobs } from './utils/cronJobs';
@@ -169,6 +183,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/tds', tdsRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/api/retail-items', retailItemRoutes);
 
 // Initialize scheduled tasks
 initCronJobs();

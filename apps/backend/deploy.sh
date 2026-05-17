@@ -47,8 +47,8 @@ ssh -i "apps/backend/$PEM_KEY" -o StrictHostKeyChecking=no $USER@$SERVER_IP << '
   # 2. Create the Dockerfile dynamically if it doesn't exist
   cat << 'DOCKERFILE' > Dockerfile
 FROM node:20-alpine
-# Install pnpm and turbo globally
-RUN npm install -g pnpm turbo
+# Install pnpm, turbo, and tsx globally
+RUN npm install -g pnpm turbo tsx
 
 WORKDIR /app
 
@@ -67,8 +67,8 @@ RUN pnpm turbo run build --filter=@restaurant/backend
 # Expose backend port
 EXPOSE 8080
 
-# Command to start the app
-CMD ["node", "apps/backend/dist/index.js"]
+# Command to start the app using tsx to handle workspace typescript files
+CMD ["npx", "--yes", "tsx", "apps/backend/src/index.ts"]
 DOCKERFILE
 
   # 3. Clean up old unused cache / dangling images

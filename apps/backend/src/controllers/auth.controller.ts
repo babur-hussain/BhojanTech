@@ -27,13 +27,23 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user) {
-      // Create new user, default to OWNER for new signups
-      user = await User.create({
-        firebaseUid: uid,
-        email,
-        phoneNumber: phone_number,
-        role: UserRole.OWNER,
-      });
+      try {
+        // Create new user, default to OWNER for new signups
+        user = await User.create({
+          firebaseUid: uid,
+          email,
+          phoneNumber: phone_number,
+          role: UserRole.OWNER,
+        });
+      } catch (createError: any) {
+        // If creation failed due to duplicate key, someone else just created it
+        if (createError.code === 11000) {
+          user = await User.findOne({ firebaseUid: uid });
+          if (!user) throw createError; // Should not happen
+        } else {
+          throw createError;
+        }
+      }
     }
 
     if (!user.isActive) {

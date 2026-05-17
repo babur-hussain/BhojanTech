@@ -3,10 +3,25 @@ import crypto from 'crypto';
 import { Order } from '../models/Order';
 import { KOT } from '../models/KOT';
 import { Table } from '../models/Table';
+import { Customer } from '../models/Customer';
 import { razorpay } from '../config/razorpay';
 import { sendOrderConfirmationWA } from '../services/whatsappService';
 // Assuming io is exported from index.ts or a separate socket.ts file
 import { io } from '../index';
+
+export const lookupCustomerForOnlineOrder = async (req: Request, res: Response) => {
+    try {
+        const { restaurantId, phone } = req.params;
+        const customer = await Customer.findOne({ restaurantId, phone }).select('name');
+        if (customer) {
+            return res.json({ name: customer.name });
+        }
+        return res.json({ name: null });
+    } catch (error) {
+        console.error('lookupCustomerForOnlineOrder Error:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
 
 export const createOnlineOrder = async (req: Request, res: Response) => {
     try {
@@ -188,8 +203,19 @@ const createKOTForOnlineOrder = async (order: any, specificItems?: any[]) => {
 
     await newKOT.save();
 
+    // Mark items as sent to kitchen
+    if (order.items) {
+        order.items.forEach((item: any) => {
+            if (itemsToProcess.some((i: any) => i._id.toString() === item._id.toString())) {
+                item.sentToKitchen = true;
+            }
+        });
+        await order.save();
+    }
+
     // Notify Kitchen via Socket.io
-    io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('new_kot', { kot: newKOT, isOnlineOrder: true });
+    io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('kot_created', newKOT);
+    io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'KOT_SENT', order });
 };
 
 export const getLiveTableOrder = async (req: Request, res: Response) => {
@@ -231,6 +257,8 @@ export const requestBill = async (req: Request, res: Response) => {
         
         // Notify Waiter via Socket.io
         io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('bill_requested', { tableNumber: order.tableNumber, orderId: order._id });
+        io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'BILL_REQUESTED', order });
+        io.to(`order_${order._id}`).emit('order_update', { type: 'BILL_REQUESTED', order });
         
         res.status(200).json({ message: 'Bill requested successfully', order });
     } catch (error) {

@@ -6,12 +6,14 @@ import {
 import {
   ArrowLeft, Printer, MessageSquare, CheckCircle,
   CreditCard, Smartphone, Banknote, Split,
-  Tag, AlertTriangle, UserPlus, Search, Gift, Loader2
+  Tag, AlertTriangle, UserPlus, Search, Gift, Loader2, ShoppingCart, Plus, Minus, X, Camera, ScanLine
 } from 'lucide-react';
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { api } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import CameraScanner from '../components/CameraScanner';
 
 interface BillPreview {
   order: any;
@@ -42,16 +44,26 @@ export default function BillingScreen() {
   const [showPrint, setShowPrint] = useState(false);
   const [paid, setPaid] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [generatingBill, setGeneratingBill] = useState(false);
   const [whatsapp, setWhatsapp] = useState('');
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [restaurant, setRestaurant] = useState<any>(null);
 
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [customerLoading, setCustLoading] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState('');
   const [pointValue, setPointValue] = useState(0);
   const [tierDiscountPct, setTierDiscountPct] = useState(0);
+
+  // Retail items
+  const [retailCatalog, setRetailCatalog] = useState<any[]>([]);
+  const [retailCart, setRetailCart] = useState<{ _id: string; name: string; priceINR: number; gstSlab: number; unit: string; quantity: number }[]>([]);
+  const [showRetail, setShowRetail] = useState(false);
+  const [retailSearch, setRetailSearch] = useState('');
+  const [showCamera, setShowCamera] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
 
   // Fetch bill preview from backend
   useEffect(() => {
@@ -65,6 +77,12 @@ export default function BillingScreen() {
         ]);
         setPreview(prevRes.data);
         setRestaurant(restRes.data);
+
+        // Load retail catalog
+        try {
+          const retailRes = await api.get('/retail-items');
+          setRetailCatalog(retailRes.data.filter((i: any) => i.isActive));
+        } catch {}
       } catch (e: any) {
         setError(e?.response?.data?.error || 'Failed to load bill');
       } finally {
@@ -74,11 +92,11 @@ export default function BillingScreen() {
   }, [orderId]);
 
   // Customer CRM lookup (live)
-  const handleCustomerSearch = async () => {
-    if (customerPhone.length < 10) return;
+  const handleCustomerSearch = async (phone: string) => {
+    if (phone.length < 10) { setCustomer(null); return; }
     try {
       setCustLoading(true);
-      const res = await api.get(`/billing/customer/${customerPhone}`);
+      const res = await api.get(`/billing/customer/${phone}`);
       if (res.data.found) {
         setCustomer(res.data.customer);
         setPointValue(res.data.pointsPerRupeeRedemption || 1);
@@ -93,6 +111,14 @@ export default function BillingScreen() {
     }
   };
 
+  // Live search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleCustomerSearch(customerPhone);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [customerPhone]);
+
   if (loading) {
     return <PageLoader message="Loading bill…" />;
   }
@@ -106,8 +132,36 @@ export default function BillingScreen() {
     );
   }
 
-  // Discount computation
-  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR) : 0;
+  // Retail cart helpers
+  const addRetailItem = useCallback((item: any) => {
+    setRetailCart(cart => {
+      const ex = cart.find(c => c._id === item._id);
+      if (ex) return cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...cart, { _id: item._id, name: item.name, priceINR: item.priceINR, gstSlab: item.gstSlab, unit: item.unit, quantity: 1 }];
+    });
+  }, []);
+
+  const updateRetailQty = (id: string, delta: number) => {
+    setRetailCart(cart => cart.map(c => c._id === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
+  };
+  const retailSubtotal = retailCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
+
+  const handleBarcodeScan = useCallback((barcode: string) => {
+    const item = retailCatalog.find(i => i.barcode === barcode);
+    if (item) {
+      addRetailItem(item);
+      setScanFeedback({ text: `Scanned: ${item.name}`, ok: true });
+      setShowRetail(true);
+    } else {
+      setScanFeedback({ text: `Barcode ${barcode} not found`, ok: false });
+    }
+    setTimeout(() => setScanFeedback(null), 3000);
+  }, [retailCatalog, addRetailItem]);
+
+  useBarcodeScanner(handleBarcodeScan);
+
+  // Discount computation — now includes retail subtotal
+  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR + retailSubtotal) : 0;
   const discountFlat = (() => {
     let dc = 0;
     if (discountVal) {
@@ -116,7 +170,7 @@ export default function BillingScreen() {
     return dc + pointsDiscount;
   })();
   const needsApproval = discountType === 'PERCENT' ? +discountVal > 10 : (discountFlat - pointsDiscount) / preview.subtotalINR > 0.10;
-  const afterDiscount = +(preview.grandTotalINR - discountFlat).toFixed(2);
+  const afterDiscount = +(preview.grandTotalINR + retailSubtotal - discountFlat).toFixed(2);
   const finalTotal = Math.max(0, Math.round(afterDiscount));
   const roundOff = +(finalTotal - afterDiscount).toFixed(2);
   const change = paymentMode === 'CASH' && cashReceived ? Math.max(0, +cashReceived - finalTotal) : 0;
@@ -128,6 +182,63 @@ export default function BillingScreen() {
   const removeSplit = (i: number) => setSplits(s => s.filter((_, idx) => idx !== i));
   const splitsTotal = splits.reduce((s, sp) => s + (+sp.amountINR || 0), 0);
 
+  // Generate Proforma Bill
+  const handleGenerateBill = async () => {
+    try {
+      setGeneratingBill(true);
+      await api.post(`/billing/generate/${orderId}`);
+      
+      const now = new Date();
+      const printerName = restaurant?.printerName || localStorage.getItem('qz_receipt_printer') || '';
+      const receiptData: ReceiptData = {
+        restaurantName: restaurant?.name || '',
+        address: restaurant?.address || '',
+        gstin: restaurant?.gstin || '',
+        fssai: restaurant?.fssaiNumber || '',
+        upiId: restaurant?.upiId || '',
+        invoiceNumber: 'PROFORMA',
+        tableNumber: preview?.order.tableNumber || 'Takeaway',
+        waiterName: preview?.order.waiterName || 'Staff',
+        paymentMode: paymentMode,
+        date: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        items: (preview?.lineItems || []).map((li: any) => ({
+          name: li.name,
+          variantName: li.variantName,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          lineTotal: li.lineTotal,
+          gstSlab: li.gstSlab,
+        })),
+        subtotal: preview?.subtotalINR ?? 0,
+        discountFlat: discountFlat,
+        roundOff: roundOff,
+        grandTotal: finalTotal,
+        gstBreakup: preview?.gstBreakup ?? [],
+        totalGST: (preview?.gstBreakup ?? []).reduce(
+          (s: number, g: any) => s + (g.cgst ?? 0) + (g.sgst ?? 0), 0
+        ),
+        amountInWords: toWordsEN(finalTotal),
+      };
+      
+      if (preview && preview.order) {
+        setPreview({ ...preview, order: { ...preview.order, status: 'BILLED' } });
+      }
+
+      await printReceipt({
+        receiptData,
+        receiptContainerRef: receiptRef.current,
+        printerName,
+      });
+
+      alert('Bill generated and table locked!');
+    } catch (e: any) {
+      alert(e?.response?.data?.error || 'Failed to generate bill');
+    } finally {
+      setGeneratingBill(false);
+    }
+  };
+
   // Pay — live API call
   const handlePay = async () => {
     try {
@@ -135,107 +246,28 @@ export default function BillingScreen() {
       const body: any = {
         orderId,
         paymentMode,
-        amountPaidINR: paymentMode === 'CASH' ? +cashReceived || finalTotal : finalTotal,
+        amountPaidINR: finalTotal,
         payments: paymentMode === 'SPLIT' ? splits : [{ mode: paymentMode, amountINR: finalTotal }],
+        retailItems: retailCart.map(c => ({ _id: c._id, quantity: c.quantity })),
       };
       if (discountFlat > pointsDiscount && discountVal) {
         body.discount = { type: discountType, value: +discountVal, approvedBy: approver || undefined };
       }
-      if (customerPhone) { body.customerPhone = customerPhone; body.customerName = customer?.name; }
+      if (customerPhone) { body.customerPhone = customerPhone; body.customerName = customer?.name || customerName; }
       if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
       if (whatsapp) body.whatsappNumber = whatsapp;
 
       const res = await api.post('/billing/pay', body);
-      setInvoiceData(res.data.invoice);
-      setPaid(true);
+      const invoiceId = res.data?.invoice?._id;
+      if (!invoiceId) throw new Error('No invoice ID in response');
+      navigate(`/invoice/${invoiceId}`);
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Payment failed');
+      alert(e?.response?.data?.error || e?.message || 'Payment failed');
     } finally {
       setPaying(false);
     }
   };
 
-  if (paid) {
-    return (
-      <div className="h-[calc(100vh-80px)] overflow-y-auto bg-gray-50 flex flex-col items-center py-8 -m-4 p-4">
-        <div className="flex flex-col items-center mb-8">
-          <CheckCircle size={64} className="text-green-500 mb-2" />
-          <h2 className="text-2xl font-black text-gray-800">Payment Received!</h2>
-          <p className="text-gray-500 mt-1">Invoice {invoiceData?.invoiceNumber || ''} — Table {preview.order.tableNumber} cleared.</p>
-          <div className="flex gap-4 mt-6">
-            <button
-              onClick={() => {
-                const now = new Date();
-                const printerName = restaurant?.printerName || localStorage.getItem('qz_receipt_printer') || '';
-                const receiptData: ReceiptData = {
-                  restaurantName: restaurant?.name || '',
-                  address: restaurant?.address || '',
-                  gstin: restaurant?.gstin || '',
-                  fssai: restaurant?.fssaiNumber || '',
-                  upiId: restaurant?.upiId || '',
-                  invoiceNumber: invoiceData?.invoiceNumber || '',
-                  tableNumber: preview.order.tableNumber || 'Takeaway',
-                  waiterName: preview.order.waiterName || 'Staff',
-                  paymentMode: paymentMode,
-                  date: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-                  time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-                  items: (invoiceData?.lineItems || preview.lineItems || []).map((li: any) => ({
-                    name: li.name,
-                    variantName: li.variantName,
-                    quantity: li.quantity,
-                    unitPrice: li.unitPrice,
-                    lineTotal: li.lineTotal,
-                    gstSlab: li.gstSlab,
-                  })),
-                  subtotal: invoiceData?.subtotalINR ?? preview.subtotalINR,
-                  discountFlat: discountFlat,
-                  roundOff: roundOff,
-                  grandTotal: invoiceData?.grandTotalINR ?? finalTotal,
-                  gstBreakup: invoiceData?.gstBreakup ?? preview.gstBreakup ?? [],
-                  totalGST: (invoiceData?.gstBreakup ?? preview.gstBreakup ?? []).reduce(
-                    (s: number, g: any) => s + (g.cgst ?? 0) + (g.sgst ?? 0), 0
-                  ),
-                  amountInWords: toWordsEN(invoiceData?.grandTotalINR ?? finalTotal),
-                };
-                printReceipt({
-                  receiptData,
-                  receiptContainerRef: receiptRef.current,
-                  printerName,
-                });
-              }}
-              className="flex items-center gap-2 px-8 py-3 bg-maroon text-white rounded-xl font-bold shadow-lg hover:bg-opacity-90 transition-transform active:scale-95"
-            >
-              <Printer size={20} /> Print Receipt
-            </button>
-            <button onClick={() => navigate('/tables')} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
-              Back to Tables
-            </button>
-          </div>
-        </div>
-
-        <div className="relative">
-          <div className="absolute -inset-4 bg-gradient-to-b from-gray-200/50 to-transparent blur-xl -z-10 rounded-full"></div>
-          <div ref={receiptRef}>
-            <InvoicePrint
-              preview={preview}
-              finalTotal={invoiceData?.grandTotalINR || finalTotal}
-              discountFlat={discountFlat}
-              roundOff={roundOff}
-              paymentMode={paymentMode}
-              invoiceNumber={invoiceData?.invoiceNumber || ''}
-              restaurant={{
-                name: restaurant?.name || '',
-                address: restaurant?.address || '',
-                gstin: restaurant?.gstin || '',
-                fssai: restaurant?.fssaiNumber || '',
-                upiId: restaurant?.upiId || '',
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -249,6 +281,120 @@ export default function BillingScreen() {
       <div className="flex-1 flex flex-col lg:flex-row gap-0 max-w-6xl mx-auto w-full p-4 gap-4">
         {/* Left: Order & GST */}
         <div className="flex-1 space-y-4">
+          {/* Customer Section - Beautiful Live Search */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-maroon bg-opacity-10 flex items-center justify-center">
+                <UserPlus size={16} className="text-maroon" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 text-sm">Customer Details</h3>
+                <p className="text-xs text-gray-400">Auto-fill via CRM or enter manually</p>
+              </div>
+            </div>
+
+            <div className="p-5">
+              {/* Phone + Name Row */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Mobile Number</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-medium">+91</span>
+                    <input
+                      type="tel" maxLength={10}
+                      placeholder="10-digit number"
+                      value={customerPhone}
+                      onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                      className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all"
+                    />
+                    {customerLoading && (
+                      <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-maroon" />
+                    )}
+                    {!customerLoading && customerPhone.length === 10 && (
+                      <div className={`absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${customer ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Customer Name</label>
+                  <input
+                    type="text"
+                    placeholder={customer ? customer.name : 'Enter name...'}
+                    value={customer ? customer.name : customerName}
+                    onChange={e => !customer && setCustomerName(e.target.value)}
+                    readOnly={!!customer}
+                    className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
+                      customer
+                        ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
+                        : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* CRM Result Card */}
+              {customer && (
+                <div className="rounded-xl border border-maroon border-opacity-20 overflow-hidden">
+                  {/* Customer Identity Banner */}
+                  <div className="bg-gradient-to-r from-maroon to-red-800 px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-white bg-opacity-20 flex items-center justify-center text-white font-black text-sm">
+                        {customer.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-white font-bold text-sm">{customer.name}</p>
+                        <p className="text-white text-opacity-70 text-xs">+91 {customer.phone} · {customer.totalVisits || 0} visits</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+                        customer.tier === 'GOLD' ? 'bg-yellow-400 text-yellow-900' :
+                        customer.tier === 'SILVER' ? 'bg-gray-300 text-gray-800' :
+                        customer.tier === 'PLATINUM' ? 'bg-purple-300 text-purple-900' :
+                        'bg-white bg-opacity-20 text-white'
+                      }`}>{customer.tier}</span>
+                      <button
+                        onClick={() => { setCustomer(null); setCustomerPhone(''); setCustomerName(''); setRedeemPoints(''); }}
+                        className="text-white text-opacity-60 hover:text-opacity-100 transition-opacity ml-1 text-xs"
+                      >✕</button>
+                    </div>
+                  </div>
+
+                  {/* Loyalty Points Redeem Row */}
+                  <div className="bg-red-50 px-4 py-3 flex items-center gap-3">
+                    <Gift size={16} className="text-maroon shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Loyalty Balance</p>
+                      <p className="font-black text-maroon">{customer.loyaltyPoints?.toLocaleString() || 0} pts
+                        <span className="font-normal text-gray-400 ml-1 text-xs">= ₹{((customer.loyaltyPoints || 0) / (pointValue || 1)).toFixed(2)}</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number" placeholder="Redeem" value={redeemPoints}
+                        onChange={e => setRedeemPoints(e.target.value)}
+                        max={customer.loyaltyPoints}
+                        className="w-20 text-sm border border-maroon border-opacity-30 rounded-lg px-2 py-1.5 bg-white text-center font-semibold"
+                      />
+                      <button
+                        onClick={() => setRedeemPoints(String(customer.loyaltyPoints || 0))}
+                        className="text-xs font-black bg-maroon text-white px-2.5 py-1.5 rounded-lg hover:bg-opacity-90 transition"
+                      >MAX</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* No CRM Match hint */}
+              {!customer && customerPhone.length === 10 && !customerLoading && preview?.order?.status !== 'BILLED' && (
+                <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0"></span>
+                  No existing customer found
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Line Items */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="bg-gray-50 px-4 py-3 border-b"><h2 className="font-bold text-gray-700">Order Items</h2></div>
@@ -279,6 +425,103 @@ export default function BillingScreen() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Retail Items Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <button
+              onClick={() => setShowRetail(r => !r)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 border-b hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingCart size={16} className="text-maroon" />
+                <span className="font-bold text-gray-700">Add Retail Items</span>
+                {retailCart.length > 0 && (
+                  <span className="bg-maroon text-white text-xs font-black px-2 py-0.5 rounded-full">
+                    {retailCart.reduce((s, c) => s + c.quantity, 0)} items · +₹{retailSubtotal.toFixed(0)}
+                  </span>
+                )}
+              </div>
+              <span className="text-gray-400 text-sm">{showRetail ? '▲' : '▼'}</span>
+            </button>
+
+            {showRetail && (
+              <div className="p-4 space-y-3">
+                {/* Search & Scan Actions */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={retailSearch} onChange={e => setRetailSearch(e.target.value)}
+                      placeholder="Search retail items..."
+                      className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent"
+                    />
+                  </div>
+                  <button 
+                    onClick={() => setShowCamera(true)}
+                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-lg text-gray-600 transition flex items-center justify-center"
+                    title="Scan Barcode with Camera"
+                  >
+                    <Camera size={18} />
+                  </button>
+                </div>
+
+                {/* Feedback Toast */}
+                {scanFeedback && (
+                  <div className={`p-2 rounded-lg text-sm text-center font-semibold animate-pulse ${scanFeedback.ok ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                    {scanFeedback.text}
+                  </div>
+                )}
+
+                {/* Catalog grid */}
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {retailCatalog
+                    .filter(i => i.name.toLowerCase().includes(retailSearch.toLowerCase()))
+                    .map(item => {
+                      const inCart = retailCart.find(c => c._id === item._id);
+                      return (
+                        <div
+                          key={item._id}
+                          className={`flex items-center justify-between p-2.5 rounded-lg border text-sm cursor-pointer transition-all ${inCart ? 'border-maroon bg-red-50' : 'border-gray-100 hover:border-maroon hover:bg-gray-50'}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-800 truncate text-xs">{item.name}</p>
+                            <p className="text-maroon font-bold text-xs">₹{item.priceINR}</p>
+                          </div>
+                          {inCart ? (
+                            <div className="flex items-center gap-1 ml-2">
+                              <button onClick={() => updateRetailQty(item._id, -1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Minus size={10} /></button>
+                              <span className="w-5 text-center text-xs font-black">{inCart.quantity}</span>
+                              <button onClick={() => updateRetailQty(item._id, 1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Plus size={10} /></button>
+                            </div>
+                          ) : (
+                            <button onClick={() => addRetailItem(item)} className="ml-2 w-6 h-6 bg-maroon text-white rounded-full flex items-center justify-center hover:bg-opacity-90 transition">
+                              <Plus size={12} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+
+                {/* Retail cart summary */}
+                {retailCart.length > 0 && (
+                  <div className="border-t pt-3 space-y-1">
+                    {retailCart.map(c => (
+                      <div key={c._id} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700 flex-1">{c.name} × {c.quantity}</span>
+                        <span className="font-semibold text-gray-800">₹{(c.priceINR * c.quantity).toFixed(2)}</span>
+                        <button onClick={() => updateRetailQty(c._id, -c.quantity)} className="ml-2 text-red-400 hover:text-red-600"><X size={14} /></button>
+                      </div>
+                    ))}
+                    <div className="flex justify-between font-black text-maroon pt-1 border-t text-sm">
+                      <span>Retail Subtotal</span>
+                      <span>₹{retailSubtotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* GST Breakup */}
@@ -333,40 +576,6 @@ export default function BillingScreen() {
 
         {/* Right: Payment Panel */}
         <div className="w-full lg:w-96 space-y-4">
-          {/* Customer CRM Lookup */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-4 space-y-3">
-            <h3 className="font-bold text-gray-800 text-sm flex items-center gap-2"><UserPlus size={16} /> Customer</h3>
-            {!customer ? (
-              <div className="flex gap-2">
-                <input type="tel" placeholder="Phone Number" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCustomerSearch()}
-                  className="flex-1 border rounded-lg px-3 py-2 text-sm" />
-                <button onClick={handleCustomerSearch} disabled={customerLoading} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200">
-                  {customerLoading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex justify-between items-start bg-gray-50 border border-gray-100 p-3 rounded-lg">
-                  <div><p className="font-bold text-gray-900">{customer.name}</p><p className="text-xs text-gray-500">{customer.phone}</p></div>
-                  <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-full">{customer.tier}</span>
-                </div>
-                <div className="bg-maroon bg-opacity-5 p-3 rounded-lg border border-maroon border-opacity-20 text-maroon">
-                  <div className="flex justify-between items-center mb-1">
-                    <p className="text-sm font-semibold flex items-center gap-1"><Gift size={14} /> Loyalty Points</p>
-                    <p className="font-bold">{customer.loyaltyPoints?.toLocaleString() || 0}</p>
-                  </div>
-                  <p className="text-xs text-opacity-80 mb-2">Value: ₹{((customer.loyaltyPoints || 0) / (pointValue || 1)).toFixed(2)}</p>
-                  <div className="flex gap-2">
-                    <input type="number" placeholder="Pts to redeem" value={redeemPoints} onChange={e => setRedeemPoints(e.target.value)}
-                      className="w-24 text-sm border-maroon border-opacity-30 rounded px-2 py-1 bg-white" max={customer.loyaltyPoints} />
-                    <button onClick={() => setRedeemPoints(String(customer.loyaltyPoints || 0))} className="text-xs font-bold bg-maroon text-white px-2 py-1 rounded hover:bg-opacity-90">MAX</button>
-                    <button onClick={() => { setCustomer(null); setCustomerPhone(''); setRedeemPoints(''); }} className="text-xs ml-auto text-maroon hover:underline">Change</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Totals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -403,18 +612,9 @@ export default function BillingScreen() {
 
           {/* Mode-specific fields */}
           {paymentMode === 'CASH' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 space-y-3">
-              <label className="block text-sm font-medium text-gray-700">Amount Received (₹)</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-3 flex items-center text-gray-500">₹</span>
-                <input type="number" value={cashReceived} onChange={e => setCash(e.target.value)}
-                  className="w-full pl-8 pr-4 py-3 border rounded-lg text-xl font-bold" placeholder={String(finalTotal)} />
-              </div>
-              {cashReceived && +cashReceived >= finalTotal && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                  <span className="text-green-700 font-bold text-lg">Change: ₹{change.toFixed(2)}</span>
-                </div>
-              )}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center space-y-2">
+              <Banknote size={48} className="text-gray-300 mx-auto" />
+              <p className="text-sm text-gray-500">Collect ₹{finalTotal} in Cash</p>
             </div>
           )}
 
@@ -467,20 +667,55 @@ export default function BillingScreen() {
             </div>
           </div>
 
-          {/* Collect Button */}
-          <button onClick={handlePay} disabled={
-            paying ||
-            (paymentMode === 'CASH' && (!cashReceived || +cashReceived < finalTotal)) ||
-            (paymentMode === 'SPLIT' && splitsTotal !== finalTotal) ||
-            (needsApproval && !approver.trim())
-          }
-            className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-          >
-            {paying ? <Loader2 size={22} className="animate-spin" /> : null}
-            {paying ? 'Processing…' : `COLLECT ₹${finalTotal}`}
-          </button>
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <button onClick={handlePay} disabled={
+                paying || generatingBill ||
+                (paymentMode === 'SPLIT' && splitsTotal !== finalTotal) ||
+                (needsApproval && !approver.trim())
+              }
+                className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-black text-xl rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {paying ? <Loader2 size={22} className="animate-spin" /> : null}
+                {paying ? 'Processing…' : `GENERATE INVOICE`}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <div style={{ display: 'none' }}>
+        <div ref={receiptRef}>
+          <InvoicePrint
+            preview={preview}
+            finalTotal={invoiceData?.grandTotalINR || finalTotal}
+            discountFlat={discountFlat}
+            roundOff={roundOff}
+            paymentMode={paymentMode}
+            invoiceNumber={invoiceData?.invoiceNumber || ''}
+            restaurant={{
+              name: restaurant?.name || '',
+              address: restaurant?.address || '',
+              gstin: restaurant?.gstin || '',
+              fssai: restaurant?.fssaiNumber || '',
+              upiId: restaurant?.upiId || '',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Camera Scanner Modal */}
+      {showCamera && (
+        <CameraScanner 
+          onScan={(barcode) => {
+            handleBarcodeScan(barcode);
+            setShowCamera(false);
+          }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
     </div>
   );
 }

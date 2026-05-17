@@ -11,6 +11,7 @@ import OrderDetails from './pages/OrderDetails';
 import KDS from './pages/KDS';
 import LiveOrders from './pages/LiveOrders';
 import BillingScreen from './pages/BillingScreen';
+import InvoiceScreen from './pages/InvoiceScreen';
 import EODReport from './pages/EODReport';
 import Inventory from './pages/Inventory';
 import StaffManagement from './pages/StaffManagement';
@@ -31,13 +32,15 @@ import InvoiceRegister from './pages/accounting/InvoiceRegister';
 
 import DirectPOS from './pages/DirectPOS';
 import RestaurantSettings from './pages/RestaurantSettings';
+import AllOrders from './pages/AllOrders';
+import RetailItems from './pages/RetailItems';
 
 const DashboardHome = () => <AnalyticsDashboard />;
 
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/setup" element={<SetupRestaurant />} />
@@ -50,7 +53,10 @@ function App() {
             <Route path="tables" element={<Tables />} />
             <Route path="order/:tableId" element={<OrderDetails />} />
             <Route path="bill/:orderId" element={<BillingScreen />} />
+            <Route path="invoice/:invoiceId" element={<InvoiceScreen />} />
             <Route path="kds" element={<KDS />} />
+            <Route path="orders" element={<AllOrders />} />
+            <Route path="retail" element={<RetailItems />} />
             <Route path="live-orders" element={<LiveOrders />} />
             <Route path="eod" element={<EODReport />} />
             <Route path="inventory" element={<Inventory />} />

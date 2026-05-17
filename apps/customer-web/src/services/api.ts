@@ -50,3 +50,8 @@ export const loadRazorpay = () => {
         document.body.appendChild(script);
     });
 };
+
+export const lookupCustomer = async (restaurantId: string, phone: string) => {
+    const { data } = await api.get(`/online-orders/${restaurantId}/customer/${phone}`);
+    return data;
+};

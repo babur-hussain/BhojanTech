@@ -5,12 +5,12 @@ import { ArrowLeft, Trash2 } from 'lucide-react';
 import { createOrder, loadRazorpay } from '../services/api';
 
 export const Checkout = () => {
-    const { items, getTotal, customerName, customerPhone, setCustomerDetails, updateQuantity, removeItem, clearCart, restaurantId, tableNumber } = useCartStore();
+    const { items, getTotal, getGST, customerName, customerPhone, setCustomerDetails, updateQuantity, removeItem, clearCart, restaurantId, tableNumber } = useCartStore();
     const [isProcessing, setIsProcessing] = useState(false);
     const navigate = useNavigate();
 
     const total = getTotal();
-    const gst = total * 0.05; // Assuming 5% avg
+    const gst = getGST();
     const finalTotal = total + gst;
 
     const handlePlaceOrder = async (payOnline: boolean) => {
@@ -127,6 +127,31 @@ export const Checkout = () => {
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                     <h2 className="font-bold text-gray-900">Your Details</h2>
                     <div>
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Phone Number</label>
+                        <input
+                            type="tel"
+                            value={customerPhone}
+                            onChange={async (e) => {
+                                const phone = e.target.value;
+                                setCustomerDetails(customerName, phone);
+                                if (phone.length === 10) {
+                                    try {
+                                        const { lookupCustomer } = await import('../services/api');
+                                        const data = await lookupCustomer(restaurantId || '', phone);
+                                        if (data.name) {
+                                            setCustomerDetails(data.name, phone);
+                                        }
+                                    } catch (err) {
+                                        // Ignore
+                                    }
+                                }
+                            }}
+                            placeholder="10 digit mobile number"
+                            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
+                            maxLength={10}
+                        />
+                    </div>
+                    <div>
                         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Name</label>
                         <input
                             type="text"
@@ -136,23 +161,15 @@ export const Checkout = () => {
                             className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
                         />
                     </div>
-                    <div>
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Phone Number</label>
-                        <input
-                            type="tel"
-                            value={customerPhone}
-                            onChange={e => setCustomerDetails(customerName, e.target.value)}
-                            placeholder="10 digit mobile number"
-                            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
-                        />
-                    </div>
                 </div>
 
                 {/* Bill Details */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                     <h2 className="font-bold text-gray-900 mb-3">Bill Summary</h2>
                     <div className="flex justify-between text-sm text-gray-600 mb-2"><span>Item Total</span><span>₹{total.toFixed(2)}</span></div>
-                    <div className="flex justify-between text-sm text-gray-600 mb-2"><span>Taxes & GST (5%)</span><span>₹{gst.toFixed(2)}</span></div>
+                    {gst > 0 && (
+                        <div className="flex justify-between text-sm text-gray-600 mb-2"><span>Taxes & GST</span><span>₹{gst.toFixed(2)}</span></div>
+                    )}
                     <div className="border-t border-dashed my-3"></div>
                     <div className="flex justify-between font-black text-lg text-gray-900"><span>Grand Total</span><span>₹{finalTotal.toFixed(2)}</span></div>
                 </div>

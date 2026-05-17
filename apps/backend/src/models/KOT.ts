@@ -18,9 +18,9 @@ export interface IKOT extends Document {
     variantName?: string;
     quantity: number;
     notes?: string;
-    status: 'PENDING' | 'PREPARING' | 'READY';
+    status: 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED';
   }[];
-  status: 'PENDING' | 'PREPARING' | 'READY';
+  status: 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED';
 }
 
 const KOTSchema: Schema = new Schema(
@@ -42,10 +42,10 @@ const KOTSchema: Schema = new Schema(
         variantName: { type: String },
         quantity: { type: Number, required: true, min: 1 },
         notes: { type: String },
-        status: { type: String, enum: ['PENDING', 'PREPARING', 'READY'], default: 'PENDING' },
+        status: { type: String, enum: ['PENDING', 'PREPARING', 'READY', 'COMPLETED'], default: 'PENDING' },
       },
     ],
-    status: { type: String, enum: ['PENDING', 'PREPARING', 'READY'], default: 'PENDING' },
+    status: { type: String, enum: ['PENDING', 'PREPARING', 'READY', 'COMPLETED'], default: 'PENDING' },
   },
   { timestamps: true }
 );

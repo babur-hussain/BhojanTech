@@ -76,7 +76,7 @@ export default function Tables() {
   }, []);
 
   const handleTableClick = (table: Table) => {
-    navigate(`/order/${table.id}`);
+    navigate(`/order/${(table as any)._id || table.id}`);
   };
 
   const formatTurnTime = (seatedAt?: Date) => {

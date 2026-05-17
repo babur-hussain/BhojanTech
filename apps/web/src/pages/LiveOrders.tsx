@@ -48,11 +48,6 @@ const STATUS_META: Record<string, { label: string; cls: string; dot: string }> =
 // ─── Order Card ───────────────────────────────────────────────────────────────
 
 function OrderCard({ order, onClick }: { order: any; onClick: () => void }) {
-  const [, forceUpdate] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => forceUpdate(n => n + 1), 30000);
-    return () => clearInterval(t);
-  }, []);
 
   const badge = urgencyBadge(order.createdAt);
   const status = STATUS_META[order.status] || STATUS_META.OPEN;
@@ -283,7 +278,7 @@ export default function LiveOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'OPEN' | 'BILLED'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'OPEN' | 'BILLED'>('OPEN');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [, tick] = useState(0);
@@ -298,6 +293,11 @@ export default function LiveOrders() {
     try {
       const res = await api.get('/orders/active');
       setOrders(res.data);
+      setSelectedOrder((prev: any) => {
+        if (!prev) return prev;
+        const updated = res.data.find((o: any) => o._id === prev._id);
+        return updated || prev;
+      });
       setLastRefresh(new Date());
       setLoading(false);
     } catch (e) {
@@ -314,16 +314,25 @@ export default function LiveOrders() {
 
   // Real-time socket updates
   useEffect(() => {
-    const unsub = subscribe('order_update', ({ type, order }: any) => {
-      if (type === 'NEW_ORDER') {
-        setOrders(prev => [order, ...prev]);
-      } else {
+    const unsub = subscribe('order_update', ({ type, order, orderId }: any) => {
+      if (type === 'NEW_ORDER' && order) {
+        setOrders(prev => {
+          if (prev.some(o => o._id === order._id)) return prev;
+          return [order, ...prev];
+        });
+      } else if (type === 'ORDER_PAID' || type === 'ORDER_COMPLETED' || type === 'ORDER_CANCELLED') {
+        const idToRemove = orderId || (order && order._id);
+        if (idToRemove) {
+          setOrders(prev => prev.filter(o => o._id !== idToRemove));
+          setSelectedOrder((prev: any) => prev?._id === idToRemove ? null : prev);
+        }
+      } else if (order) {
         setOrders(prev => prev.map(o => o._id === order._id ? order : o));
-        if (selectedOrder?._id === order._id) setSelectedOrder(order);
+        setSelectedOrder((prev: any) => prev?._id === order._id ? order : prev);
       }
     });
     return unsub;
-  }, [subscribe, selectedOrder]);
+  }, [subscribe]);
 
   const filtered = orders.filter(o => {
     if (statusFilter !== 'all' && o.status !== statusFilter) return false;

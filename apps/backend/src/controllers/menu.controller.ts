@@ -11,10 +11,14 @@ import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 const clearMenuCache = async (restaurantId?: string, branchId?: string | null) => {
   if (!restaurantId) return;
   const bId = branchId || 'all';
+  // Clear branch-specific keys
   await redis.del(`menu_categories:${restaurantId}:${bId}`);
   await redis.del(`menu_items:${restaurantId}:${bId}`);
   await redis.del(`menu_public:${restaurantId}:${bId}`);
-  // If global update, probably best to clear patterns but let's stick to exact keys or wildcard
+  // Always also clear the 'all' public key — the customer menu uses this
+  await redis.del(`menu_public:${restaurantId}:all`);
+  await redis.del(`menu_categories:${restaurantId}:all`);
+  // If it was a global (no-branch) update, wipe all related keys
   if (!branchId) {
     const keys = await redis.keys(`menu_*:${restaurantId}:*`);
     if (keys.length) await redis.del(...keys);
@@ -63,7 +67,7 @@ export const uploadImages = async (req: AuthRequest, res: Response) => {
 // CATEGORIES
 export const getCategories = async (req: AuthRequest, res: Response) => {
   try {
-    const branchId = typeof req.query.branchId === 'string' ? req.query.branchId : 'all';
+    const branchId = req.user!.branchId || 'all';
     const cacheKey = `menu_categories:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
@@ -87,9 +91,64 @@ export const createCategory = async (req: AuthRequest, res: Response) => {
       branchId,
       name: req.body.name,
       order: req.body.order || 0,
+      imageUrl: req.body.imageUrl,
     });
     await clearMenuCache(req.user!.restaurantId, typeof req.query.branchId === 'string' ? req.query.branchId : undefined);
     return res.status(201).json(category);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const updateCategory = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const query = getBaseQuery(req);
+    query._id = id;
+
+    const category = await MenuCategory.findOneAndUpdate(
+      query,
+      req.body,
+      { new: true }
+    );
+
+    if (!category) return res.status(404).json({ error: 'Not found' });
+    
+    // Clear cache
+    await clearMenuCache(req.user!.restaurantId, category.branchId?.toString());
+
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('menu_update', {
+      type: 'CATEGORY_UPDATED',
+      category,
+    });
+
+    return res.json(category);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const deleteCategory = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const query = getBaseQuery(req);
+    query._id = id;
+
+    const category = await MenuCategory.findOneAndDelete(query);
+    if (!category) return res.status(404).json({ error: 'Not found' });
+
+    // Also delete associated items? Optional, but typical. For now, just clear cache.
+    // Wait, let's keep items and maybe just disable them or leave them un-categorized?
+    // Often it's better to just delete the category.
+
+    await clearMenuCache(req.user!.restaurantId, category.branchId?.toString());
+
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${req.user!.branchId}`).emit('menu_update', {
+      type: 'CATEGORY_DELETED',
+      categoryId: id,
+    });
+
+    return res.json({ message: 'Category deleted successfully' });
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });
   }
@@ -127,7 +186,7 @@ export const updateCategoryAvailability = async (req: AuthRequest, res: Response
 // ITEMS
 export const getMenuItems = async (req: AuthRequest, res: Response) => {
   try {
-    const branchId = typeof req.query.branchId === 'string' ? req.query.branchId : 'all';
+    const branchId = req.user!.branchId || 'all';
     const cacheKey = `menu_items:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
@@ -258,8 +317,14 @@ export const getPublicMenu = async (req: Request, res: Response) => {
 
     const categories = await MenuCategory.find(queryParams).sort('order').lean();
     const items = await MenuItem.find(queryParams).lean();
+    
+    // Add Restaurant import at top, or just use mongoose model directly if imported
+    const mongoose = require('mongoose');
+    const Restaurant = mongoose.model('Restaurant');
+    const restaurant = await Restaurant.findById(restaurantId).lean();
 
     const result = {
+      restaurant,
       categories,
       items
     };

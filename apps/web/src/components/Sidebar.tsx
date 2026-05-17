@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '@restaurant/types';
-import { LayoutDashboard, Users, UtensilsCrossed, Package, Settings, LogOut, Receipt, TrendingUp, BarChart2, Building, Megaphone, FileText, PieChart, ShoppingBag, Store } from 'lucide-react';
+import { LayoutDashboard, Users, UtensilsCrossed, Package, Settings, LogOut, Receipt, TrendingUp, BarChart2, Building, Megaphone, FileText, PieChart, ShoppingBag, Store, ClipboardList, ShoppingCart } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -11,6 +11,7 @@ export default function Sidebar() {
     { name: 'Dashboard', icon: LayoutDashboard, to: '/', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Live Analytics', icon: TrendingUp, to: '/analytics', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Live Orders', icon: ShoppingBag, to: '/live-orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.WAITER] },
+    { name: 'Orders', icon: ClipboardList, to: '/orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Customers', icon: Users, to: '/customers', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Campaigns', icon: Megaphone, to: '/campaigns', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Customer Analytics', icon: BarChart2, to: '/customer-analytics', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
@@ -19,6 +20,7 @@ export default function Sidebar() {
     { name: 'Tables', icon: Receipt, to: '/tables', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.WAITER] },
     { name: 'Menu', icon: UtensilsCrossed, to: '/menu', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Kitchen Display', icon: UtensilsCrossed, to: '/kds', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.KITCHEN_STAFF] },
+    { name: 'Retail Items', icon: ShoppingCart, to: '/retail', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.WAITER] },
     { name: 'Inventory', icon: Package, to: '/inventory', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Staff', icon: Users, to: '/staff', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'EOD Report', icon: Receipt, to: '/eod', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },

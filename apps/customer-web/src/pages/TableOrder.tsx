@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import { getLiveTableOrder, requestBill, payOnlineOrder, loadRazorpay } from '../services/api';
-import { ArrowLeft, Clock, CreditCard, Receipt, Loader } from 'lucide-react';
+import { ArrowLeft, Clock, CreditCard, Receipt, Loader, CheckCircle, PartyPopper } from 'lucide-react';
 import { getSocket } from '../services/socket';
 
 export const TableOrder = () => {
@@ -11,18 +11,20 @@ export const TableOrder = () => {
     const [order, setOrder] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    const [sessionClosed, setSessionClosed] = useState(false);
 
     const fetchOrder = async () => {
-        if (!tableNumber) {
-            navigate('/menu');
-            return;
-        }
+        if (!tableNumber) { navigate('/menu'); return; }
         try {
             const data = await getLiveTableOrder(tableNumber);
             setOrder(data);
+            if (data?._id) {
+                const socket = getSocket();
+                socket.emit('join_order', data._id);
+            }
+            if (data?.status === 'PAID') setSessionClosed(true);
         } catch (error) {
             console.error(error);
-            // If no active order, go back to menu
             navigate('/menu');
         } finally {
             setLoading(false);
@@ -31,23 +33,27 @@ export const TableOrder = () => {
 
     useEffect(() => {
         fetchOrder();
-
         const socket = getSocket();
-        
-        // Listen for updates on this order
-        const handleStatusUpdate = (data: any) => {
-            if (order && data.orderId === order._id) {
-                fetchOrder();
+
+        const handleOrderUpdate = (data: any) => {
+            // ORDER_PAID only sends orderId
+            if (data.type === 'ORDER_PAID' || data.type === 'ORDER_COMPLETED') {
+                setSessionClosed(true);
+                return;
             }
+
+            const updatedOrder = data.order;
+            if (!updatedOrder) return;
+
+            // Update order if it's billed or updated
+            setOrder(updatedOrder);
         };
 
-        socket.on('order_status_update', handleStatusUpdate);
-
-        // Also poll every 10 seconds just in case
-        const interval = setInterval(fetchOrder, 10000);
+        socket.on('order_update', handleOrderUpdate);
+        const interval = setInterval(fetchOrder, 15000);
 
         return () => {
-            socket.off('order_status_update', handleStatusUpdate);
+            socket.off('order_update', handleOrderUpdate);
             clearInterval(interval);
         };
     }, [tableNumber, navigate]);
@@ -55,15 +61,12 @@ export const TableOrder = () => {
     const handleRequestBill = async () => {
         if (!order) return;
         if (!window.confirm('Are you done eating and ready for the bill?')) return;
-        
         setProcessing(true);
         try {
             await requestBill(order._id);
-            alert('Bill requested! A waiter will be with you shortly.');
             fetchOrder();
-        } catch (error) {
-            console.error(error);
-            alert('Failed to request bill.');
+        } catch {
+            alert('Failed to request bill. Please call a waiter.');
         } finally {
             setProcessing(false);
         }
@@ -76,25 +79,19 @@ export const TableOrder = () => {
             const res = await payOnlineOrder(order._id);
             const scriptLoaded = await loadRazorpay();
             if (!scriptLoaded) throw new Error('Razorpay load failed');
-
             const options = {
-                key: 'rzp_test_stub', // Should use env var
+                key: 'rzp_test_stub',
                 amount: res.amount,
                 currency: 'INR',
-                name: 'Restaurant Name',
+                name: 'Restaurant',
                 description: 'Table Bill Payment',
                 order_id: res.razorpayOrderId,
-                handler: function () {
-                    alert('Payment Successful!');
-                    navigate('/menu'); // Reset to menu after paying
-                },
+                handler: () => setSessionClosed(true),
                 theme: { color: '#B91C1C' }
             };
-            const rzp = new (window as any).Razorpay(options);
-            rzp.open();
-        } catch (error) {
-            console.error(error);
-            alert('Payment failed. Please try again or ask the waiter.');
+            new (window as any).Razorpay(options).open();
+        } catch {
+            alert('Payment failed. Please ask the waiter.');
         } finally {
             setProcessing(false);
         }
@@ -105,6 +102,42 @@ export const TableOrder = () => {
             <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
                 <Loader className="w-8 h-8 text-brand-600 animate-spin mb-4" />
                 <p className="text-gray-500 font-medium">Loading your table...</p>
+            </div>
+        );
+    }
+
+    // ── Session Closed (payment collected from POS) ───────────────────────────
+    if (sessionClosed) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex flex-col items-center justify-center p-6 text-center">
+                <div className="bg-white rounded-3xl shadow-xl p-8 max-w-sm w-full space-y-5">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+                            <CheckCircle size={48} className="text-green-500" />
+                        </div>
+                        <PartyPopper size={28} className="text-yellow-500" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900">Thank You!</h1>
+                        <p className="text-gray-500 mt-2 text-sm">
+                            Your payment has been collected.<br />
+                            We hope you enjoyed your meal! 🍽️
+                        </p>
+                    </div>
+                    {order?.totalAmountINR && (
+                        <div className="bg-green-50 rounded-2xl px-5 py-3 border border-green-100">
+                            <p className="text-xs text-gray-500 font-medium">Amount Paid</p>
+                            <p className="text-3xl font-black text-green-700">₹{order.totalAmountINR.toFixed(2)}</p>
+                        </div>
+                    )}
+                    <button
+                        onClick={() => navigate('/menu')}
+                        className="w-full text-white font-bold py-3.5 rounded-2xl transition-colors"
+                        style={{ background: '#B91C1C' }}
+                    >
+                        Back to Menu
+                    </button>
+                </div>
             </div>
         );
     }
@@ -132,11 +165,10 @@ export const TableOrder = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="bg-brand-50 p-4 border-b border-brand-100">
                         <h2 className="font-bold text-brand-900 flex items-center gap-2">
-                            <Clock size={18} className="text-brand-600" /> 
+                            <Clock size={18} className="text-brand-600" />
                             Ordered Items ({order.items.length})
                         </h2>
                     </div>
-                    
                     <div className="p-4 space-y-4 max-h-[50vh] overflow-y-auto">
                         {order.items.map((item: any, idx: number) => (
                             <div key={idx} className="flex justify-between items-start pb-4 border-b border-gray-50 last:border-0 last:pb-0">
@@ -149,7 +181,6 @@ export const TableOrder = () => {
                                     </div>
                                 </div>
                                 <div className="mt-1">
-                                    {/* Real app would have per-item KOT status tracking, here we just show sent */}
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">Sent</span>
                                 </div>
                             </div>
@@ -163,7 +194,7 @@ export const TableOrder = () => {
                         <span className="font-medium">₹{order.totalAmountINR.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-gray-600">
-                        <span>Taxes & GST (5%)</span>
+                        <span>Taxes &amp; GST (5%)</span>
                         <span className="font-medium">₹{(order.totalAmountINR * 0.05).toFixed(2)}</span>
                     </div>
                     <div className="border-t border-dashed my-2 pt-3 flex justify-between font-black text-xl text-gray-900">
@@ -175,16 +206,15 @@ export const TableOrder = () => {
 
             <div className="p-4 bg-white border-t border-gray-100 mt-auto space-y-3 pb-8">
                 {order.status === 'OPEN' && (
-                    <button 
+                    <button
                         onClick={() => navigate('/menu')}
                         className="w-full bg-brand-50 text-brand-700 font-bold py-3.5 rounded-2xl hover:bg-brand-100 transition-colors"
                     >
                         + Add More Food
                     </button>
                 )}
-                
                 <div className="flex gap-3">
-                    <button 
+                    <button
                         disabled={processing || order.status === 'BILLED'}
                         onClick={handleRequestBill}
                         className="flex-1 flex flex-col items-center justify-center gap-1 bg-gray-900 text-white font-bold py-3 rounded-2xl hover:bg-gray-800 disabled:opacity-50 transition-colors"
@@ -192,7 +222,7 @@ export const TableOrder = () => {
                         <Receipt size={20} />
                         <span className="text-sm">Request Bill</span>
                     </button>
-                    <button 
+                    <button
                         disabled={processing}
                         onClick={handlePayOnline}
                         className="flex-1 flex flex-col items-center justify-center gap-1 bg-blue-600 text-white font-bold py-3 rounded-2xl hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-blue-500/20 shadow-lg"

@@ -7,6 +7,7 @@ export interface IMenuCategory extends Document {
   station?: string;
   order: number;
   isAvailable: boolean;
+  imageUrl?: string;
 }
 
 const MenuCategorySchema: Schema = new Schema(
@@ -17,6 +18,7 @@ const MenuCategorySchema: Schema = new Schema(
     station: { type: String },
     order: { type: Number, default: 0 },
     isAvailable: { type: Boolean, default: true },
+    imageUrl: { type: String },
   },
   { timestamps: true }
 );

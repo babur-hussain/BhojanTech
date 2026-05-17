@@ -20,6 +20,7 @@ export default function MenuManagement() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
 
   const fetchData = async () => {
     try {
@@ -69,7 +70,7 @@ export default function MenuManagement() {
         <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-cream">
           <h2 className="text-lg font-bold text-maroon">Categories</h2>
           <button
-            onClick={() => setIsCategoryModalOpen(true)}
+            onClick={() => { setEditingCategory(null); setIsCategoryModalOpen(true); }}
             disabled={isAllBranches}
             title={isAllBranches ? "Select a specific branch to add categories" : ""}
             className={`p-1 rounded text-white ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-saffron hover:bg-opacity-90'}`}
@@ -90,6 +91,12 @@ export default function MenuManagement() {
                 <span className="font-medium text-gray-800">{cat.name}</span>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditingCategory(cat); setIsCategoryModalOpen(true); }}
+                  className="text-xs px-2 py-1 text-saffron border border-saffron rounded hover:bg-orange-50 mr-2"
+                >
+                  Edit
+                </button>
                 <label className="relative inline-flex items-center cursor-pointer" onClick={e => e.stopPropagation()}>
                   <input type="checkbox" className="sr-only peer" checked={cat.isAvailable} onChange={() => handleToggleCategory((cat as any)._id || cat.id, cat.isAvailable)} />
                   <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
@@ -216,15 +223,31 @@ export default function MenuManagement() {
       )}
       {isCategoryModalOpen && (
         <CategoryModal
+          category={editingCategory}
           onClose={() => setIsCategoryModalOpen(false)}
           onSave={async (cat) => {
             try {
-              await api.post('/menu/categories', cat);
+              if (editingCategory) {
+                await api.put(`/menu/categories/${(editingCategory as any)._id || editingCategory.id}`, cat);
+              } else {
+                await api.post('/menu/categories', cat);
+              }
               fetchData();
               setIsCategoryModalOpen(false);
             } catch (e: any) {
               console.error('Failed to save category', e);
               alert(e?.response?.data?.error || 'Failed to save category. Please try again.');
+            }
+          }}
+          onDelete={async (cat) => {
+            if (!confirm('Are you sure you want to delete this category?')) return;
+            try {
+              await api.delete(`/menu/categories/${(cat as any)._id || cat.id}`);
+              fetchData();
+              setIsCategoryModalOpen(false);
+            } catch (e: any) {
+              console.error('Failed to delete category', e);
+              alert(e?.response?.data?.error || 'Failed to delete category. Please try again.');
             }
           }}
         />

@@ -3,7 +3,7 @@
 // For production, replace with your deployed API URL.
 export const API_BASE_URL = __DEV__
     ? 'http://10.0.2.2:8080'    // Android emulator → host machine
-    : 'https://api.yourrestaurant.com';
+    : 'https://server.bhojantech.lfvs.in';
 
 // ─── Endpoint Paths ─────────────────────────────────────────────────────────
 export const Endpoints = {

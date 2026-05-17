@@ -87,6 +87,7 @@ export interface MenuCategory {
   station?: string; // e.g. Tandoor, Dessert, Curry
   order: number;
   isAvailable: boolean;
+  imageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
 }

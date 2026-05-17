@@ -38,7 +38,10 @@ export function useSocket() {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('join_restaurant', user.restaurantId);
+      socket.emit('join_restaurant', {
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+      });
     });
 
     // Forward all tracked events to registered handlers

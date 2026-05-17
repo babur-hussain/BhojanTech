@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MenuItem, MenuCategory, Order, OrderItem } from '@restaurant/types';
 import { ArrowLeft, Send, Plus, Minus, Search, MessageSquare } from 'lucide-react';
+import { api } from '../utils/api';
+import { useSocket } from '../hooks/useSocket';
 
 export default function OrderDetails() {
   const { tableId } = useParams();
@@ -10,33 +12,66 @@ export default function OrderDetails() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const { subscribe } = useSocket();
+  const [tableName, setTableName] = useState('');
   
   // Current active order state
+  const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [isSending, setIsSending] = useState(false);
   
   // Variant selection modal
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItem | null>(null);
 
-  useEffect(() => {
-    // Mock fetch
-    setCategories([
-      { id: '1', restaurantId: 'r1', name: 'Starters', order: 0, isAvailable: true, createdAt: new Date(), updatedAt: new Date() },
-      { id: '2', restaurantId: 'r1', name: 'Main Course', order: 1, isAvailable: true, createdAt: new Date(), updatedAt: new Date() }
-    ]);
-    setMenuItems([
-      {
-        id: 'i1', restaurantId: 'r1', categoryId: '1', name: 'Paneer Tikka',
-        isVeg: true, variants: [{ name: 'Half', priceINR: 150 }, { name: 'Full', priceINR: 280 }],
-        gstSlab: 5, isAvailable: true, allergenTags: [], createdAt: new Date(), updatedAt: new Date()
-      },
-      {
-        id: 'i2', restaurantId: 'r1', categoryId: '2', name: 'Dal Makhani',
-        isVeg: true, variants: [{ name: 'Regular', priceINR: 220 }],
-        gstSlab: 5, isAvailable: true, allergenTags: [], createdAt: new Date(), updatedAt: new Date()
+  const fetchMenu = async () => {
+    try {
+      const [catsRes, itemsRes] = await Promise.all([
+        api.get('/menu/categories'),
+        api.get('/menu/items')
+      ]);
+      setCategories(catsRes.data);
+      setMenuItems(itemsRes.data);
+      if (catsRes.data.length > 0) setSelectedCategory(catsRes.data[0]._id || catsRes.data[0].id);
+    } catch (err) {
+      console.error('Failed to fetch menu', err);
+    }
+  };
+
+  const fetchActiveOrder = async () => {
+    try {
+      const res = await api.get('/orders/active');
+      const orders = res.data;
+      const tableOrder = orders.find((o: any) => o.tableId === tableId);
+      if (tableOrder) {
+        setActiveOrder(tableOrder);
+        setOrderItems(tableOrder.items.map((i: any) => ({...i, id: i._id || i.id})));
+      } else {
+        setActiveOrder(null);
       }
-    ]);
-    setSelectedCategory('1');
-  }, []);
+    } catch (err) {
+      console.error('Failed to fetch active order', err);
+    }
+  };
+
+  useEffect(() => {
+    api.get('/tables').then(res => {
+      const table = res.data.find((t: any) => t._id === tableId || t.id === tableId);
+      if (table) setTableName(table.number);
+    });
+    fetchMenu();
+    fetchActiveOrder();
+  }, [tableId]);
+
+  useEffect(() => {
+    const unsub = subscribe('order_update', (data: any) => {
+      const { order } = data;
+      if (order && order.tableId === tableId) {
+        setActiveOrder(order);
+        setOrderItems(order.items.map((i: any) => ({...i, id: i._id || i.id})));
+      }
+    });
+    return () => unsub();
+  }, [subscribe, tableId]);
 
   const handleAddItem = (item: MenuItem, variantName?: string) => {
     const variant = variantName ? item.variants.find(v => v.name === variantName) : item.variants[0];
@@ -44,7 +79,7 @@ export default function OrderDetails() {
 
     setOrderItems([...orderItems, {
       id: Math.random().toString(),
-      menuItemId: item.id,
+      menuItemId: (item as any)._id || item.id,
       name: item.name,
       variantName: variant.name,
       quantity: 1,
@@ -68,17 +103,65 @@ export default function OrderDetails() {
     setOrderItems(orderItems.map(item => item.id === id ? { ...item, notes } : item));
   };
 
-  const handleSendToKitchen = () => {
+  const handleSendToKitchen = async () => {
     const itemsToSend = orderItems.filter(i => !i.sentToKitchen);
     if (itemsToSend.length === 0) return;
     
-    // API call to send KOT
-    alert(`Generating KOT for ${itemsToSend.length} items`);
-    setOrderItems(orderItems.map(i => ({ ...i, sentToKitchen: true })));
+    setIsSending(true);
+    try {
+      let currentOrderId = (activeOrder as any)?._id || activeOrder?.id;
+
+      if (!currentOrderId) {
+        // Create order
+        const res = await api.post('/orders', {
+          tableId,
+          items: itemsToSend.map(i => ({
+            menuItemId: i.menuItemId,
+            name: i.name,
+            variantName: i.variantName,
+            quantity: i.quantity,
+            priceAtOrderTime: i.priceAtOrderTime,
+            notes: i.notes
+          }))
+        });
+        currentOrderId = res.data._id || res.data.id;
+        
+        const newItems = res.data.items.filter((i: any) => !i.sentToKitchen).map((i: any) => i._id);
+        if (newItems.length > 0) {
+          await api.post(`/orders/${currentOrderId}/kot`, { itemIds: newItems });
+        }
+      } else {
+        // Add items to existing order
+        const res = await api.post(`/orders/${currentOrderId}/items`, {
+          items: itemsToSend.map(i => ({
+            menuItemId: i.menuItemId,
+            name: i.name,
+            variantName: i.variantName,
+            quantity: i.quantity,
+            priceAtOrderTime: i.priceAtOrderTime,
+            notes: i.notes
+          }))
+        });
+        
+        const updatedOrder = res.data;
+        const unsentItems = updatedOrder.items.filter((i: any) => !i.sentToKitchen).map((i: any) => i._id);
+        
+        if (unsentItems.length > 0) {
+          await api.post(`/orders/${currentOrderId}/kot`, { itemIds: unsentItems });
+        }
+      }
+      
+      await fetchActiveOrder();
+    } catch (error) {
+      console.error(error);
+      alert('Failed to send to kitchen');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const filteredMenu = menuItems.filter(i => 
-    (selectedCategory ? i.categoryId === selectedCategory : true) &&
+    (selectedCategory ? (i.categoryId === selectedCategory || (i as any).categoryId?._id === selectedCategory) : true) &&
     (searchQuery ? i.name.toLowerCase().includes(searchQuery.toLowerCase()) : true)
   );
 
@@ -94,7 +177,7 @@ export default function OrderDetails() {
             <button onClick={() => navigate('/tables')} className="mr-3 hover:bg-white hover:bg-opacity-20 p-1 rounded">
               <ArrowLeft size={20} />
             </button>
-            <h2 className="text-lg font-bold">Table {tableId}</h2>
+            <h2 className="text-lg font-bold">Table {tableName || tableId}</h2>
           </div>
           <span className="text-sm bg-white text-maroon px-2 py-1 rounded font-bold">
             Total: ₹{totalAmount}
@@ -144,10 +227,10 @@ export default function OrderDetails() {
         <div className="p-4 bg-white border-t">
           <button 
             onClick={handleSendToKitchen}
-            disabled={orderItems.filter(i => !i.sentToKitchen).length === 0}
+            disabled={orderItems.filter(i => !i.sentToKitchen).length === 0 || isSending}
             className="w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            <Send size={20} /> Send to Kitchen
+            <Send size={20} /> {isSending ? 'Sending...' : 'Send to Kitchen'}
           </button>
         </div>
       </div>
@@ -172,9 +255,9 @@ export default function OrderDetails() {
           <div className="w-48 bg-white border-r overflow-y-auto">
             {categories.map(cat => (
               <button 
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`w-full text-left px-4 py-4 border-b font-medium transition-colors ${selectedCategory === cat.id ? 'bg-orange-50 text-maroon border-l-4 border-l-saffron' : 'text-gray-600 hover:bg-gray-50'}`}
+                key={(cat as any)._id || cat.id}
+                onClick={() => setSelectedCategory((cat as any)._id || cat.id)}
+                className={`w-full text-left px-4 py-4 border-b font-medium transition-colors ${selectedCategory === ((cat as any)._id || cat.id) ? 'bg-orange-50 text-maroon border-l-4 border-l-saffron' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 {cat.name}
               </button>
@@ -186,7 +269,7 @@ export default function OrderDetails() {
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredMenu.map(item => (
                 <div 
-                  key={item.id} 
+                  key={(item as any)._id || item.id} 
                   onClick={() => {
                     if (item.variants.length > 1) setSelectedMenuItem(item);
                     else handleAddItem(item);

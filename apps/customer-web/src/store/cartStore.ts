@@ -10,6 +10,7 @@ export interface CartItem {
     quantity: number;
     notes?: string;
     isVeg: boolean;
+    gstSlab?: 0 | 5 | 12 | 18; // actual GST slab from menu item
 }
 
 interface CartState {
@@ -28,6 +29,7 @@ interface CartState {
 
     getTotal: () => number;
     getItemCount: () => number;
+    getGST: () => number; // returns actual GST amount based on per-item slabs
 }
 
 export const useCartStore = create<CartState>()(
@@ -75,6 +77,11 @@ export const useCartStore = create<CartState>()(
             getTotal: () => get().items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
 
             getItemCount: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
+
+            getGST: () => get().items.reduce((sum, item) => {
+                if (!item.gstSlab) return sum; // covers 0, undefined, null
+                return sum + (item.price * item.quantity * item.gstSlab / 100);
+            }, 0),
         }),
         {
             name: 'restaurant-cart-storage',
