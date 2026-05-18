@@ -607,7 +607,6 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     const grandTotal = rounded;
 
     // 4. Generate Invoice (atomic sequence)
-    const branchId = req.user!.branchId;
     const seq = await (InvoiceSequence as any).getNextSequence(
       new mongoose.Types.ObjectId(restaurantId as string),
       branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
