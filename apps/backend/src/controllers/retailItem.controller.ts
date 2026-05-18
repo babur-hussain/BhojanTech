@@ -158,15 +158,39 @@ export const createRetailItem = async (req: AuthRequest, res: Response) => {
 export const updateRetailItem = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { stock: _stock, ...safeBody } = req.body; // Don't allow direct stock override via update
-    const item = await RetailItem.findOneAndUpdate(
-      { _id: id, restaurantId: req.user!.restaurantId },
-      { $set: safeBody },
-      { new: true }
-    );
+    const { stock: newStockRaw, ...metaBody } = req.body;
+
+    // First fetch current item so we can detect stock changes
+    const itemBefore = await RetailItem.findOne({ _id: id, restaurantId: req.user!.restaurantId });
+    if (!itemBefore) return res.status(404).json({ error: 'Item not found' });
+
+    const updatePayload: any = { ...metaBody };
+
+    // Allow stock override via edit form — log as CORRECTION
+    if (newStockRaw != null && newStockRaw !== '' && Number(newStockRaw) !== itemBefore.stock) {
+      const newStock = Math.max(0, Number(newStockRaw));
+      updatePayload.stock = newStock;
+    }
+
+    const item = await RetailItem.findByIdAndUpdate(id, { $set: updatePayload }, { new: true });
     if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    // Write CORRECTION log if stock changed
+    const stockBefore = itemBefore.stock;
+    const stockAfter  = item.stock;
+    if (stockAfter !== stockBefore) {
+      await writeStockLog({
+        req, item,
+        action: 'CORRECTION',
+        quantityBefore: stockBefore,
+        quantityChanged: stockAfter - stockBefore,
+        note: 'Stock corrected via item edit form',
+      });
+    }
+
     return res.json(item);
   } catch (err) {
+    console.error('[updateRetailItem]', err);
     return res.status(500).json({ error: 'Server error' });
   }
 };
