@@ -48,14 +48,19 @@ export const previewBill = async (req: AuthRequest, res: Response) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
     // Enrich items with gstSlab
-    const menuItemIds = order.items.map(i => i.menuItemId);
-    const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+    // Priority: stored order item gstSlab > MenuItem lookup > default 5%
+    const menuItemIds = order.items
+      .map(i => i.menuItemId)
+      .filter(id => id && id.toString() !== '000000000000000000000000');
+    const menuItems = menuItemIds.length > 0
+      ? await MenuItem.find({ _id: { $in: menuItemIds } })
+      : [];
 
     const enrichedItems = order.items.map(i => {
-      const mi = menuItems.find(m => m._id.toString() === i.menuItemId.toString());
+      const mi = menuItems.find(m => m._id.toString() === i.menuItemId?.toString());
       return {
         ...(i as any).toObject(),
-        gstSlab: mi?.gstSlab ?? 5,
+        gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 5,  // stored gstSlab wins
         hindiName: mi?.hindiName,
       };
     });
@@ -205,12 +210,17 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     }
 
     // Enrich items
-    const menuItemIds = order.items.map(i => i.menuItemId);
-    const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+    // Priority: stored order item gstSlab > MenuItem lookup > default 5%
+    const menuItemIds2 = order.items
+      .map(i => i.menuItemId)
+      .filter(id => id && id.toString() !== '000000000000000000000000');
+    const menuItemDocs = menuItemIds2.length > 0
+      ? await MenuItem.find({ _id: { $in: menuItemIds2 } })
+      : [];
 
     const enrichedItems = order.items.map(i => {
-      const mi = menuItems.find(m => m._id.toString() === i.menuItemId.toString());
-      return { ...(i as any).toObject(), gstSlab: mi?.gstSlab ?? 5, hindiName: mi?.hindiName };
+      const mi = menuItemDocs.find(m => m._id.toString() === i.menuItemId?.toString());
+      return { ...(i as any).toObject(), gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 5, hindiName: mi?.hindiName };
     });
 
     const lineItems = buildLineItems(enrichedItems as any);
@@ -535,6 +545,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       menuItemId: i.menuItemId ? new mongoose.Types.ObjectId(i.menuItemId) : RETAIL_PLACEHOLDER_ID,
       sentToKitchen: true,
       priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+      gstSlab: Number(i.gstSlab ?? 5),   // ← persist actual product GST into the order
     }));
 
     const branchId = req.user!.branchId;
@@ -555,11 +566,10 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       paymentStatus: 'PAID',
     });
 
-    // 2. Compute Invoice Data — build line items directly from order items
-    // This works for both menu items and retail items
+    // 2. Compute Invoice Data — use gstSlab stored on each order item
     const enrichedItems = order.items.map((i: any) => ({
       ...(i as any).toObject(),
-      gstSlab: i.gstSlab ?? 5, // Use provided gstSlab, fallback to 5%
+      gstSlab: (i as any).gstSlab ?? 5,  // comes from DB (persisted from request)
     }));
 
     const lineItems = buildLineItems(enrichedItems as any);

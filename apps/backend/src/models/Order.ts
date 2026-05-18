@@ -7,6 +7,7 @@ export interface IOrderItem {
   variantName?: string;
   quantity: number;
   priceAtOrderTime: number;
+  gstSlab?: number;   // stored at order time so invoice doesn't need MenuItem lookup
   notes?: string;
   sentToKitchen: boolean;
 }
@@ -55,6 +56,7 @@ const OrderSchema: Schema = new Schema(
         variantName: { type: String },
         quantity: { type: Number, required: true, min: 1 },
         priceAtOrderTime: { type: Number, required: true },
+        gstSlab: { type: Number, default: 5 },  // persisted GST % per item
         notes: { type: String },
         sentToKitchen: { type: Boolean, default: false },
       },
