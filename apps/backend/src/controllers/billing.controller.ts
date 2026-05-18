@@ -520,16 +520,33 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     }
 
     // 1. Create a "Direct" Order
-    const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
-    
+    // For retail-only orders, items may not have real menuItemIds
+    const totalAmountINR = items.reduce(
+      (sum: number, item: any) => sum + (Number(item.priceAtOrderTime || 0) * Number(item.quantity || 1)),
+      0
+    );
+
+    // Use a placeholder ObjectId for retail items that have no real menuItemId
+    const RETAIL_PLACEHOLDER_ID = new mongoose.Types.ObjectId('000000000000000000000000');
+
+    const formattedItems = items.map((i: any) => ({
+      ...i,
+      _id: new mongoose.Types.ObjectId(),
+      menuItemId: i.menuItemId ? new mongoose.Types.ObjectId(i.menuItemId) : RETAIL_PLACEHOLDER_ID,
+      sentToKitchen: true,
+      priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+    }));
+
+    const branchId = req.user!.branchId;
+
     const order = await Order.create({
       restaurantId,
-      branchId: req.user!.branchId,
+      ...(branchId ? { branchId } : {}),
       isOnlineOrder: true, // Bypass table requirement
       deliveryPlatform: 'MANUAL',
       waiterId: req.user!.userId,
       waiterName: req.user!.name || 'Staff',
-      items: items.map((i: any) => ({ ...i, _id: new mongoose.Types.ObjectId(), sentToKitchen: true })),
+      items: formattedItems,
       totalAmountINR,
       status: 'PAID', // Directly marked as paid
       customerName,
@@ -538,14 +555,12 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       paymentStatus: 'PAID',
     });
 
-    // 2. Compute Invoice Data
-    const menuItemIds = order.items.map(i => i.menuItemId);
-    const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
-
-    const enrichedItems = order.items.map(i => {
-      const mi = menuItems.find(m => m._id.toString() === i.menuItemId.toString());
-      return { ...(i as any).toObject(), gstSlab: mi?.gstSlab ?? 5, hindiName: mi?.hindiName };
-    });
+    // 2. Compute Invoice Data — build line items directly from order items
+    // This works for both menu items and retail items
+    const enrichedItems = order.items.map((i: any) => ({
+      ...(i as any).toObject(),
+      gstSlab: i.gstSlab ?? 5, // Use provided gstSlab, fallback to 5%
+    }));
 
     const lineItems = buildLineItems(enrichedItems as any);
     const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2);
@@ -633,7 +648,9 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
           customerName || order.customerName || 'Guest',
           grandTotal,
           (order._id as any).toString(),
-          order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity }))
+          order.items
+            .filter((i: any) => i.menuItemId && i.menuItemId.toString() !== '000000000000000000000000')
+            .map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity }))
         );
 
         if (pointsToRedeem && loyaltyRedemptionDiscount > 0) {

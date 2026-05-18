@@ -54,6 +54,7 @@ export default function DirectPOS() {
   const [showCamera, setShowCamera] = useState(false);
 
   const [paying, setPaying] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const { selectedBranchId } = useBranchStore();
 
   // ─── Fetch Data ────────────────────────────────────────────────────────────
@@ -154,35 +155,42 @@ export default function DirectPOS() {
       const menuCartItems = cart.filter(c => c.type === 'menu');
       const retailCartItems = cart.filter(c => c.type === 'retail');
 
-      // If only retail items, create a retail-only order flow (navigate to billing)
-      const body: any = {
-        orderType: 'TAKEAWAY',
-        items: menuCartItems.map(c => ({
-          menuItemId: c.id.replace(c.variantName || '', ''),
-          name: c.name,
-          variantName: c.variantName,
-          quantity: c.quantity,
-          priceAtOrderTime: c.price,
-        })),
-        retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
-        customerPhone,
-        customerName,
-      };
-
-      // If there are no menu items, we need at least a dummy takeaway order
       if (menuCartItems.length === 0 && retailCartItems.length > 0) {
-        // Create a retail-only direct invoice
-        const res = await api.post('/orders/takeaway', {
-          ...body,
-          items: [{ name: 'Retail Items', quantity: 1, priceAtOrderTime: subtotal }],
+        // ── RETAIL-ONLY: use /billing/direct (creates order + invoice + deducts stock) ──
+        const res = await api.post('/billing/direct', {
+          orderType: 'TAKEAWAY',
+          items: retailCartItems.map(c => ({
+            menuItemId: c.id,   // retail item _id used as placeholder
+            name: c.name,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+          })),
+          paymentMode,
+          customerPhone: customerPhone || undefined,
+          customerName: customerName || undefined,
         });
-        navigate(`/bill/${res.data._id}`);
+        // Direct bill returns invoice directly
+        navigate(`/bill/${res.data.order._id}`);
       } else {
-        const res = await api.post('/orders/takeaway', body);
+        // ── MENU (+ optional retail) ──
+        const res = await api.post('/orders/takeaway', {
+          orderType: 'TAKEAWAY',
+          items: menuCartItems.map(c => ({
+            menuItemId: c.id,
+            name: c.name,
+            variantName: c.variantName,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+          })),
+          retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
+          customerPhone: customerPhone || undefined,
+          customerName: customerName || undefined,
+        });
         navigate(`/bill/${res.data._id}`);
       }
     } catch (e: any) {
-      alert(e?.response?.data?.error || 'Failed to create order');
+      console.error('POS error:', e?.response?.data || e);
+      alert(e?.response?.data?.error || 'Failed to create order. Please try again.');
     } finally {
       setPaying(false);
     }
@@ -203,9 +211,9 @@ export default function DirectPOS() {
   );
 
   return (
-    <div className="h-[calc(100vh-80px)] flex gap-4 overflow-hidden -m-4 p-4">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-80px)] -m-4 p-4">
       {/* ── Left: Menu + Retail ─────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[60vh] lg:min-h-0">
 
         {/* Search + Scanner */}
         <div className="p-4 border-b border-gray-100 space-y-3 bg-gray-50">
@@ -373,7 +381,7 @@ export default function DirectPOS() {
       </div>
 
       {/* ── Right: Cart & Checkout ─────────────────────────────────────── */}
-      <div className="w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+      <div className="w-full lg:w-[380px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-maroon text-white p-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2"><ShoppingCart size={18} /> Current Order</h2>
@@ -469,12 +477,31 @@ export default function DirectPOS() {
                 <span>₹{cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.price * c.quantity, 0).toFixed(2)}</span>
               </div>
             )}
+            {/* Payment Mode */}
+            <div className="grid grid-cols-3 gap-1.5 mt-2">
+              {(['CASH', 'UPI', 'CARD'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setPaymentMode(mode)}
+                  className={`py-2 rounded-lg text-xs font-bold border transition-colors ${
+                    paymentMode === mode
+                      ? mode === 'CASH' ? 'bg-green-600 text-white border-green-700'
+                        : mode === 'UPI' ? 'bg-blue-600 text-white border-blue-700'
+                        : 'bg-purple-600 text-white border-purple-700'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {mode === 'CASH' ? '💵 Cash' : mode === 'UPI' ? '📱 UPI' : '💳 Card'}
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={handleProceed} disabled={cart.length === 0 || paying}
-              className="w-full mt-3 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-lg rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
+              className="w-full mt-3 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-base rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               {paying ? <Loader2 size={20} className="animate-spin" /> : null}
-              {paying ? 'Processing...' : 'PROCEED TO BILLING'}
+              {paying ? 'Processing...' : `PROCEED TO BILLING · ₹${subtotal.toFixed(0)}`}
             </button>
           </div>
         </div>

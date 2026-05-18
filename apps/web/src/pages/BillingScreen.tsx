@@ -119,20 +119,7 @@ export default function BillingScreen() {
     return () => clearTimeout(timer);
   }, [customerPhone]);
 
-  if (loading) {
-    return <PageLoader message="Loading bill…" />;
-  }
-  if (error || !preview) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <AlertTriangle size={48} className="text-red-400" />
-        <p className="text-red-600 font-semibold">{error || 'Order not found'}</p>
-        <button onClick={() => navigate(-1)} className="text-sm text-gray-500 underline">Go Back</button>
-      </div>
-    );
-  }
-
-  // Retail cart helpers
+  // ── Retail cart helpers ── MUST be before any early returns (Rules of Hooks) ──
   const addRetailItem = useCallback((item: any) => {
     setRetailCart(cart => {
       const ex = cart.find(c => c._id === item._id);
@@ -140,11 +127,6 @@ export default function BillingScreen() {
       return [...cart, { _id: item._id, name: item.name, priceINR: item.priceINR, gstSlab: item.gstSlab, unit: item.unit, quantity: 1 }];
     });
   }, []);
-
-  const updateRetailQty = (id: string, delta: number) => {
-    setRetailCart(cart => cart.map(c => c._id === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
-  };
-  const retailSubtotal = retailCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
 
   const handleBarcodeScan = useCallback((barcode: string) => {
     const item = retailCatalog.find(i => i.barcode === barcode);
@@ -158,7 +140,27 @@ export default function BillingScreen() {
     setTimeout(() => setScanFeedback(null), 3000);
   }, [retailCatalog, addRetailItem]);
 
+  // ── Hardware barcode scanner (MUST be before early returns) ──
   useBarcodeScanner(handleBarcodeScan);
+
+  if (loading) {
+    return <PageLoader message="Loading bill…" />;
+  }
+  if (error || !preview) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <AlertTriangle size={48} className="text-red-400" />
+        <p className="text-red-600 font-semibold">{error || 'Order not found'}</p>
+        <button onClick={() => navigate(-1)} className="text-sm text-gray-500 underline">Go Back</button>
+      </div>
+    );
+  }
+
+  // Non-hook helpers (safe after early returns — these are not hooks)
+  const updateRetailQty = (id: string, delta: number) => {
+    setRetailCart(cart => cart.map(c => c._id === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
+  };
+  const retailSubtotal = retailCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
 
   // Discount computation — now includes retail subtotal
   const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR + retailSubtotal) : 0;
