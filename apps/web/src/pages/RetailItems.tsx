@@ -106,7 +106,7 @@ export default function RetailItems() {
 
   useBarcodeScanner(handleGlobalScan, { interceptAll: showForm });
 
-  const fetchItems = async () => {
+  const fetchItems = React.useCallback(async () => {
     try {
       const res = await api.get('/retail-items');
       setItems(res.data);
@@ -115,9 +115,9 @@ export default function RetailItems() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
-  useEffect(() => { fetchItems(); }, [selectedBranchId]);
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const openCreate = () => {
     const autoSku = generateNextSKU('Beverages');

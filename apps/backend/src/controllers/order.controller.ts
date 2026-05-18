@@ -134,16 +134,27 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { items, customerName, customerPhone } = req.body;
     const restaurantId = req.user!.restaurantId;
-    const branchId = getCreateBranchId(req);
-    if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+    const branchId = getCreateBranchId(req); // undefined is OK for OWNER role
 
-    const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
 
-    const formattedItems = items.map((i: any) => ({ ...i, _id: new mongoose.Types.ObjectId(), sentToKitchen: true }));
+    const totalAmountINR = items.reduce(
+      (sum: number, item: any) => sum + (Number(item.priceAtOrderTime || 0) * Number(item.quantity || 1)),
+      0
+    );
+
+    const formattedItems = items.map((i: any) => ({
+      ...i,
+      _id: new mongoose.Types.ObjectId(),
+      sentToKitchen: true,
+      priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+    }));
 
     const order = await Order.create({
       restaurantId,
-      branchId,
+      ...(branchId ? { branchId } : {}),
       tableId: new mongoose.Types.ObjectId(), // placeholder – takeaway has no real table
       tableNumber: 'TAKEAWAY',
       waiterId: req.user!.userId,
@@ -156,17 +167,19 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
       isOnlineOrder: false,
     });
 
-    // Create KOT for Kitchen
-    const kotItems = formattedItems.map((item: any) => ({
+    // Create KOT only for real menu items (not retail/placeholder items)
+    const menuItems = formattedItems.filter((item: any) => !!item.menuItemId);
+    if (menuItems.length > 0) {
+      const kotItems = menuItems.map((item: any) => ({
         orderItemId: item._id,
         menuItemId: item.menuItemId,
         name: item.name,
         variantName: item.variantName,
         quantity: item.quantity,
-        status: 'PENDING'
-    }));
+        status: 'PENDING',
+      }));
 
-    const newKOT = new KOT({
+      const newKOT = new KOT({
         restaurantId: order.restaurantId,
         branchId: order.branchId,
         orderId: order._id,
@@ -174,12 +187,20 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
         isOnlineOrder: false,
         customerName: order.customerName,
         items: kotItems,
-        status: 'PENDING'
-    });
-    await newKOT.save();
+        status: 'PENDING',
+      });
+      await newKOT.save();
 
-    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('kot_created', newKOT);
-    io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('order_update', { type: 'NEW_ORDER', order });
+      const room = branchId
+        ? `restaurant_${restaurantId}_branch_${branchId}`
+        : `restaurant_${restaurantId}`;
+      io.to(room).emit('kot_created', newKOT);
+    }
+
+    const room = branchId
+      ? `restaurant_${restaurantId}_branch_${branchId}`
+      : `restaurant_${restaurantId}`;
+    io.to(room).emit('order_update', { type: 'NEW_ORDER', order });
 
     return res.status(201).json(order);
   } catch (error) {

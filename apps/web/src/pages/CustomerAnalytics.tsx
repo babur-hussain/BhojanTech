@@ -14,8 +14,8 @@ import { api } from '../utils/api';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmtInr(n: number) {
-  return '₹' + n.toLocaleString('en-IN');
+function fmtInr(n: number | undefined | null) {
+  return '₹' + (n ?? 0).toLocaleString('en-IN');
 }
 
 const SEGMENT_META: Record<string, { color: string; bg: string; icon: React.ReactNode; desc: string }> = {
@@ -163,13 +163,13 @@ export default function CustomerAnalytics() {
       {/* ── KPI Row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard icon={<Users size={20} className="text-purple-600" />} iconBg="bg-purple-50" accent="border-purple-100"
-          label="Total Customers" value={data.totalCustomers.toLocaleString()} sub={`+${data.newThisMonth} this month`} />
+          label="Total Customers" value={(data.totalCustomers ?? 0).toLocaleString()} sub={`+${data.newThisMonth ?? 0} this month`} />
         <KPICard icon={<IndianRupee size={20} className="text-emerald-600" />} iconBg="bg-emerald-50" accent="border-emerald-100"
           label="Total CRM Revenue" value={fmtInr(data.totalSpend)} sub={`Avg ${fmtInr(data.avgSpend)} / customer`} />
         <KPICard icon={<TrendingUp size={20} className="text-blue-600" />} iconBg="bg-blue-50" accent="border-blue-100"
-          label="Avg Visits / Customer" value={`${data.avgVisits}×`} sub={`${data.retentionRate}% retention rate`} />
+          label="Avg Visits / Customer" value={`${data.avgVisits ?? 0}×`} sub={`${data.retentionRate ?? 0}% retention rate`} />
         <KPICard icon={<Award size={20} className="text-amber-600" />} iconBg="bg-amber-50" accent="border-amber-100"
-          label="Loyalty Points Pool" value={data.totalLoyaltyPoints.toLocaleString()} sub={`Avg ${data.avgLoyaltyPoints} pts / customer`} />
+          label="Loyalty Points Pool" value={(data.totalLoyaltyPoints ?? 0).toLocaleString()} sub={`Avg ${data.avgLoyaltyPoints ?? 0} pts / customer`} />
       </div>
 
       {/* ── Quick Alerts ── */}
