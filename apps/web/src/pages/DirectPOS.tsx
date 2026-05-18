@@ -43,12 +43,6 @@ export default function DirectPOS() {
   // Unified cart
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // Customer
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customer, setCustomer] = useState<any>(null);
-  const [customerLoading, setCustLoading] = useState(false);
-
   // Scanner feedback
   const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -115,7 +109,8 @@ export default function DirectPOS() {
       if (ex) return prev.map(c => (c.id === item._id && c.type === 'retail') ? { ...c, quantity: c.quantity + 1 } : c);
       return [...prev, {
         id: item._id, type: 'retail', name: item.name,
-        price: item.priceINR, quantity: 1, gstSlab: item.gstSlab || 18,
+        price: item.priceINR, quantity: 1,
+        gstSlab: item.gstSlab ?? 5,   // ← use product's actual GST slab, not hardcoded 18
         unit: item.unit, barcode: item.barcode,
       }];
     });
@@ -135,17 +130,8 @@ export default function DirectPOS() {
   const gstEstimate = cart.reduce((s, c) => s + (c.price * c.quantity * c.gstSlab / 100), 0);
   const totalItems = cart.reduce((s, c) => s + c.quantity, 0);
 
-  // ─── Customer Search ────────────────────────────────────────────────────────
-  const handleCustomerSearch = async () => {
-    if (customerPhone.length < 10) return;
-    try {
-      setCustLoading(true);
-      const res = await api.get(`/billing/customer/${customerPhone}`);
-      if (res.data.found) { setCustomer(res.data.customer); setCustomerName(res.data.customer.name); }
-      else setCustomer(null);
-    } catch { setCustomer(null); }
-    finally { setCustLoading(false); }
-  };
+  // ─── Customer Search removed from POS ─────────────────────────────────────
+  // Customer phone/name are collected in BillingScreen after order creation.
 
   // ─── Proceed to Billing ────────────────────────────────────────────────────
   const handleProceed = async () => {
@@ -156,20 +142,17 @@ export default function DirectPOS() {
       const retailCartItems = cart.filter(c => c.type === 'retail');
 
       if (menuCartItems.length === 0 && retailCartItems.length > 0) {
-        // ── RETAIL-ONLY: use /billing/direct (creates order + invoice + deducts stock) ──
+        // ── RETAIL-ONLY: use /billing/direct ──
         const res = await api.post('/billing/direct', {
           orderType: 'TAKEAWAY',
           items: retailCartItems.map(c => ({
-            menuItemId: c.id,   // retail item _id used as placeholder
             name: c.name,
             quantity: c.quantity,
             priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,    // ← pass actual product GST
           })),
           paymentMode,
-          customerPhone: customerPhone || undefined,
-          customerName: customerName || undefined,
         });
-        // Direct bill returns invoice directly
         navigate(`/bill/${res.data.order._id}`);
       } else {
         // ── MENU (+ optional retail) ──
@@ -181,10 +164,9 @@ export default function DirectPOS() {
             variantName: c.variantName,
             quantity: c.quantity,
             priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,    // ← pass actual product GST
           })),
           retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
-          customerPhone: customerPhone || undefined,
-          customerName: customerName || undefined,
         });
         navigate(`/bill/${res.data._id}`);
       }
@@ -196,7 +178,7 @@ export default function DirectPOS() {
     }
   };
 
-  const resetPOS = () => { setCart([]); setCustomer(null); setCustomerPhone(''); setCustomerName(''); };
+  const resetPOS = () => { setCart([]); };
 
   if (loading) return <PageLoader message="Loading POS..." />;
 
@@ -449,20 +431,6 @@ export default function DirectPOS() {
 
         {/* Checkout Panel */}
         <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
-          {/* Customer */}
-          <div className="flex gap-2">
-            <input
-              type="tel" placeholder="Customer Phone" value={customerPhone}
-              onChange={e => setCustomerPhone(e.target.value)} onBlur={handleCustomerSearch}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              type="text" placeholder="Name" value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-
           {/* Totals */}
           <div className="pt-2 border-t border-gray-200">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
