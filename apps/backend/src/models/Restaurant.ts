@@ -9,6 +9,9 @@ export interface IRestaurant extends Document {
   logoUrl?: string;
   upiId?: string;
   printerName?: string;
+  businessType?: string;
+  bookingCategories?: string[];
+  defaultBookingCategory?: string;
 }
 
 const RestaurantSchema: Schema = new Schema(
@@ -21,6 +24,9 @@ const RestaurantSchema: Schema = new Schema(
     logoUrl: { type: String },
     upiId: { type: String },
     printerName: { type: String },
+    businessType: { type: String, enum: ['Restaurant', 'Bakery', 'Sweets Shop', 'Cafe', 'Retail'], default: 'Restaurant' },
+    bookingCategories: [{ type: String }],
+    defaultBookingCategory: { type: String },
   },
   { timestamps: true }
 );

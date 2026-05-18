@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, ShoppingBag, Users,
-  Table, Activity, RefreshCw, Share2, FileText, MonitorPlay, FileBarChart, PlusCircle, ListOrdered, Receipt
+  Table, Activity, RefreshCw, Share2, FileText, MonitorPlay, FileBarChart, PlusCircle, ListOrdered, Receipt, Calendar
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { inrFormat, pctFormat, shortInr } from '../utils/format';
@@ -51,6 +51,8 @@ export default function AnalyticsDashboard() {
   const [pie, setPie] = useState<any[]>([]);
   const [monthly, setMonthly] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [pendingBookings, setPendingBookings] = useState(0);
 
   const fetchData = async () => {
     try {
@@ -89,6 +91,20 @@ export default function AnalyticsDashboard() {
       }));
 
       setLastUpdate(new Date());
+
+      // Live open orders & pending bookings for badges/panel
+      try {
+        const [ordersRes, bookingsRes] = await Promise.all([
+          api.get(`/orders/active`),
+          api.get(`/bookings?date=${new Date().toISOString().split('T')[0]}`)
+        ]);
+        const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+        setLiveOrders(allOrders.filter((o: any) => o.status === 'OPEN'));
+        const allBookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : [];
+        setPendingBookings(allBookings.filter((b: any) => ['PENDING', 'CONFIRMED', 'READY'].includes(b.status)).length);
+      } catch (e) {
+        console.warn('Live orders fetch failed:', e);
+      }
     } catch (e) {
       console.error('Failed to fetch analytics', e);
       setError(true);
@@ -156,12 +172,28 @@ export default function AnalyticsDashboard() {
       <InsightsWidget />
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Link to="/live-orders" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Link to="/live-orders" className="relative flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          {liveOrders.length > 0 && (
+            <span className="absolute top-2 right-2 min-w-[22px] h-[22px] flex items-center justify-center bg-red-500 text-white text-[11px] font-black rounded-full px-1 animate-pulse">
+              {liveOrders.length}
+            </span>
+          )}
           <div className="p-3 bg-red-50 text-maroon rounded-full mb-3 group-hover:scale-110 transition-transform">
             <ListOrdered size={24} />
           </div>
           <span className="text-sm font-bold text-gray-700">View Orders</span>
+        </Link>
+        <Link to="/bookings" className="relative flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
+          {pendingBookings > 0 && (
+            <span className="absolute top-2 right-2 min-w-[22px] h-[22px] flex items-center justify-center bg-saffron text-white text-[11px] font-black rounded-full px-1">
+              {pendingBookings}
+            </span>
+          )}
+          <div className="p-3 bg-pink-50 text-pink-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
+            <Calendar size={24} />
+          </div>
+          <span className="text-sm font-bold text-gray-700">Bookings</span>
         </Link>
         <Link to="/pos" className="flex flex-col items-center justify-center p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md hover:border-saffron transition-all group">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-full mb-3 group-hover:scale-110 transition-transform">
@@ -181,6 +213,49 @@ export default function AnalyticsDashboard() {
           </div>
           <span className="text-sm font-bold text-gray-700">Reports</span>
         </Link>
+      </div>
+
+      {/* Live Table Orders Panel — always visible */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b flex justify-between items-center" style={{ background: liveOrders.length > 0 ? '#fef2f2' : '#f9fafb' }}>
+          <div className="flex items-center gap-3">
+            <span className={`w-2.5 h-2.5 rounded-full ${liveOrders.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-gray-300'}`} />
+            <h2 className={`font-bold ${liveOrders.length > 0 ? 'text-red-700' : 'text-gray-600'}`}>Live Table Orders</h2>
+            <span className={`text-xs font-black px-2 py-0.5 rounded-full ${liveOrders.length > 0 ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
+              {liveOrders.length} OPEN
+            </span>
+          </div>
+          <Link to="/live-orders" className="text-xs font-semibold text-maroon hover:underline">View All →</Link>
+        </div>
+        <div className="divide-y overflow-y-auto max-h-72">
+          {liveOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+              <Activity size={32} className="text-gray-200" />
+              <p className="text-sm font-medium">No open table orders right now</p>
+              <p className="text-xs">Orders will appear here as soon as a table is occupied</p>
+            </div>
+          ) : liveOrders.map((order: any, i: number) => (
+            <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-maroon text-white rounded-xl flex items-center justify-center font-black text-sm shadow">
+                  {order.tableNumber || 'TK'}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-800">
+                    {order.isOnlineOrder ? '🛵 Delivery' : `Table ${order.tableNumber}`}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {order.waiterName || 'Staff'} · {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''} · {timeAgo(order.createdAt)}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-black text-gray-800 text-sm">{inrFormat(order.totalAmountINR || 0)}</p>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">OPEN</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* KPI Cards */}

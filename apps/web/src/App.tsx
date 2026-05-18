@@ -34,6 +34,7 @@ import DirectPOS from './pages/DirectPOS';
 import RestaurantSettings from './pages/RestaurantSettings';
 import AllOrders from './pages/AllOrders';
 import RetailItems from './pages/RetailItems';
+import Bookings from './pages/Bookings';
 
 const DashboardHome = () => <AnalyticsDashboard />;
 
@@ -57,6 +58,7 @@ function App() {
             <Route path="kds" element={<KDS />} />
             <Route path="orders" element={<AllOrders />} />
             <Route path="retail" element={<RetailItems />} />
+            <Route path="bookings" element={<Bookings />} />
             <Route path="live-orders" element={<LiveOrders />} />
             <Route path="eod" element={<EODReport />} />
             <Route path="inventory" element={<Inventory />} />

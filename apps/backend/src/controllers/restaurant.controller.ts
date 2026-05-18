@@ -66,10 +66,10 @@ export const getRestaurantInfo = async (req: AuthRequest, res: Response) => {
 
 export const updateRestaurantInfo = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, address, gstin, fssaiNumber, logoUrl, upiId, printerName } = req.body;
+    const { name, address, gstin, fssaiNumber, logoUrl, upiId, printerName, businessType, bookingCategories, defaultBookingCategory } = req.body;
     const restaurant = await Restaurant.findByIdAndUpdate(
       req.user!.restaurantId,
-      { $set: { name, address, gstin, fssaiNumber, logoUrl, upiId, printerName } },
+      { $set: { name, address, gstin, fssaiNumber, logoUrl, upiId, printerName, businessType, bookingCategories, defaultBookingCategory } },
       { new: true, runValidators: true }
     ).lean();
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });

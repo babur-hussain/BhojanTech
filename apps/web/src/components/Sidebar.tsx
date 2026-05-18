@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '@restaurant/types';
-import { LayoutDashboard, Users, UtensilsCrossed, Package, Settings, LogOut, Receipt, TrendingUp, BarChart2, Building, Megaphone, FileText, PieChart, ShoppingBag, Store, ClipboardList, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, Users, UtensilsCrossed, Package, Settings, LogOut, Receipt, TrendingUp, BarChart2, Building, Megaphone, FileText, PieChart, ShoppingBag, Store, ClipboardList, ShoppingCart, Calendar } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
@@ -12,6 +12,7 @@ export default function Sidebar() {
     { name: 'Live Analytics', icon: TrendingUp, to: '/analytics', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Live Orders', icon: ShoppingBag, to: '/live-orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.WAITER] },
     { name: 'Orders', icon: ClipboardList, to: '/orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
+    { name: 'Bookings', icon: Calendar, to: '/bookings', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Customers', icon: Users, to: '/customers', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Campaigns', icon: Megaphone, to: '/campaigns', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Customer Analytics', icon: BarChart2, to: '/customer-analytics', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
@@ -26,7 +27,6 @@ export default function Sidebar() {
     { name: 'EOD Report', icon: Receipt, to: '/eod', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Delivery Orders', icon: Package, to: '/delivery-orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
     { name: 'Integrations', icon: Settings, to: '/integrations', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER] },
-    { name: 'Restaurant Settings', icon: Store, to: '/settings', roles: [UserRole.SUPER_OWNER, UserRole.OWNER] },
     { name: 'CA Dashboard', icon: LayoutDashboard, to: '/ca', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.ACCOUNTANT] },
     { name: 'GST Filing', icon: FileText, to: '/ca/gst', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.ACCOUNTANT] },
     { name: 'Profit & Loss', icon: TrendingUp, to: '/ca/pnl', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.ACCOUNTANT] },
@@ -65,6 +65,17 @@ export default function Sidebar() {
             <p className="text-xs font-medium text-gray-300">{user?.role}</p>
           </div>
         </div>
+        {user && [UserRole.SUPER_OWNER, UserRole.OWNER].includes(user.role) && (
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex w-full items-center px-2 py-2 mb-2 text-sm font-medium rounded-md transition-colors ${isActive ? 'bg-saffron text-white' : 'text-cream hover:bg-saffron hover:text-white'}`
+            }
+          >
+            <Settings className="mr-3 h-5 w-5" />
+            Global Settings
+          </NavLink>
+        )}
         <button
           onClick={logout}
           className="flex w-full items-center px-2 py-2 text-sm font-medium text-cream rounded-md hover:bg-saffron hover:text-white transition-colors"

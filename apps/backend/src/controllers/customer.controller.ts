@@ -67,16 +67,29 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
             : 'totalSpend';
 
         const [customers, total] = await Promise.all([
-            Customer.find(filter).lean()
+            Customer.find(filter)
                 .sort({ _id: -1 }) // Sort exactly by ID for cursor approach
                 .limit(Number(limit))
                 .select('-otp -otpExpiresAt'),
             Customer.countDocuments(filter),
         ]);
 
+        const customersData = customers.map((c: any) => {
+            if (c.decryptFieldsSync) c.decryptFieldsSync();
+            const obj = c.toJSON();
+            return {
+                _id: obj._id,
+                name: obj.name,
+                phone: obj.phone,
+                totalVisits: obj.totalVisits,
+                totalSpend: obj.totalSpend,
+                segment: obj.segment
+            };
+        });
+
         const nextCursor = customers.length > 0 ? customers[customers.length - 1]._id : null;
 
-        return res.json({ customers, total, nextCursor });
+        return res.json({ customers: customersData, total, nextCursor });
     } catch (err) {
         return res.status(500).json({ error: 'Server error' });
     }
@@ -140,7 +153,7 @@ export const getSegmentSummary = async (req: AuthRequest, res: Response) => {
         // Re-sync segments live
         const all = await Customer.find({ restaurantId }).select(
             'phone totalVisits totalSpend lastVisitDate firstVisitDate segment loyaltyPoints'
-        ).lean();
+        );
 
         const counts: Record<string, number> = {
             VIP: 0, REGULAR: 0, OCCASIONAL: 0, LAPSED: 0, NEW: 0,
@@ -245,7 +258,11 @@ export const getBirthdayList = async (req: AuthRequest, res: Response) => {
 
         const customers = await Customer.find({ restaurantId, birthdayMonth: currentMonth })
             .select('name phone tier loyaltyPoints whatsappOptIn smsOptIn')
-            .limit(100).lean();
+            .limit(100);
+
+        customers.forEach((c: any) => {
+            if (c.decryptFieldsSync) c.decryptFieldsSync();
+        });
 
         return res.json({ customers, month: currentMonth });
     } catch (err) {
@@ -264,7 +281,10 @@ export const customerAnalytics = async (req: AuthRequest, res: Response) => {
         const sixtyDaysAgo = new Date(now); sixtyDaysAgo.setDate(now.getDate() - 60);
 
         // All customers
-        const all = await Customer.find({ restaurantId }).lean();
+        const all = await Customer.find({ restaurantId });
+        all.forEach((c: any) => {
+            if (c.decryptFieldsSync) c.decryptFieldsSync();
+        });
 
         // Segment counts
         const segments: Record<string, number> = { VIP: 0, REGULAR: 0, OCCASIONAL: 0, NEW: 0, LAPSED: 0 };

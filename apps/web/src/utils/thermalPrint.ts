@@ -248,6 +248,12 @@ export interface ReceiptData {
   gstBreakup: { slab: number; taxableAmount: number; cgst: number; sgst: number }[];
   totalGST: number;
   amountInWords: string;
+  // Booking-specific extras
+  customerName?: string;
+  customerPhone?: string;
+  depositPaid?: number;
+  balanceDue?: number;
+  bookingNote?: string;
 }
 
 export function buildESCPOS(r: ReceiptData): string {
@@ -269,8 +275,15 @@ export function buildESCPOS(r: ReceiptData): string {
 
   // ── Meta ──────────────────────────────────────────────────────────────────
   s += cols(`INV: ${r.invoiceNumber}`, r.date);
-  s += cols(`TBL: ${r.tableNumber || 'Takeaway'}`, r.time);
+  s += cols(`FOR: ${r.tableNumber || 'Takeaway'}`, r.time);
   s += cols(`USR: ${r.waiterName || 'Staff'}`, `[${r.paymentMode}]`);
+
+  // ── Customer block (booking receipts) ─────────────────────────────────────
+  if (r.customerName) {
+    s += dashes('-');
+    s += BOLD_ON + line(`CUST: ${r.customerName}`) + BOLD_OFF;
+    if (r.customerPhone) s += line(`MOB:  ${r.customerPhone}`);
+  }
   s += dashes();
 
   // ── Column headers ────────────────────────────────────────────────────────
@@ -304,18 +317,34 @@ export function buildESCPOS(r: ReceiptData): string {
   s += BOLD_ON;
   s += cols('TOTAL PAYABLE', `Rs.${r.grandTotal}`);
   s += BOLD_OFF;
+
+  // ── Deposit / Balance (booking-specific) ──────────────────────────────────
+  if (r.depositPaid !== undefined && r.depositPaid > 0) {
+    s += dashes('-');
+    s += cols('Advance Paid', `Rs.${r.depositPaid.toFixed(2)}`);
+    const bal = r.balanceDue ?? (r.grandTotal - r.depositPaid);
+    s += BOLD_ON + cols('BALANCE DUE', `Rs.${Math.max(0, bal).toFixed(2)}`) + BOLD_OFF;
+  }
   s += dashes();
 
-  // ── GST Breakup ───────────────────────────────────────────────────────────
-  s += ALIGN_C + BOLD_ON + line('TAX SUMMARY') + BOLD_OFF + ALIGN_L;
-  s += line('Slab  Taxable   CGST   SGST   Total');
-  s += dashes('-');
-  for (const g of r.gstBreakup) {
-    const row = `${String(g.slab + '%').padEnd(6)}${String(g.taxableAmount.toFixed(2)).padEnd(10)}${String(g.cgst.toFixed(2)).padEnd(7)}${String(g.sgst.toFixed(2)).padEnd(7)}${(g.cgst + g.sgst).toFixed(2)}`;
-    s += line(row);
+  // ── GST Breakup (only when GST data exists) ──────────────────────────────
+  if (r.gstBreakup.length > 0) {
+    s += ALIGN_C + BOLD_ON + line('TAX SUMMARY') + BOLD_OFF + ALIGN_L;
+    s += line('Slab  Taxable   CGST   SGST   Total');
+    s += dashes('-');
+    for (const g of r.gstBreakup) {
+      const row = `${String(g.slab + '%').padEnd(6)}${String(g.taxableAmount.toFixed(2)).padEnd(10)}${String(g.cgst.toFixed(2)).padEnd(7)}${String(g.sgst.toFixed(2)).padEnd(7)}${(g.cgst + g.sgst).toFixed(2)}`;
+      s += line(row);
+    }
+    s += cols('Total GST', `Rs.${r.totalGST.toFixed(2)}`);
+    s += dashes();
   }
-  s += cols('Total GST', `Rs.${r.totalGST.toFixed(2)}`);
-  s += dashes();
+
+  // ── Booking note (special requests) ──────────────────────────────────────
+  if (r.bookingNote) {
+    s += ALIGN_L + line(`NOTE: ${r.bookingNote}`);
+    s += dashes('-');
+  }
 
   // ── Amount in words ───────────────────────────────────────────────────────
   s += ALIGN_C;
@@ -323,7 +352,11 @@ export function buildESCPOS(r: ReceiptData): string {
 
   // ── UPI QR (ESC/POS model-2 QR command) ──────────────────────────────────
   if (r.upiId) {
-    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${r.grandTotal}&cu=INR`;
+    // If deposit was paid, QR should be for balance due only
+    const qrAmount = (r.depositPaid && r.depositPaid > 0)
+      ? Math.max(0, r.grandTotal - r.depositPaid)
+      : r.grandTotal;
+    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${qrAmount}&cu=INR`;
     const upiLen = upiString.length;
     const pL = upiLen & 0xFF;
     const pH = (upiLen >> 8) & 0xFF;
@@ -340,7 +373,10 @@ export function buildESCPOS(r: ReceiptData): string {
     // Print QR
     s += GS + '(k\x03\x00\x31\x51\x30';
 
-    s += LF + line('Scan to Pay via UPI') + line(r.upiId);
+    s += LF + ALIGN_C;
+    s += BOLD_ON + line('Scan to Pay via UPI') + BOLD_OFF;
+    s += line(r.upiId);
+    if (qrAmount > 0) s += BOLD_ON + line(`Pay: Rs.${qrAmount.toFixed(2)}`) + BOLD_OFF;
     s += dashes();
   }
 
@@ -425,6 +461,161 @@ export function buildKOTSlip(k: KOTData): string {
   return s;
 }
 
+// ─── Final Bill builder (full detailed invoice) ──────────────────────────────
+// Used when marking a booking as DELIVERED/COMPLETED.
+// More comprehensive than the short booking receipt.
+
+export function buildFinalBillESCPOS(r: ReceiptData): string {
+  const DB  = '═';   // double-line separator char
+  const SB  = '─';   // single-line separator char
+
+  function dbl(len = 32)   { return line(DB.repeat(len)); }
+  function sgl(len = 32)   { return line(SB.repeat(len)); }
+
+  let s = '';
+  s += INIT;
+
+  // ══ Header ════════════════════════════════════════════════════════════════
+  s += ALIGN_C;
+  s += BOLD_ON + DSIZE_ON + line(r.restaurantName.toUpperCase()) + DSIZE_OFF + BOLD_OFF;
+  if (r.address) s += line(r.address);
+  if (r.gstin)   s += line(`GSTIN: ${r.gstin}`);
+  if (r.fssai)   s += line(`FSSAI: ${r.fssai}`);
+  s += LF;
+  s += dbl();
+
+  // ══ FINAL BILL title ══════════════════════════════════════════════════════
+  s += ALIGN_C + BOLD_ON + DSIZE_ON + line('** FINAL BILL **') + DSIZE_OFF + BOLD_OFF;
+  s += dbl();
+
+  // ── Bill meta ─────────────────────────────────────────────────────────────
+  s += ALIGN_L;
+  s += cols(`Bill No : ${r.invoiceNumber}`, r.date);
+  s += cols(`Time    : ${r.time}`,          `[${r.paymentMode}]`);
+  s += sgl();
+
+  // ── Customer ──────────────────────────────────────────────────────────────
+  if (r.customerName) {
+    s += BOLD_ON + line('CUSTOMER') + BOLD_OFF;
+    s += sgl();
+    s += line(`Name  : ${r.customerName}`);
+    if (r.customerPhone) s += line(`Mobile: ${r.customerPhone}`);
+    s += sgl();
+  }
+
+  // ── Booking details ───────────────────────────────────────────────────────
+  s += BOLD_ON + line('ORDER DETAILS') + BOLD_OFF;
+  s += sgl();
+  s += line(`Category   : ${r.tableNumber}`);
+  s += sgl();
+
+  // ── Items ─────────────────────────────────────────────────────────────────
+  s += BOLD_ON + line('ITEMS') + BOLD_OFF;
+  s += sgl();
+  s += BOLD_ON + line('ITEM                    QTY   RATE     AMT') + BOLD_OFF;
+  s += sgl();
+
+  for (const item of r.items) {
+    const name = item.variantName && item.variantName !== 'Regular'
+      ? `${item.name} (${item.variantName})`
+      : item.name;
+    const nameTrunc = name.length > 24 ? name.substring(0, 23) + '…' : name.padEnd(24);
+    const qty  = String(item.quantity).padStart(3);
+    const rate = String(item.unitPrice.toFixed(0)).padStart(6);
+    const amt  = String(item.lineTotal.toFixed(2)).padStart(8);
+    s += line(`${nameTrunc}${qty}${rate}${amt}`);
+  }
+
+  s += dbl();
+
+  // ── Financials ────────────────────────────────────────────────────────────
+  s += cols('Sub-Total', `Rs. ${r.subtotal.toFixed(2)}`);
+  if (r.discountFlat > 0) {
+    s += cols('Discount', `-Rs. ${r.discountFlat.toFixed(2)}`);
+  }
+  if (r.roundOff !== 0) {
+    s += cols('Round-off', `${r.roundOff > 0 ? '+' : ''}Rs. ${Math.abs(r.roundOff).toFixed(2)}`);
+  }
+  s += sgl();
+  s += BOLD_ON + DSIZE_ON;
+  s += cols('TOTAL', `Rs.${r.grandTotal.toFixed(2)}`);
+  s += DSIZE_OFF + BOLD_OFF;
+  s += dbl();
+
+  // ── Advance / Balance ─────────────────────────────────────────────────────
+  if (r.depositPaid && r.depositPaid > 0) {
+    const bal = r.balanceDue ?? Math.max(0, r.grandTotal - r.depositPaid);
+    s += cols('Advance Paid', `Rs. ${r.depositPaid.toFixed(2)}`);
+    s += sgl();
+    s += BOLD_ON;
+    s += cols('BALANCE DUE', `Rs. ${bal.toFixed(2)}`);
+    s += BOLD_OFF;
+    s += dbl();
+  }
+
+  // ── GST summary ───────────────────────────────────────────────────────────
+  if (r.gstBreakup.length > 0) {
+    s += ALIGN_C + BOLD_ON + line('GST SUMMARY') + BOLD_OFF + ALIGN_L;
+    s += sgl();
+    s += line('Slab  Taxable     CGST    SGST    Total');
+    s += sgl();
+    for (const g of r.gstBreakup) {
+      const row = `${String(g.slab + '%').padEnd(6)}${String(g.taxableAmount.toFixed(2)).padEnd(11)}${String(g.cgst.toFixed(2)).padEnd(8)}${String(g.sgst.toFixed(2)).padEnd(8)}${(g.cgst + g.sgst).toFixed(2)}`;
+      s += line(row);
+    }
+    s += cols('Total GST', `Rs. ${r.totalGST.toFixed(2)}`);
+    s += dbl();
+  }
+
+  // ── Special note ──────────────────────────────────────────────────────────
+  if (r.bookingNote) {
+    s += ALIGN_L + BOLD_ON + line('SPECIAL NOTE') + BOLD_OFF;
+    s += line(r.bookingNote);
+    s += sgl();
+  }
+
+  // ── Amount in words ───────────────────────────────────────────────────────
+  s += ALIGN_C;
+  s += line(r.amountInWords);
+  s += LF;
+
+  // ── UPI QR ────────────────────────────────────────────────────────────────
+  if (r.upiId) {
+    const qrAmount = (r.depositPaid && r.depositPaid > 0)
+      ? Math.max(0, r.grandTotal - r.depositPaid)
+      : r.grandTotal;
+    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${qrAmount}&cu=INR`;
+    const upiLen = upiString.length;
+    const pL = upiLen & 0xFF;
+    const pH = (upiLen >> 8) & 0xFF;
+
+    s += LF;
+    s += GS + '(k\x04\x00\x31\x41\x32\x00';
+    s += GS + '(k\x03\x00\x31\x43\x05';   // module size 5 for final bill QR
+    s += GS + '(k\x03\x00\x31\x45\x31';
+    s += GS + '(k' + String.fromCharCode(pL + 3) + String.fromCharCode(pH) + '\x31\x50\x30' + upiString;
+    s += GS + '(k\x03\x00\x31\x51\x30';
+
+    s += LF;
+    s += BOLD_ON + line('SCAN & PAY') + BOLD_OFF;
+    s += line(r.upiId);
+    if (qrAmount > 0) s += BOLD_ON + line(`Amount: Rs. ${qrAmount.toFixed(2)}`) + BOLD_OFF;
+    s += dbl();
+  }
+
+  // ── Footer ────────────────────────────────────────────────────────────────
+  s += ALIGN_C;
+  s += BOLD_ON + DSIZE_ON + line('THANK YOU!') + DSIZE_OFF + BOLD_OFF;
+  s += line('Dhanyavaad! Phir Padharen 🙏');
+  s += LF;
+  s += line('~ Powered by RestoOS ~');
+
+  s += FEED3;
+  s += CUT;
+
+  return s;
+}
+
 // ─── Main printReceipt function ─────────────────────────────────────────────
 
 export interface PrintReceiptOptions {
@@ -434,30 +625,47 @@ export interface PrintReceiptOptions {
 }
 
 export async function printReceipt(options: PrintReceiptOptions | HTMLElement | null) {
-  // Legacy call: printReceipt(domNode)
+  // Legacy call: printReceipt(domNode) — no-op, popup disabled
   if (options === null || options instanceof HTMLElement) {
-    popupPrint(options);
-    return;
+    throw new Error('QZ Tray is required for printing. Browser popup is disabled.');
   }
 
-  const { receiptData, receiptContainerRef, printerName } = options;
+  const { receiptData, printerName } = options;
 
-  // Try QZ Tray first if receiptData is provided (printerName can be empty to use default)
-  if (receiptData) {
-    const connected = await ensureConnected();
-    if (connected) {
-      try {
-        await _printESCPOS(buildESCPOS(receiptData), printerName || null);
-        console.log('[thermalPrint] Printed receipt via QZ Tray ✅');
-        return;
-      } catch (err) {
-        console.warn('[thermalPrint] QZ Tray print failed, falling back to popup:', err);
-      }
-    }
+  if (!receiptData) {
+    throw new Error('No receipt data provided.');
   }
 
-  // Fallback: popup window
-  popupPrint(receiptContainerRef ?? null);
+  const connected = await ensureConnected();
+  if (!connected) {
+    throw new Error('QZ Tray is not running. Please start QZ Tray and try again.');
+  }
+
+  try {
+    await _printESCPOS(buildESCPOS(receiptData), printerName || null);
+    console.log('[thermalPrint] Printed receipt via QZ Tray ✅');
+  } catch (err) {
+    console.error('[thermalPrint] QZ Tray print failed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Print a full detailed Final Bill via QZ Tray.
+ * Uses buildFinalBillESCPOS for a comprehensive invoice layout.
+ */
+export async function printFinalBill(receiptData: ReceiptData, printerName?: string): Promise<void> {
+  const connected = await ensureConnected();
+  if (!connected) {
+    throw new Error('QZ Tray is not running. Please start QZ Tray and try again.');
+  }
+  try {
+    await _printESCPOS(buildFinalBillESCPOS(receiptData), printerName || null);
+    console.log('[thermalPrint] Final bill printed via QZ Tray ✅');
+  } catch (err) {
+    console.error('[thermalPrint] Final bill print failed:', err);
+    throw err;
+  }
 }
 
 /**
