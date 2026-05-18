@@ -57,6 +57,13 @@ export default function BillingScreen() {
   const [pointValue, setPointValue] = useState(0);
   const [tierDiscountPct, setTierDiscountPct] = useState(0);
 
+  // Live search suggestions
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggLoading, setSuggLoading] = useState(false);
+  const [showSugg, setShowSugg] = useState(false);
+  const [activeInput, setActiveInput] = useState<'phone' | 'name' | null>(null);
+  const suggRef = React.useRef<HTMLDivElement>(null);
+
   // Retail items
   const [retailCatalog, setRetailCatalog] = useState<any[]>([]);
   const [retailCart, setRetailCart] = useState<{ _id: string; name: string; priceINR: number; gstSlab: number; unit: string; quantity: number }[]>([]);
@@ -91,7 +98,7 @@ export default function BillingScreen() {
     })();
   }, [orderId]);
 
-  // Customer CRM lookup (live)
+  // Customer CRM lookup (exact phone → full CRM details)
   const handleCustomerSearch = async (phone: string) => {
     if (phone.length < 10) { setCustomer(null); return; }
     try {
@@ -99,6 +106,7 @@ export default function BillingScreen() {
       const res = await api.get(`/billing/customer/${phone}`);
       if (res.data.found) {
         setCustomer(res.data.customer);
+        setCustomerName(res.data.customer.name);
         setPointValue(res.data.pointsPerRupeeRedemption || 1);
         setTierDiscountPct(res.data.tierDiscountPercent || 0);
       } else {
@@ -111,13 +119,63 @@ export default function BillingScreen() {
     }
   };
 
-  // Live search with debounce
+  // Live suggestions search (partial phone or name)
+  const searchSuggestions = useCallback(async (query: string) => {
+    if (!query || query.length < 2) { setSuggestions([]); setShowSugg(false); return; }
+    try {
+      setSuggLoading(true);
+      const res = await api.get(`/customers?q=${encodeURIComponent(query)}&limit=6`);
+      setSuggestions(res.data?.customers || res.data || []);
+      setShowSugg(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggLoading(false);
+    }
+  }, []);
+
+  // Debounced suggestions for phone
+  useEffect(() => {
+    if (customer) return;
+    const t = setTimeout(() => searchSuggestions(customerPhone), 300);
+    return () => clearTimeout(t);
+  }, [customerPhone, customer, searchSuggestions]);
+
+  // Debounced suggestions for name
+  useEffect(() => {
+    if (customer) return;
+    const t = setTimeout(() => searchSuggestions(customerName), 300);
+    return () => clearTimeout(t);
+  }, [customerName, customer, searchSuggestions]);
+
+  // Full CRM lookup when phone hits 10 digits
   useEffect(() => {
     const timer = setTimeout(() => {
       handleCustomerSearch(customerPhone);
     }, 400);
     return () => clearTimeout(timer);
   }, [customerPhone]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggRef.current && !suggRef.current.contains(e.target as Node)) {
+        setShowSugg(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Select a suggestion → autofill both fields + trigger CRM lookup
+  const selectSuggestion = (s: any) => {
+    setCustomerPhone(s.phone || '');
+    setCustomerName(s.name || '');
+    setShowSugg(false);
+    setSuggestions([]);
+    // Trigger full CRM lookup
+    handleCustomerSearch(s.phone);
+  };
 
   // ── Retail cart helpers ── MUST be before any early returns (Rules of Hooks) ──
   const addRetailItem = useCallback((item: any) => {
@@ -295,9 +353,10 @@ export default function BillingScreen() {
               </div>
             </div>
 
-            <div className="p-5">
+            <div className="p-5 relative" ref={suggRef}>
               {/* Phone + Name Row */}
               <div className="grid grid-cols-2 gap-3 mb-4">
+                {/* Phone Input with live dropdown */}
                 <div className="relative">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Mobile Number</label>
                   <div className="relative">
@@ -306,10 +365,11 @@ export default function BillingScreen() {
                       type="tel" maxLength={10}
                       placeholder="10-digit number"
                       value={customerPhone}
-                      onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                      onFocus={() => setActiveInput('phone')}
+                      onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
                       className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all"
                     />
-                    {customerLoading && (
+                    {(customerLoading || (suggLoading && activeInput === 'phone')) && (
                       <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-maroon" />
                     )}
                     {!customerLoading && customerPhone.length === 10 && (
@@ -317,22 +377,56 @@ export default function BillingScreen() {
                     )}
                   </div>
                 </div>
-                <div>
+
+                {/* Name Input with live dropdown */}
+                <div className="relative">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Customer Name</label>
-                  <input
-                    type="text"
-                    placeholder={customer ? customer.name : 'Enter name...'}
-                    value={customer ? customer.name : customerName}
-                    onChange={e => !customer && setCustomerName(e.target.value)}
-                    readOnly={!!customer}
-                    className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
-                      customer
-                        ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
-                        : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent'
-                    }`}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder={customer ? customer.name : 'Enter name...'}
+                      value={customer ? customer.name : customerName}
+                      onFocus={() => setActiveInput('name')}
+                      onChange={e => { if (!customer) { setCustomerName(e.target.value); } }}
+                      readOnly={!!customer}
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
+                        customer
+                          ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
+                          : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent'
+                      }`}
+                    />
+                    {suggLoading && activeInput === 'name' && !customer && (
+                      <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-maroon" />
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {/* Live suggestions dropdown */}
+              {showSugg && suggestions.length > 0 && !customer && (
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden" style={{top: '100%'}}>
+                  <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
+                    <Search size={11} className="text-gray-400" />
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Matching Customers</span>
+                  </div>
+                  {suggestions.map((s: any) => (
+                    <button
+                      key={s._id}
+                      onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-maroon hover:bg-opacity-5 transition-colors text-left border-b border-gray-50 last:border-0"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-maroon bg-opacity-10 flex items-center justify-center text-maroon font-black text-xs shrink-0">
+                        {s.name?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-800 text-sm truncate">{s.name}</p>
+                        <p className="text-xs text-gray-400">+91 {s.phone} · {s.totalVisits || 0} visits</p>
+                      </div>
+                      <span className="text-xs text-maroon font-bold">Select →</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* CRM Result Card */}
               {customer && (
