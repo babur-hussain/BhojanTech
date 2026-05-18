@@ -4,86 +4,89 @@ import { useEffect, useRef, useCallback } from 'react';
  * useBarcodeScanner
  *
  * Detects input from hardware barcode scanners (USB, Bluetooth wedge).
- * These scanners act as keyboards: they emit characters very quickly
- * (< SCANNER_INTERVAL_MS between chars) and terminate with Enter.
- *
- * Usage:
- *   useBarcodeScanner((barcode) => handleBarcode(barcode));
- *
- * Options:
- *   - minLength: minimum barcode length to consider valid (default 3)
- *   - scanInterval: max ms between scanner keystrokes (default 50ms)
- *   - active: whether to listen (default true)
+ * Operates in CAPTURE phase so it intercepts before inputs receive the key.
+ * When `interceptAll` is true (form mode), prevents characters from reaching
+ * the focused input and fills only the barcode target.
  */
 interface BarcodeScannerOptions {
   minLength?: number;
   scanInterval?: number;
   active?: boolean;
+  interceptAll?: boolean; // when true, eat ALL scanner keystrokes (form mode)
 }
 
 export function useBarcodeScanner(
   onScan: (barcode: string) => void,
   options: BarcodeScannerOptions = {}
 ) {
-  const { minLength = 3, scanInterval = 50, active = true } = options;
+  const { minLength = 3, scanInterval = 50, active = true, interceptAll = false } = options;
 
   const bufferRef = useRef<string>('');
   const lastKeyTimeRef = useRef<number>(0);
+  const isScanningRef = useRef<boolean>(false); // true once first char arrives fast
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!active) return;
 
+      // Ignore modifier keys
+      if (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock'].includes(e.key)) return;
+
       const now = Date.now();
       const elapsed = now - lastKeyTimeRef.current;
       lastKeyTimeRef.current = now;
 
-      // Ignore modifier keys
-      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+      if (e.key === 'Escape') {
+        bufferRef.current = '';
+        isScanningRef.current = false;
         return;
       }
 
       if (e.key === 'Enter') {
         const code = bufferRef.current.trim();
-        // If the elapsed time since the last character is small, and we have enough chars, it's a scanner.
-        if (code.length >= minLength && elapsed <= scanInterval) {
-          e.preventDefault(); // Prevent form submission
+        if (code.length >= minLength && isScanningRef.current) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
           onScan(code);
         }
         bufferRef.current = '';
+        isScanningRef.current = false;
         return;
       }
 
-      if (e.key === 'Escape') {
-        bufferRef.current = '';
-        return;
-      }
-
-      // If it took too long between keys, this is human typing, reset buffer
+      // Reset buffer if too long since last key (human typing)
       if (elapsed > scanInterval && bufferRef.current.length > 0) {
         bufferRef.current = '';
+        isScanningRef.current = false;
       }
 
-      // Only record single printable characters
+      // Record single printable characters
       if (e.key.length === 1) {
-        bufferRef.current += e.key;
+        // If this char arrived very fast, mark as scanner input
+        if (elapsed <= scanInterval || bufferRef.current.length === 0) {
+          if (elapsed <= scanInterval) isScanningRef.current = true;
+          bufferRef.current += e.key;
+
+          // In interceptAll mode, prevent the char from reaching any focused input
+          if (interceptAll && isScanningRef.current) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }
       }
     },
-    [active, minLength, onScan, scanInterval]
+    [active, interceptAll, minLength, onScan, scanInterval]
   );
 
   useEffect(() => {
     if (!active) return;
-    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase to intercept before inputs
+    window.addEventListener('keydown', handleKeyDown, true); // capture phase
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [active, handleKeyDown]);
 }
 
 /**
- * useBarcodeScannerInput
- *
- * For use with a dedicated text input (data-barcode-input="true").
- * Fires onScan when Enter is pressed with a valid barcode.
+ * useBarcodeScannerInput — for a dedicated visible input field.
  */
 export function useBarcodeScannerInput(
   onScan: (barcode: string) => void,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useBranchStore } from '../store/branchStore';
 import { api } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import { Calendar, Clock, Users, Phone, Plus, Search, CheckCircle, XCircle, ChevronRight, User, Table as TableIcon, Eye, X, Printer } from 'lucide-react';
@@ -165,6 +166,7 @@ export default function Bookings() {
   const [customerSearchFocus, setCustomerSearchFocus] = useState<'name' | 'phone' | null>(null);
   const [restaurantInfo, setRestaurantInfo] = useState<{ name: string; address: string; gstin: string; fssai: string; upiId: string; printerName: string }>({ name: '', address: '', gstin: '', fssai: '', upiId: '', printerName: '' });
   const [billPreview, setBillPreview] = useState<Booking | null>(null);
+  const { selectedBranchId } = useBranchStore();
   
   const [showMenuPopup, setShowMenuPopup] = useState(false);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -253,7 +255,7 @@ export default function Bookings() {
   useEffect(() => {
     fetchBookings();
     fetchTables();
-  }, [filterDate]);
+  }, [filterDate, selectedBranchId]);
 
   const handleCreateBooking = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -9,6 +9,7 @@ import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '@restaurant/types';
+import { useBranchStore } from '../store/branchStore';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   OPEN:   { label: 'Open',   color: 'bg-green-100 text-green-700 border-green-200',   icon: <Clock size={11} /> },
@@ -42,6 +43,7 @@ export default function AllOrders() {
   const [branches, setBranches] = useState<any[]>([]);
 
   const isOwner = user?.role === UserRole.SUPER_OWNER || user?.role === UserRole.OWNER;
+  const { selectedBranchId } = useBranchStore();
   const debounceRef = useRef<NodeJS.Timeout>();
 
   const fetchOrders = useCallback(async (p = page) => {
@@ -79,7 +81,7 @@ export default function AllOrders() {
       setPage(1);
       fetchOrders(1);
     }, 350);
-  }, [search, status, type, branchId, dateFrom, dateTo]);
+  }, [search, status, type, branchId, dateFrom, dateTo, selectedBranchId]);
 
   useEffect(() => {
     fetchOrders(page);

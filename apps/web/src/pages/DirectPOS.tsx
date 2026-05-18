@@ -1,118 +1,186 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MenuCategory, MenuItem } from '@restaurant/types';
-import { Search, Plus, Minus, ShoppingCart, UserPlus, CreditCard, Banknote, Smartphone, Split, Loader2, CheckCircle, Printer, X, Tag, Image as ImageIcon } from 'lucide-react';
+import {
+  Search, Plus, Minus, ShoppingCart, Loader2, X, Image as ImageIcon,
+  ScanLine, Camera, Package, ShoppingBag
+} from 'lucide-react';
 import { api } from '../utils/api';
 import PageLoader from '../components/PageLoader';
-import InvoicePrint from '../components/Billing/InvoicePrint';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
 import { useNavigate } from 'react-router-dom';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
+import CameraScanner from '../components/CameraScanner';
+import { useBranchStore } from '../store/branchStore';
+
+// Cart item can be a menu item or a retail item
+interface CartItem {
+  id: string;           // menuItemId or retailItemId
+  type: 'menu' | 'retail';
+  name: string;
+  variantName?: string;
+  price: number;
+  quantity: number;
+  gstSlab: number;
+  unit?: string;
+  barcode?: string;
+}
 
 export default function DirectPOS() {
   const navigate = useNavigate();
+
+  // Menu
   const [categories, setCategories] = useState<MenuCategory[]>([]);
-  const [items, setItems] = useState<MenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
+  // Retail
+  const [retailItems, setRetailItems] = useState<any[]>([]);
+  const [showRetailTab, setShowRetailTab] = useState(false);
+
   const [loading, setLoading] = useState(true);
-  
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  
-  // Cart
-  const [cart, setCart] = useState<any[]>([]);
-  
-  // Customer & Payment
+
+  // Unified cart
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  // Customer
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [customerLoading, setCustLoading] = useState(false);
-  // Submit state
-  const [paying, setPaying] = useState(false);
 
+  // Scanner feedback
+  const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
+
+  const [paying, setPaying] = useState(false);
+  const { selectedBranchId } = useBranchStore();
+
+  // ─── Fetch Data ────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
-        const [catRes, itemRes] = await Promise.all([
+        const [catRes, itemRes, retailRes] = await Promise.all([
           api.get('/menu/categories'),
           api.get('/menu/items'),
+          api.get('/retail-items'),
         ]);
         setCategories(catRes.data);
-        setItems(itemRes.data.filter((i: any) => i.isAvailable));
+        setMenuItems(itemRes.data.filter((i: any) => i.isAvailable));
+        setRetailItems(retailRes.data.filter((i: any) => i.isActive));
       } catch (err) {
-        console.error('Failed to load menu', err);
+        console.error('Failed to load POS data', err);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [selectedBranchId]);
 
+  // ─── Barcode Scanner (hardware) ────────────────────────────────────────────
+  const handleBarcodeScan = useCallback((barcode: string) => {
+    const found = retailItems.find(i => i.barcode === barcode);
+    if (found) {
+      addRetailToCart(found);
+      setScanFeedback({ text: `✓ ${found.name} added`, ok: true });
+      if (!showRetailTab) setShowRetailTab(true);
+    } else {
+      setScanFeedback({ text: `Barcode ${barcode} not found in retail catalog`, ok: false });
+    }
+    setTimeout(() => setScanFeedback(null), 3000);
+  }, [retailItems, showRetailTab]);
+
+  useBarcodeScanner(handleBarcodeScan);
+
+  // ─── Cart Helpers ──────────────────────────────────────────────────────────
+  const addMenuToCart = (item: any, variantIdx = 0) => {
+    const variant = item.variants[variantIdx];
+    const variantName = variant.name !== 'Regular' ? variant.name : undefined;
+    const key = item._id + (variantName || '');
+    setCart(prev => {
+      const ex = prev.find(c => c.id === key);
+      if (ex) return prev.map(c => c.id === key ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, {
+        id: key, type: 'menu', name: item.name, variantName,
+        price: variant.specialPriceINR || variant.priceINR,
+        quantity: 1, gstSlab: item.gstSlab || 5,
+      }];
+    });
+  };
+
+  const addRetailToCart = (item: any) => {
+    setCart(prev => {
+      const ex = prev.find(c => c.id === item._id && c.type === 'retail');
+      if (ex) return prev.map(c => (c.id === item._id && c.type === 'retail') ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, {
+        id: item._id, type: 'retail', name: item.name,
+        price: item.priceINR, quantity: 1, gstSlab: item.gstSlab || 18,
+        unit: item.unit, barcode: item.barcode,
+      }];
+    });
+  };
+
+  const updateQty = (id: string, type: 'menu' | 'retail', delta: number) => {
+    setCart(prev =>
+      prev.map(c => (c.id === id && c.type === type) ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c)
+          .filter(c => c.quantity > 0)
+    );
+  };
+
+  const removeFromCart = (id: string, type: 'menu' | 'retail') =>
+    setCart(prev => prev.filter(c => !(c.id === id && c.type === type)));
+
+  const subtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const gstEstimate = cart.reduce((s, c) => s + (c.price * c.quantity * c.gstSlab / 100), 0);
+  const totalItems = cart.reduce((s, c) => s + c.quantity, 0);
+
+  // ─── Customer Search ────────────────────────────────────────────────────────
   const handleCustomerSearch = async () => {
     if (customerPhone.length < 10) return;
     try {
       setCustLoading(true);
       const res = await api.get(`/billing/customer/${customerPhone}`);
-      if (res.data.found) {
-        setCustomer(res.data.customer);
-        setCustomerName(res.data.customer.name);
-      } else {
-        setCustomer(null);
-      }
-    } catch {
-      setCustomer(null);
-    } finally {
-      setCustLoading(false);
-    }
+      if (res.data.found) { setCustomer(res.data.customer); setCustomerName(res.data.customer.name); }
+      else setCustomer(null);
+    } catch { setCustomer(null); }
+    finally { setCustLoading(false); }
   };
 
-  const addToCart = (item: MenuItem, variantIdx = 0) => {
-    const variant = item.variants[variantIdx];
-    const expectedVariantName = variant.name !== 'Regular' ? variant.name : undefined;
-    const existing = cart.find(c => c.menuItemId === (item as any)._id && c.variantName === expectedVariantName);
-    if (existing) {
-      setCart(cart.map(c => c === existing ? { ...c, quantity: c.quantity + 1 } : c));
-    } else {
-      setCart([...cart, {
-        menuItemId: (item as any)._id,
-        name: item.name,
-        variantName: variant.name !== 'Regular' ? variant.name : undefined,
-        priceAtOrderTime: variant.specialPriceINR || variant.priceINR,
-        quantity: 1,
-        gstSlab: item.gstSlab
-      }]);
-    }
-  };
-
-  const updateCartQty = (idx: number, delta: number) => {
-    const newCart = [...cart];
-    newCart[idx].quantity += delta;
-    if (newCart[idx].quantity <= 0) newCart.splice(idx, 1);
-    setCart(newCart);
-  };
-
-  const subtotal = cart.reduce((sum, item) => sum + (item.priceAtOrderTime * item.quantity), 0);
-  
-  // Quick GST estimate for frontend display (backend does accurate)
-  const gstEstimate = cart.reduce((sum, item) => sum + ((item.priceAtOrderTime * item.quantity) * (item.gstSlab || 5) / 100), 0);
-  const grandTotalEstimate = Math.round(subtotal + gstEstimate);
-
-  const handlePay = async () => {
+  // ─── Proceed to Billing ────────────────────────────────────────────────────
+  const handleProceed = async () => {
     if (cart.length === 0) return;
     try {
       setPaying(true);
+      const menuCartItems = cart.filter(c => c.type === 'menu');
+      const retailCartItems = cart.filter(c => c.type === 'retail');
+
+      // If only retail items, create a retail-only order flow (navigate to billing)
       const body: any = {
         orderType: 'TAKEAWAY',
-        items: cart.map(c => ({
-          menuItemId: c.menuItemId,
+        items: menuCartItems.map(c => ({
+          menuItemId: c.id.replace(c.variantName || '', ''),
           name: c.name,
           variantName: c.variantName,
           quantity: c.quantity,
-          priceAtOrderTime: c.priceAtOrderTime
+          priceAtOrderTime: c.price,
         })),
+        retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
         customerPhone,
-        customerName
+        customerName,
       };
 
-      const res = await api.post('/orders/takeaway', body);
-      navigate(`/bill/${res.data._id}`);
+      // If there are no menu items, we need at least a dummy takeaway order
+      if (menuCartItems.length === 0 && retailCartItems.length > 0) {
+        // Create a retail-only direct invoice
+        const res = await api.post('/orders/takeaway', {
+          ...body,
+          items: [{ name: 'Retail Items', quantity: 1, priceAtOrderTime: subtotal }],
+        });
+        navigate(`/bill/${res.data._id}`);
+      } else {
+        const res = await api.post('/orders/takeaway', body);
+        navigate(`/bill/${res.data._id}`);
+      }
     } catch (e: any) {
       alert(e?.response?.data?.error || 'Failed to create order');
     } finally {
@@ -120,96 +188,201 @@ export default function DirectPOS() {
     }
   };
 
-  const resetPOS = () => {
-    setCart([]);
-    setCustomer(null);
-    setCustomerPhone('');
-    setCustomerName('');
-  };
+  const resetPOS = () => { setCart([]); setCustomer(null); setCustomerPhone(''); setCustomerName(''); };
 
   if (loading) return <PageLoader message="Loading POS..." />;
 
-  const filteredItems = items.filter(i => 
+  const filteredMenu = menuItems.filter(i =>
     (selectedCategory === 'all' || i.categoryId === selectedCategory) &&
     i.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const filteredRetail = retailItems.filter(i =>
+    i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (i.barcode && i.barcode.includes(searchQuery))
+  );
+
   return (
     <div className="h-[calc(100vh-80px)] flex gap-4 overflow-hidden -m-4 p-4">
-      {/* Left: Menu */}
+      {/* ── Left: Menu + Retail ─────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {/* Search & Categories */}
+
+        {/* Search + Scanner */}
         <div className="p-4 border-b border-gray-100 space-y-3 bg-gray-50">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" placeholder="Search menu..." 
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent"
-              value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text" placeholder={showRetailTab ? "Search retail or scan barcode..." : "Search menu..."}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent"
+                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+            {/* Camera scan button */}
+            <button
+              onClick={() => setShowCamera(true)}
+              className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 flex items-center gap-1.5 text-sm font-medium shadow-sm"
+              title="Scan barcode with camera"
+            >
+              <Camera size={18} />
+            </button>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-            <button 
-              onClick={() => setSelectedCategory('all')}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-maroon text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+
+          {/* Scan feedback toast */}
+          {scanFeedback && (
+            <div className={`px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 animate-pulse ${
+              scanFeedback.ok ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'
+            }`}>
+              <ScanLine size={14} />
+              {scanFeedback.text}
+            </div>
+          )}
+
+          {/* Tab row: Menu Categories + Retail tab */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {/* Retail tab */}
+            <button
+              onClick={() => { setShowRetailTab(false); setSelectedCategory('all'); }}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                !showRetailTab && selectedCategory === 'all' ? 'bg-maroon text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
             >
               All Items
             </button>
             {categories.map(c => (
-              <button 
-                key={(c as any)._id || c.id} onClick={() => setSelectedCategory((c as any)._id || c.id)}
-                className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${selectedCategory === ((c as any)._id || c.id) ? 'bg-maroon text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              <button
+                key={(c as any)._id}
+                onClick={() => { setSelectedCategory((c as any)._id); setShowRetailTab(false); }}
+                className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                  !showRetailTab && selectedCategory === (c as any)._id ? 'bg-maroon text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }`}
               >
                 {c.name}
               </button>
             ))}
+            {/* ── Retail Tab ── */}
+            <button
+              onClick={() => { setShowRetailTab(true); setSelectedCategory(''); }}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold transition-colors flex items-center gap-1.5 ${
+                showRetailTab ? 'bg-blue-600 text-white' : 'bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100'
+              }`}
+            >
+              <ShoppingBag size={13} /> Retail
+              {retailItems.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${showRetailTab ? 'bg-white text-blue-700' : 'bg-blue-600 text-white'}`}>
+                  {retailItems.length}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Item Grid */}
+        {/* ── Item Grid ── */}
         <div className="flex-1 overflow-y-auto p-4 bg-gray-50/50">
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filteredItems.map((item: any) => (
-              <div key={item._id} onClick={() => addToCart(item)} className="bg-white border border-gray-100 rounded-xl p-3 cursor-pointer hover:border-saffron hover:shadow-md transition-all flex flex-col">
-                {item.imageUrls?.[0] || item.imageUrl ? (
-                  <img src={item.imageUrls?.[0] || item.imageUrl} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3 border border-gray-50" />
-                ) : (
-                  <div className="w-full h-28 bg-gray-50 border border-dashed border-gray-200 rounded-lg mb-3 flex items-center justify-center text-gray-300">
-                    <ImageIcon size={28} />
+          {!showRetailTab ? (
+            /* ── Menu Items ── */
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {filteredMenu.map((item: any) => (
+                <div
+                  key={item._id}
+                  onClick={() => addMenuToCart(item)}
+                  className="bg-white border border-gray-100 rounded-xl p-3 cursor-pointer hover:border-saffron hover:shadow-md transition-all flex flex-col"
+                >
+                  {item.imageUrls?.[0] || item.imageUrl ? (
+                    <img src={item.imageUrls?.[0] || item.imageUrl} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3 border border-gray-50" />
+                  ) : (
+                    <div className="w-full h-28 bg-gray-50 border border-dashed border-gray-200 rounded-lg mb-3 flex items-center justify-center text-gray-300">
+                      <ImageIcon size={28} />
+                    </div>
+                  )}
+                  <div className="flex justify-between items-start mb-2">
+                    <div className={`w-3 h-3 border flex items-center justify-center ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
+                      <div className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {item.variants[0].specialPriceINR && (
+                        <span className="text-xs text-gray-400 line-through">₹{item.variants[0].priceINR}</span>
+                      )}
+                      <span className="font-bold text-gray-800">₹{item.variants[0].specialPriceINR || item.variants[0].priceINR}</span>
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between items-start mb-2">
-                  <div className={`w-3 h-3 border flex items-center justify-center ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`}></div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {item.variants[0].specialPriceINR && (
-                      <span className="text-xs text-gray-400 line-through">₹{item.variants[0].priceINR}</span>
-                    )}
-                    <span className="font-bold text-gray-800">
-                      ₹{item.variants[0].specialPriceINR || item.variants[0].priceINR}
-                    </span>
-                  </div>
+                  <h3 className="font-semibold text-gray-800 text-sm leading-tight">{item.name}</h3>
+                  {item.hindiName && <p className="text-xs text-gray-400">{item.hindiName}</p>}
+                  {item.variants.length > 1 && <p className="text-xs text-saffron mt-auto italic">Multiple variants</p>}
                 </div>
-                <h3 className="font-semibold text-gray-800 text-sm mb-1 leading-tight">{item.name}</h3>
-                {item.hindiName && <p className="text-xs text-gray-400 mb-2">{item.hindiName}</p>}
-                {item.variants.length > 1 && (
-                  <p className="text-xs text-saffron mt-auto italic">Multiple variants available</p>
-                )}
+              ))}
+            </div>
+          ) : (
+            /* ── Retail Items ── */
+            <div>
+              <div className="flex items-center gap-2 mb-3 text-blue-700">
+                <ScanLine size={16} />
+                <p className="text-xs font-bold">Hardware scanner active — scan any barcode to add instantly</p>
               </div>
-            ))}
-          </div>
+              {filteredRetail.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+                  <Package size={40} className="text-gray-200" />
+                  <p className="text-sm font-medium">No retail items found</p>
+                  <p className="text-xs">Add items in the Retail section or try a different search</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {filteredRetail.map((item: any) => {
+                    const inCart = cart.find(c => c.id === item._id && c.type === 'retail');
+                    return (
+                      <div
+                        key={item._id}
+                        className={`bg-white border-2 rounded-xl p-3 cursor-pointer transition-all flex flex-col ${
+                          inCart ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-100 hover:border-blue-300 hover:shadow-md'
+                        }`}
+                        onClick={() => addRetailToCart(item)}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase">{item.category}</span>
+                          <span className="font-black text-gray-800 text-sm">₹{item.priceINR}</span>
+                        </div>
+                        <h3 className="font-semibold text-gray-800 text-sm leading-tight mb-1">{item.name}</h3>
+                        {item.brand && <p className="text-xs text-gray-400">{item.brand}</p>}
+                        {item.barcode && (
+                          <p className="text-[10px] font-mono text-gray-300 mt-auto truncate">{item.barcode}</p>
+                        )}
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className={`text-xs font-medium ${item.stock <= item.lowStockAlert ? 'text-red-500' : 'text-green-600'}`}>
+                            {item.stock} {item.unit} left
+                          </span>
+                          {inCart ? (
+                            <div className="flex items-center gap-1 bg-blue-600 rounded-lg px-2 py-0.5" onClick={e => e.stopPropagation()}>
+                              <button onClick={() => updateQty(item._id, 'retail', -1)} className="text-white"><Minus size={12} /></button>
+                              <span className="text-white text-xs font-black w-4 text-center">{inCart.quantity}</span>
+                              <button onClick={() => updateQty(item._id, 'retail', 1)} className="text-white"><Plus size={12} /></button>
+                            </div>
+                          ) : (
+                            <button className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition" onClick={e => { e.stopPropagation(); addRetailToCart(item); }}>
+                              <Plus size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right: Cart & Payment */}
+      {/* ── Right: Cart & Checkout ─────────────────────────────────────── */}
       <div className="w-[400px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-        {/* Cart Header */}
+        {/* Header */}
         <div className="bg-maroon text-white p-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2"><ShoppingCart size={18} /> Current Order</h2>
-          <span className="bg-white/20 px-2 py-0.5 rounded text-xs">
-            {cart.reduce((sum, item) => sum + item.quantity, 0)} items
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="bg-white/20 px-2 py-0.5 rounded text-xs">{totalItems} items</span>
+            {cart.length > 0 && (
+              <button onClick={resetPOS} className="bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded text-xs transition">Clear</button>
+            )}
+          </div>
         </div>
 
         {/* Cart Items */}
@@ -217,52 +390,104 @@ export default function DirectPOS() {
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-400">
               <ShoppingCart size={48} className="mb-2 opacity-20" />
-              <p>Cart is empty</p>
+              <p className="text-sm">Cart is empty</p>
+              <p className="text-xs mt-1 text-gray-300">Click items or scan barcode to add</p>
             </div>
           ) : (
-            cart.map((c, idx) => (
-              <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100">
-                <div className="flex-1 min-w-0 pr-2">
-                  <p className="font-semibold text-gray-800 text-sm truncate">{c.name}</p>
-                  <p className="text-xs text-gray-500">₹{c.priceAtOrderTime} {c.variantName ? `(${c.variantName})` : ''}</p>
+            <>
+              {/* Menu items */}
+              {cart.filter(c => c.type === 'menu').map((c) => (
+                <div key={c.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex-1 min-w-0 pr-2">
+                    <p className="font-semibold text-gray-800 text-sm truncate">{c.name}</p>
+                    <p className="text-xs text-gray-500">₹{c.price}{c.variantName ? ` · ${c.variantName}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white rounded-lg border border-gray-200 p-0.5">
+                    <button onClick={() => updateQty(c.id, 'menu', -1)} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Minus size={13} /></button>
+                    <span className="text-sm font-bold w-4 text-center">{c.quantity}</span>
+                    <button onClick={() => updateQty(c.id, 'menu', 1)} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Plus size={13} /></button>
+                  </div>
+                  <div className="w-16 text-right font-bold text-gray-800 text-sm pl-2">₹{c.price * c.quantity}</div>
                 </div>
-                <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-0.5">
-                  <button onClick={() => updateCartQty(idx, -1)} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Minus size={14} /></button>
-                  <span className="text-sm font-bold w-4 text-center">{c.quantity}</span>
-                  <button onClick={() => updateCartQty(idx, 1)} className="p-1 hover:bg-gray-100 rounded text-gray-600"><Plus size={14} /></button>
-                </div>
-                <div className="w-16 text-right font-bold text-gray-800 text-sm pl-2">
-                  ₹{c.priceAtOrderTime * c.quantity}
-                </div>
-              </div>
-            ))
+              ))}
+
+              {/* Retail items — visually distinct */}
+              {cart.filter(c => c.type === 'retail').length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 pt-1">
+                    <div className="flex-1 border-t border-dashed border-blue-200" />
+                    <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1"><ShoppingBag size={10} /> RETAIL</span>
+                    <div className="flex-1 border-t border-dashed border-blue-200" />
+                  </div>
+                  {cart.filter(c => c.type === 'retail').map((c) => (
+                    <div key={c.id} className="flex justify-between items-center p-2 bg-blue-50 rounded-lg border border-blue-100">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <p className="font-semibold text-gray-800 text-sm truncate">{c.name}</p>
+                        <p className="text-xs text-blue-500">₹{c.price} · {c.unit}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-white rounded-lg border border-blue-200 p-0.5">
+                        <button onClick={() => updateQty(c.id, 'retail', -1)} className="p-1 hover:bg-blue-50 rounded text-blue-600"><Minus size={13} /></button>
+                        <span className="text-sm font-bold w-4 text-center">{c.quantity}</span>
+                        <button onClick={() => updateQty(c.id, 'retail', 1)} className="p-1 hover:bg-blue-50 rounded text-blue-600"><Plus size={13} /></button>
+                      </div>
+                      <div className="w-16 text-right font-bold text-blue-700 text-sm pl-2">₹{c.price * c.quantity}</div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
           )}
         </div>
 
         {/* Checkout Panel */}
-        <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-4">
-          
+        <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
           {/* Customer */}
           <div className="flex gap-2">
-            <input type="tel" placeholder="Customer Phone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} onBlur={handleCustomerSearch} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
-            <input type="text" placeholder="Name" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm" />
+            <input
+              type="tel" placeholder="Customer Phone" value={customerPhone}
+              onChange={e => setCustomerPhone(e.target.value)} onBlur={handleCustomerSearch}
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
+            <input
+              type="text" placeholder="Name" value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+            />
           </div>
 
-          {/* Totals & Proceed */}
-          <div className="pt-2 border-t border-gray-200 mt-2">
-            <div className="flex justify-between text-sm text-gray-600 mb-1"><span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span></div>
-            <div className="flex justify-between text-sm text-gray-600 mb-1"><span>Est. Tax</span><span>₹{gstEstimate.toFixed(2)}</span></div>
-            <button 
-              onClick={handlePay} disabled={cart.length === 0 || paying}
-              className="w-full mt-4 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-lg rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
+          {/* Totals */}
+          <div className="pt-2 border-t border-gray-200">
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-gray-600 mb-1">
+              <span>Est. Tax</span><span>₹{gstEstimate.toFixed(2)}</span>
+            </div>
+            {cart.filter(c => c.type === 'retail').length > 0 && (
+              <div className="flex justify-between text-xs text-blue-600 mb-1">
+                <span>🛍 Retail ({cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.quantity, 0)} items)</span>
+                <span>₹{cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.price * c.quantity, 0).toFixed(2)}</span>
+              </div>
+            )}
+            <button
+              onClick={handleProceed} disabled={cart.length === 0 || paying}
+              className="w-full mt-3 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-lg rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               {paying ? <Loader2 size={20} className="animate-spin" /> : null}
-              {paying ? 'Processing...' : `PROCEED TO BILLING`}
+              {paying ? 'Processing...' : 'PROCEED TO BILLING'}
             </button>
           </div>
-
         </div>
       </div>
+
+      {/* Camera Scanner Modal */}
+      {showCamera && (
+        <CameraScanner
+          title="Scan Retail Barcode"
+          onScan={(barcode) => { handleBarcodeScan(barcode); setShowCamera(false); }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
     </div>
   );
 }

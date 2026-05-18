@@ -2,39 +2,33 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { Booking } from '../models/Booking';
 import { Table } from '../models/Table';
+import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 
 export const createBooking = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const restaurantId = req.user?.restaurantId;
-    if (!restaurantId) {
-      res.status(403).json({ error: 'Unauthorized' });
-      return;
-    }
+    if (!req.user?.restaurantId) { res.status(403).json({ error: 'Unauthorized' }); return; }
 
-    const { customerName, customerPhone, date, time, guests, branchId, specialRequests, source, depositAmount, category, productName, quantity, weight, totalAmount, discountType, discountValue } = req.body;
+    // branchId comes from the auth middleware (x-branch-id header), fallback to body
+    const branchId = getCreateBranchId(req);
+
+    const {
+      customerName, customerPhone, date, time, guests, specialRequests,
+      source, depositAmount, category, productName, quantity, weight,
+      totalAmount, discountType, discountValue,
+    } = req.body;
 
     const newBooking = new Booking({
-      restaurantId,
-      branchId,
-      customerName,
-      customerPhone,
-      date: new Date(date),
-      time,
-      guests,
-      productName,
-      quantity,
-      weight,
-      category,
-      specialRequests,
-      source,
-      totalAmount,
-      discountType,
-      discountValue,
-      depositAmount
+      restaurantId: req.user.restaurantId,
+      branchId,                       // ← always from authenticated context
+      customerName, customerPhone,
+      date: new Date(date), time, guests,
+      productName, quantity, weight, category,
+      specialRequests, source,
+      totalAmount, discountType, discountValue, depositAmount,
     });
 
-    const savedBooking = await newBooking.save();
-    res.status(201).json(savedBooking);
+    const saved = await newBooking.save();
+    res.status(201).json(saved);
   } catch (error: any) {
     console.error('Error creating booking:', error);
     res.status(500).json({ error: 'Failed to create booking', details: error.message });
@@ -43,29 +37,22 @@ export const createBooking = async (req: AuthRequest, res: Response): Promise<vo
 
 export const getBookings = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const restaurantId = req.user?.restaurantId;
-    const { date, status, branchId } = req.query;
+    if (!req.user?.restaurantId) { res.status(403).json({ error: 'Unauthorized' }); return; }
 
-    if (!restaurantId) {
-      res.status(403).json({ error: 'Unauthorized' });
-      return;
-    }
+    // getBaseQuery already scopes to restaurantId + branchId from middleware
+    const query: any = getBaseQuery(req);
 
-    const query: any = { restaurantId };
-    
-    if (branchId && branchId !== 'all') {
-      query.branchId = branchId;
-    }
-    
+    const { date, status } = req.query;
+
     if (date) {
-      // Query bookings for a specific date
-      const queryDate = new Date(date as string);
-      const startOfDay = new Date(queryDate.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(queryDate.setHours(23, 59, 59, 999));
-      query.date = { $gte: startOfDay, $lte: endOfDay };
+      const d = new Date(date as string);
+      query.date = {
+        $gte: new Date(new Date(d).setHours(0, 0, 0, 0)),
+        $lte: new Date(new Date(d).setHours(23, 59, 59, 999)),
+      };
     }
 
-    if (status) {
+    if (status && status !== 'all') {
       query.status = status;
     }
 
@@ -84,19 +71,15 @@ export const updateBookingStatus = async (req: AuthRequest, res: Response): Prom
   try {
     const { id } = req.params;
     const { status } = req.body;
-    const restaurantId = req.user?.restaurantId;
+    const base = getBaseQuery(req);
 
     const booking = await Booking.findOneAndUpdate(
-      { _id: id, restaurantId },
+      { _id: id, restaurantId: base.restaurantId },
       { status },
       { new: true }
     ).populate('tableId', 'number capacity');
 
-    if (!booking) {
-      res.status(404).json({ error: 'Booking not found' });
-      return;
-    }
-
+    if (!booking) { res.status(404).json({ error: 'Booking not found' }); return; }
     res.status(200).json(booking);
   } catch (error: any) {
     console.error('Error updating booking status:', error);
@@ -108,24 +91,16 @@ export const assignTable = async (req: AuthRequest, res: Response): Promise<void
   try {
     const { id } = req.params;
     const { tableId } = req.body;
-    const restaurantId = req.user?.restaurantId;
+    const base = getBaseQuery(req);
 
-    const booking = await Booking.findOne({ _id: id, restaurantId });
-    if (!booking) {
-      res.status(404).json({ error: 'Booking not found' });
-      return;
-    }
+    const booking = await Booking.findOne({ _id: id, restaurantId: base.restaurantId });
+    if (!booking) { res.status(404).json({ error: 'Booking not found' }); return; }
 
     if (tableId) {
-      const table = await Table.findOne({ _id: tableId, restaurantId });
-      if (!table) {
-        res.status(404).json({ error: 'Table not found' });
-        return;
-      }
+      const table = await Table.findOne({ _id: tableId, restaurantId: base.restaurantId });
+      if (!table) { res.status(404).json({ error: 'Table not found' }); return; }
       booking.tableId = tableId;
       booking.status = 'SEATED';
-      
-      // Optionally update table status to OCCUPIED or RESERVED
       table.status = 'RESERVED';
       await table.save();
     } else {
@@ -133,9 +108,8 @@ export const assignTable = async (req: AuthRequest, res: Response): Promise<void
     }
 
     await booking.save();
-    
-    const updatedBooking = await Booking.findById(id).populate('tableId', 'number capacity');
-    res.status(200).json(updatedBooking);
+    const updated = await Booking.findById(id).populate('tableId', 'number capacity');
+    res.status(200).json(updated);
   } catch (error: any) {
     console.error('Error assigning table to booking:', error);
     res.status(500).json({ error: 'Failed to assign table', details: error.message });
@@ -145,13 +119,10 @@ export const assignTable = async (req: AuthRequest, res: Response): Promise<void
 export const deleteBooking = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const restaurantId = req.user?.restaurantId;
+    const base = getBaseQuery(req);
 
-    const result = await Booking.findOneAndDelete({ _id: id, restaurantId });
-    if (!result) {
-      res.status(404).json({ error: 'Booking not found' });
-      return;
-    }
+    const result = await Booking.findOneAndDelete({ _id: id, restaurantId: base.restaurantId });
+    if (!result) { res.status(404).json({ error: 'Booking not found' }); return; }
 
     res.status(200).json({ message: 'Booking deleted successfully' });
   } catch (error: any) {

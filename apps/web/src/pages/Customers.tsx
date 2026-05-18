@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 import { Users, Crown, Calendar, Search, Filter, MessageSquare, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBranchStore } from '../store/branchStore';
 
 interface Customer {
     _id: string;
@@ -20,6 +21,7 @@ interface Customer {
 
 export default function Customers() {
     const { user } = useAuth();
+    const { selectedBranchId } = useBranchStore();
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [summary, setSummary] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export default function Customers() {
     useEffect(() => {
         fetchSummary();
         fetchCustomers();
-    }, [segmentFilter, tierFilter, search]);
+    }, [segmentFilter, tierFilter, search, selectedBranchId]);
 
     const fetchSummary = async () => {
         try {
@@ -208,10 +210,10 @@ export default function Customers() {
                                             {c.tier}
                                         </span>
                                     </td>
-                                    <td className="py-3 px-4 text-right font-medium text-maroon">{c.loyaltyPoints.toLocaleString()}</td>
-                                    <td className="py-3 px-4 text-right">{c.totalVisits}</td>
-                                    <td className="py-3 px-4 text-right">₹{c.totalSpend.toLocaleString()}</td>
-                                    <td className="py-3 px-4 text-gray-500">{new Date(c.lastVisitDate).toLocaleDateString()}</td>
+                                    <td className="py-3 px-4 text-right font-medium text-maroon">{(c.loyaltyPoints ?? 0).toLocaleString()}</td>
+                                    <td className="py-3 px-4 text-right">{c.totalVisits ?? 0}</td>
+                                    <td className="py-3 px-4 text-right">₹{(c.totalSpend ?? 0).toLocaleString()}</td>
+                                    <td className="py-3 px-4 text-gray-500">{c.lastVisitDate ? new Date(c.lastVisitDate).toLocaleDateString() : '—'}</td>
                                 </tr>
                             ))}
                         </tbody>

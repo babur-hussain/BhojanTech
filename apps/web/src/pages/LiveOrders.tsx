@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../utils/api';
 import { useSocket } from '../hooks/useSocket';
+import { useBranchStore } from '../store/branchStore';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -275,6 +276,7 @@ function OrderDetailPanel({ order, onClose }: { order: any; onClose: () => void 
 
 export default function LiveOrders() {
   const { subscribe } = useSocket();
+  const { selectedBranchId } = useBranchStore();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -310,7 +312,7 @@ export default function LiveOrders() {
     fetchOrders();
     const t = setInterval(fetchOrders, 30000);
     return () => clearInterval(t);
-  }, [fetchOrders]);
+  }, [fetchOrders, selectedBranchId]);
 
   // Real-time socket updates
   useEffect(() => {
