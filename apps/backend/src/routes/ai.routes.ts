@@ -6,7 +6,7 @@ import * as ai from '../controllers/ai.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
-router.use(requireRole([UserRole.OWNER, UserRole.MANAGER]));
+router.use(requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]));
 
 router.post('/chat',              ai.chat);
 router.get('/insights',           ai.getInsights);

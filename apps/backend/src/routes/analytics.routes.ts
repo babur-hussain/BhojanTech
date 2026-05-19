@@ -6,7 +6,7 @@ import * as analytics from '../controllers/analytics.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
-router.use(requireRole([UserRole.OWNER, UserRole.MANAGER]));
+router.use(requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]));
 
 router.get('/live-activity', analytics.liveActivity);
 router.get('/dashboard',          analytics.liveDashboard);

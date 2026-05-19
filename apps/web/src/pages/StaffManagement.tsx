@@ -1,25 +1,19 @@
-import React, { useState } from 'react';
-import { StaffMember, AttendanceStatus, ShiftType, UserRole } from '@restaurant/types';
+import React, { useState, useEffect } from 'react';
+import { StaffMember, UserRole } from '@restaurant/types';
 import {
   Users, Clock, Calendar, DollarSign, TrendingUp,
-  Plus, Phone, UserCheck, UserX, Search,
+  UserCheck, UserX,
 } from 'lucide-react';
 import StaffDirectory from '../components/Staff/StaffDirectory';
 import ShiftPlanner from '../components/Staff/ShiftPlanner';
 import AttendanceView from '../components/Staff/AttendanceView';
 import PayrollView from '../components/Staff/PayrollView';
 import PerformanceView from '../components/Staff/PerformanceView';
+import { api } from '../utils/api';
+import PageLoader from '../components/PageLoader';
+import { useBranchStore } from '../store/branchStore';
 
 export type StaffTab = 'directory' | 'shifts' | 'attendance' | 'payroll' | 'performance';
-
-// ── Shared Mock Data (used across sub-components) ────────────────────────────
-export const MOCK_STAFF: (StaffMember & { status: 'ON_DUTY' | 'OFF_DUTY' })[] = [
-  { id:'s1', restaurantId:'r1', userId:'u1', name:'Rahul Sharma',  phone:'+91 9876543210', role:UserRole.WAITER,        joiningDate:new Date('2024-01-15'), salaryType:'MONTHLY', salaryAmount:18000, isOnDuty:true,  currentShift:'MORNING',   isActive:true, photoUrl:'https://api.dicebear.com/7.x/initials/svg?seed=RS', createdAt:new Date(), status:'ON_DUTY' },
-  { id:'s2', restaurantId:'r1', userId:'u2', name:'Amit Kumar',    phone:'+91 8765432109', role:UserRole.WAITER,        joiningDate:new Date('2024-03-01'), salaryType:'MONTHLY', salaryAmount:16000, isOnDuty:false, isActive:true, photoUrl:'https://api.dicebear.com/7.x/initials/svg?seed=AK', createdAt:new Date(), status:'OFF_DUTY' },
-  { id:'s3', restaurantId:'r1', userId:'u3', name:'Priya Singh',   phone:'+91 7654321098', role:UserRole.KITCHEN_STAFF, joiningDate:new Date('2023-11-20'), salaryType:'MONTHLY', salaryAmount:20000, isOnDuty:true,  currentShift:'MORNING',   isActive:true, photoUrl:'https://api.dicebear.com/7.x/initials/svg?seed=PS', createdAt:new Date(), status:'ON_DUTY' },
-  { id:'s4', restaurantId:'r1', userId:'u4', name:'Deepak Verma',  phone:'+91 6543210987', role:UserRole.KITCHEN_STAFF, joiningDate:new Date('2024-02-10'), salaryType:'DAILY',   salaryAmount:700,   isOnDuty:false, isActive:true, photoUrl:'https://api.dicebear.com/7.x/initials/svg?seed=DV', createdAt:new Date(), status:'OFF_DUTY' },
-  { id:'s5', restaurantId:'r1', userId:'u5', name:'Sunita Devi',   phone:'+91 5432109876', role:UserRole.MANAGER,       joiningDate:new Date('2023-06-01'), salaryType:'MONTHLY', salaryAmount:35000, isOnDuty:true,  currentShift:'AFTERNOON', isActive:true, photoUrl:'https://api.dicebear.com/7.x/initials/svg?seed=SD', createdAt:new Date(), status:'ON_DUTY' },
-];
 
 const TABS: { key: StaffTab; label: string; Icon: any }[] = [
   { key: 'directory',   label: 'Staff',       Icon: Users },
@@ -31,18 +25,46 @@ const TABS: { key: StaffTab; label: string; Icon: any }[] = [
 
 export default function StaffManagement() {
   const [activeTab, setTab] = useState<StaffTab>('directory');
+  const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  const { selectedBranchId } = useBranchStore();
+  const isAllBranches = selectedBranchId === 'all';
 
-  const onDuty  = MOCK_STAFF.filter(s => s.isOnDuty).length;
-  const offDuty = MOCK_STAFF.length - onDuty;
+  const fetchStaff = async () => {
+    try {
+      setLoading(true);
+      const qs = isAllBranches ? '' : `?branchId=${selectedBranchId}`;
+      const res = await api.get(`/staff/duty/today${qs}`);
+      setStaff(res.data.map((s: any) => ({ ...s, id: s._id })));
+    } catch (e) {
+      console.error('Failed to fetch staff directory:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStaff();
+  }, [selectedBranchId]);
+
+  if (loading) return <PageLoader />;
+
+  const onDuty  = staff.filter(s => s.isOnDuty).length;
+  const offDuty = staff.length - onDuty;
+  
+  // Calculate a rough monthly bill for active staff
+  const monthlyBill = staff.reduce((sum, s) => sum + (s.salaryType === 'MONTHLY' ? s.salaryAmount : (s.salaryAmount * 26)), 0);
+  const formattedBill = monthlyBill >= 100000 ? `₹${(monthlyBill/100000).toFixed(2)}L` : `₹${monthlyBill.toLocaleString('en-IN')}`;
 
   return (
     <div className="space-y-6">
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <KPI label="Total Staff" value={String(MOCK_STAFF.length)} icon={<Users size={20} className="text-maroon"/>} />
+        <KPI label="Total Staff" value={String(staff.length)} icon={<Users size={20} className="text-maroon"/>} />
         <KPI label="On Duty Now" value={String(onDuty)} icon={<UserCheck size={20} className="text-green-600"/>} color="text-green-700" />
         <KPI label="Off Duty"    value={String(offDuty)} icon={<UserX size={20} className="text-gray-400"/>}    color="text-gray-600" />
-        <KPI label="Monthly Bill" value="₹1.32L" icon={<DollarSign size={20} className="text-saffron"/>} color="text-saffron" />
+        <KPI label="Monthly Bill" value={formattedBill} icon={<DollarSign size={20} className="text-saffron"/>} color="text-saffron" />
       </div>
 
       {/* Tabs */}
@@ -58,11 +80,11 @@ export default function StaffManagement() {
         ))}
       </div>
 
-      {activeTab === 'directory'   && <StaffDirectory staff={MOCK_STAFF} />}
-      {activeTab === 'shifts'      && <ShiftPlanner staff={MOCK_STAFF} />}
-      {activeTab === 'attendance'  && <AttendanceView staff={MOCK_STAFF} />}
-      {activeTab === 'payroll'     && <PayrollView staff={MOCK_STAFF} />}
-      {activeTab === 'performance' && <PerformanceView />}
+      {activeTab === 'directory'   && <StaffDirectory staff={staff} fetchStaff={fetchStaff} />}
+      {activeTab === 'shifts'      && <ShiftPlanner staff={staff} />}
+      {activeTab === 'attendance'  && <AttendanceView staff={staff} fetchStaff={fetchStaff} />}
+      {activeTab === 'payroll'     && <PayrollView staff={staff} />}
+      {activeTab === 'performance' && <PerformanceView staff={staff} />}
     </div>
   );
 }

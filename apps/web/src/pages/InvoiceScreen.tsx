@@ -103,8 +103,6 @@ export default function InvoiceScreen() {
               subtotalINR: invoice.subtotalINR,
               gstBreakup: invoice.gstBreakup,
               totalGSTINR: invoice.totalGSTINR,
-              grandTotalINR: invoice.grandTotalINR,
-              roundOff: invoice.roundOff
             }}
             finalTotal={invoice.grandTotalINR}
             discountFlat={invoice.discount?.flatAmount || 0}

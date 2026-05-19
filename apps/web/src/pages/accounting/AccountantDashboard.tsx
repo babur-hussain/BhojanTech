@@ -1,18 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
-import { AlertCircle, FileText, Calendar, IndianRupee, Clock, Download } from 'lucide-react';
+import { useBranchStore } from '../../store/branchStore';
+import { AlertCircle, FileText, Calendar, IndianRupee, Clock, Download, TrendingUp, TrendingDown } from 'lucide-react';
 
 export default function AccountantDashboard() {
+    const { selectedBranchId } = useBranchStore();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
         fetchMetrics();
-    }, []);
+    }, [selectedBranchId]);
 
     const fetchMetrics = async () => {
         try {
-            const response = await api.get('/accounting/dashboard');
+            setLoading(true);
+            const qs = selectedBranchId === 'all' ? '?branchId=all' : `?branchId=${selectedBranchId}`;
+            const response = await api.get(`/accounting/dashboard${qs}`);
             setData(response.data);
         } catch (e) {
             console.error('Failed to fetch dashboard metrics');
@@ -21,9 +26,35 @@ export default function AccountantDashboard() {
         }
     };
 
+    const handleExport = async () => {
+        try {
+            setExporting(true);
+            const now = new Date();
+            const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            const res = await api.get(`/analytics/gst/export?month=${month}`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `GST-Report-${month}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (e) {
+            console.error('Export failed:', e);
+            alert('Failed to export report. Please try again.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading) {
         return <div className="p-8 text-center text-gray-500 animate-pulse">Loading Financial Data...</div>;
     }
+
+    const revenue = data?.metrics?.totalRevenueThisMonth || 0;
+    const gst = data?.metrics?.totalGstLiability || 0;
+    const pending = data?.metrics?.pendingItems || 0;
+    const vsLastMonth = data?.metrics?.vsLastMonth || 0;
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
@@ -32,9 +63,13 @@ export default function AccountantDashboard() {
                     <h1 className="text-3xl font-bold text-maroon">Accountant Portal</h1>
                     <p className="text-gray-500 mt-1">Real-time financial and compliance overview.</p>
                 </div>
-                <button className="bg-maroon text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-all flex items-center shadow-md">
+                <button 
+                    onClick={handleExport}
+                    disabled={exporting}
+                    className="bg-maroon text-white px-4 py-2 rounded-lg font-medium hover:bg-opacity-90 transition-all flex items-center shadow-md disabled:opacity-50"
+                >
                     <Download className="w-4 h-4 mr-2" />
-                    Export Month End Report
+                    {exporting ? 'Exporting...' : 'Export Month End Report'}
                 </button>
             </div>
 
@@ -45,11 +80,16 @@ export default function AccountantDashboard() {
                     </div>
                     <h3 className="text-sm uppercase tracking-wider text-gray-500 font-semibold mb-2">Total Subject to GST</h3>
                     <p className="text-4xl font-bold text-gray-800">
-                        ₹{data?.metrics?.totalRevenueThisMonth?.toLocaleString('en-IN') || '0'}
+                        ₹{revenue.toLocaleString('en-IN')}
                     </p>
-                    <div className="mt-4 text-xs font-medium text-green-600 flex items-center">
-                        <span className="bg-green-100 px-2 py-1 rounded inline-block">+12% vs last month</span>
-                    </div>
+                    {vsLastMonth !== 0 && (
+                        <div className={`mt-4 text-xs font-medium flex items-center ${vsLastMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <span className={`${vsLastMonth >= 0 ? 'bg-green-100' : 'bg-red-100'} px-2 py-1 rounded inline-flex items-center gap-1`}>
+                                {vsLastMonth >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
+                                {vsLastMonth >= 0 ? '+' : ''}{vsLastMonth.toFixed(1)}% vs last month
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -58,7 +98,7 @@ export default function AccountantDashboard() {
                     </div>
                     <h3 className="text-sm uppercase tracking-wider text-gray-500 font-semibold mb-2">Estimated Output Tax</h3>
                     <p className="text-4xl font-bold text-maroon">
-                        ₹{data?.metrics?.totalGstLiability?.toLocaleString('en-IN') || '0'}
+                        ₹{gst.toLocaleString('en-IN')}
                     </p>
                     <p className="mt-4 text-sm text-gray-400">Excludes Input Tax Credit (ITC)</p>
                 </div>
@@ -69,7 +109,7 @@ export default function AccountantDashboard() {
                     </div>
                     <h3 className="text-sm uppercase tracking-wider text-gray-500 font-semibold mb-2">Pending Items</h3>
                     <p className="text-4xl font-bold text-gray-800">
-                        {data?.metrics?.pendingItems || '0'}
+                        {pending}
                     </p>
                     <p className="mt-4 text-sm text-gray-400">Requires manual reconciliation</p>
                 </div>

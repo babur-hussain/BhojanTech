@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import PageLoader from '../../components/PageLoader';
 import { api } from '../../utils/api';
+import { useBranchStore } from '../../store/branchStore';
 import { RefreshCw, Download, PiggyBank } from 'lucide-react';
 
 export default function ProfitLoss() {
+    const { selectedBranchId } = useBranchStore();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -11,12 +13,13 @@ export default function ProfitLoss() {
 
     useEffect(() => {
         fetchPnL();
-    }, [month, year]);
+    }, [month, year, selectedBranchId]);
 
     const fetchPnL = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/accounting/pnl?month=${month}&year=${year}`);
+            const branchQs = selectedBranchId === 'all' ? '&branchId=all' : `&branchId=${selectedBranchId}`;
+            const response = await api.get(`/accounting/pnl?month=${month}&year=${year}${branchQs}`);
             setData(response.data);
         } catch (e) {
             console.error('Failed to fetch PnL');

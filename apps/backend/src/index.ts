@@ -15,6 +15,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import { connectDB } from './config/db';
 import logger from './utils/logger';
 import { errorHandler } from './middleware/error.middleware';
@@ -23,8 +24,11 @@ const app = express();
 const server = http.createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: process.env.NODE_ENV === 'production'
+      ? ['https://bhojantech.com', 'https://pos.bhojantech.com']
+      : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
@@ -37,19 +41,21 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://*.firebase.io", "https://*.googleapis.com"],
+      frameAncestors: ["'none'"], // Prevent clickjacking
     },
   },
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
+const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
+  ? ['https://bhojantech.com', 'https://pos.bhojantech.com']
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? ['https://bhojantech.com', 'https://pos.bhojantech.com']
-    : '*',
+  origin: ALLOWED_ORIGINS,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   credentials: true
 }));
-app.use(express.json({ limit: '50kb' }));
+app.use(express.json({ limit: '2mb' })); // Support base64 images in menu items
 app.use(cookieParser());
 app.use(mongoSanitize());
 app.use(compression());
@@ -61,7 +67,7 @@ app.use(morgan(morganFormat, {
     write: (message: string) => logger.info(message.trim())
   }
 }));
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, message: 'Too many auth requests' });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, message: 'Too many auth requests' });
 const orderLimiter = rateLimit({ windowMs: 1 * 60 * 1000, limit: 30, message: 'Too many order requests' });
 const aiLimiter = rateLimit({ windowMs: 1 * 60 * 1000, limit: 20, message: 'Too many AI requests' });
 
@@ -78,6 +84,13 @@ app.use(
 import mongoose from 'mongoose';
 connectDB();
 
+// Request ID middleware — attach a unique ID to every request for log correlation
+app.use((req, _res, next) => {
+  const reqId = (req.headers['x-request-id'] as string) || crypto.randomUUID();
+  (req as any).requestId = reqId;
+  next();
+});
+
 // Log Mongoose connection lifecycle events
 mongoose.connection.on('disconnected', () => console.warn('MongoDB disconnected — will attempt to reconnect...'));
 mongoose.connection.on('reconnected', () => console.log('MongoDB reconnected ✅'));
@@ -89,12 +102,14 @@ import { verifyToken } from './utils/jwt';
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-    if (token) {
-      const decoded = verifyToken(token as string);
-      (socket as any).user = decoded;
-    } else {
-      (socket as any).user = null;
+    if (!token) {
+      return next(new Error('Authentication required — no token provided'));
     }
+    const decoded = verifyToken(token as string);
+    if (!decoded) {
+      return next(new Error('Authentication failed — invalid token'));
+    }
+    (socket as any).user = decoded;
     next();
   } catch (err) {
     next(new Error('Authentication error'));
@@ -105,13 +120,18 @@ io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
   socket.on('join_restaurant', (data: any) => {
-    let restaurantId;
-    let branchId;
+    let restaurantId: string | undefined;
+    let branchId: string | undefined;
+
     if (typeof data === 'string') {
       restaurantId = data;
-    } else {
+    } else if (data && typeof data === 'object') {
       restaurantId = data.restaurantId;
       branchId = data.branchId;
+    }
+
+    if (!restaurantId) {
+      return socket.emit('error', 'restaurantId is required');
     }
 
     const user = (socket as any).user;
@@ -121,7 +141,8 @@ io.on('connection', (socket) => {
 
     socket.join(`restaurant_${restaurantId}`);
     if (branchId) {
-      if (user.role !== 'SUPER_OWNER' && user.role !== 'BRANCH_MANAGER' && user.branchId !== branchId) {
+      // OWNER and SUPER_OWNER can join any branch
+      if (user.role !== 'SUPER_OWNER' && user.role !== 'OWNER' && user.role !== 'BRANCH_MANAGER' && user.branchId !== branchId) {
         return; // Only join allowed branches
       }
       socket.join(`restaurant_${restaurantId}_branch_${branchId}`);
@@ -131,7 +152,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('join_order', (orderId: string) => {
+  socket.on('join_order', (orderId: unknown) => {
+    const user = (socket as any).user;
+    if (!user) {
+      return socket.emit('error', 'Unauthorized');
+    }
+    // Validate orderId is a valid MongoDB ObjectId string
+    if (typeof orderId !== 'string' || !/^[a-fA-F0-9]{24}$/.test(orderId)) {
+      return socket.emit('error', 'Invalid orderId format');
+    }
+    // Only allow joining order rooms for authenticated users
     socket.join(`order_${orderId}`);
     console.log(`Socket ${socket.id} joined order room order_${orderId}`);
   });
@@ -150,7 +180,7 @@ import billingRoutes from './routes/billing.routes';
 import inventoryRoutes from './routes/inventory.routes';
 import staffRoutes from './routes/staff.routes';
 import analyticsRoutes from './routes/analytics.routes';
-import aiRoutes from './routes/aiRoutes';
+import aiRoutes from './routes/ai.routes';
 import qrRoutes from './routes/qr.routes';
 import onlineOrderRoutes from './routes/onlineOrder.routes';
 import integrationRoutes from './routes/integration.routes';
@@ -164,7 +194,8 @@ import bookingRoutes from './routes/bookingRoutes';
 
 app.use('/api/restaurant', restaurantRoutes);
 import { initCronJobs } from './utils/cronJobs';
-import './services/menuSync.service'; // Start Bull Queue Worker
+import './services/menuSync.service'; // Start Bull Queue Worker for single item
+import './workers/menuSync.worker'; // Start Bull Queue Worker for full menu sync
 // Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/menu', menuRoutes);
@@ -186,6 +217,8 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/retail-items', retailItemRoutes);
 app.use('/api/bookings', bookingRoutes);
+import whatsappWebhookRoutes from './routes/whatsapp.routes';
+app.use('/api/whatsapp', whatsappWebhookRoutes);
 
 // Initialize scheduled tasks
 initCronJobs();
@@ -205,3 +238,35 @@ const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+// ─── Graceful Shutdown ─────────────────────────────────────────────────────────
+const gracefulShutdown = async (signal: string) => {
+  console.log(`\n${signal} received. Shutting down gracefully...`);
+  server.close(async () => {
+    console.log('HTTP server closed.');
+    try {
+      await mongoose.connection.close();
+      console.log('MongoDB connection closed.');
+    } catch (err) {
+      console.error('Error closing MongoDB:', err);
+    }
+    try {
+      const { redis: redisClient } = await import('./config/redis');
+      await redisClient.quit();
+      console.log('Redis connection closed.');
+    } catch (err) {
+      console.error('Error closing Redis:', err);
+    }
+    process.exit(0);
+  });
+
+  // Force exit if graceful shutdown takes too long
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+

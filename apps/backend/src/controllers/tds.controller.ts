@@ -21,8 +21,15 @@ export const getTdsLogs = async (req: AuthRequest, res: Response) => {
 
 export const createTdsLog = async (req: AuthRequest, res: Response) => {
     try {
+        const { vendorName, panNumber, section, tdsAmount, tdsRate, paymentDate, branchId } = req.body;
         const log = new TdsLogModel({
-            ...req.body,
+            vendorName,
+            panNumber,
+            section,
+            tdsAmount: Number(tdsAmount),
+            tdsRate: Number(tdsRate),
+            paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+            branchId,
             restaurantId: req.user!.restaurantId,
             recordedBy: req.user!.userId
         });

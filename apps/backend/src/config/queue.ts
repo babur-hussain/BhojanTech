@@ -10,7 +10,7 @@ redisConnection.on('error', (err) => {
     console.error('[Redis] Error connecting to queue redis:', err);
 });
 
-export const menuSyncQueue = new Queue('MenuSync', {
+export const menuSyncQueue = new Queue('menu-sync', {
     connection: redisConnection,
     defaultJobOptions: {
         attempts: 3,

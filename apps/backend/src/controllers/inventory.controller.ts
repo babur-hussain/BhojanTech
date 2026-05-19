@@ -43,9 +43,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
     if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+    const { name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName } = req.body;
 
     const item = await InventoryItem.create({
-      ...req.body,
+      name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName,
       restaurantId: req.user!.restaurantId,
       branchId,
     });
@@ -57,9 +58,22 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
+    // Whitelist updatable fields — prevent overwriting restaurantId/branchId/_id
+    const { name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName, isActive } = req.body;
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (category !== undefined) updateData.category = category;
+    if (unit !== undefined) updateData.unit = unit;
+    if (currentQty !== undefined) updateData.currentQty = currentQty;
+    if (minThreshold !== undefined) updateData.minThreshold = minThreshold;
+    if (costPerUnit !== undefined) updateData.costPerUnit = costPerUnit;
+    if (supplierId !== undefined) updateData.supplierId = supplierId;
+    if (supplierName !== undefined) updateData.supplierName = supplierName;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
     const item = await InventoryItem.findOneAndUpdate(
       query,
-      req.body, { new: true }
+      { $set: updateData }, { new: true }
     );
     if (!item) return res.status(404).json({ error: 'Not found' });
     return res.json({ ...item.toObject(), status: stockStatus(item) });
@@ -167,7 +181,8 @@ export const getSuppliers = async (req: AuthRequest, res: Response) => {
 export const createSupplier = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
-    const supplier = await Supplier.create({ ...req.body, restaurantId: req.user!.restaurantId, branchId });
+    const { name, contactPerson, phone, email, address, gstNumber } = req.body;
+    const supplier = await Supplier.create({ name, contactPerson, phone, email, address, gstNumber, restaurantId: req.user!.restaurantId, branchId });
     return res.status(201).json(supplier);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -176,9 +191,19 @@ export const updateSupplier = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
+    // Whitelist updatable fields
+    const { name, contactPerson, phone, email, address, gstNumber } = req.body;
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
+    if (phone !== undefined) updateData.phone = phone;
+    if (email !== undefined) updateData.email = email;
+    if (address !== undefined) updateData.address = address;
+    if (gstNumber !== undefined) updateData.gstNumber = gstNumber;
+
     const supplier = await Supplier.findOneAndUpdate(
       query,
-      req.body, { new: true }
+      { $set: updateData }, { new: true }
     );
     if (!supplier) return res.status(404).json({ error: 'Not found' });
     return res.json(supplier);

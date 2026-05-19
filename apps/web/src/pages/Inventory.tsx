@@ -9,21 +9,10 @@ import AddStockModal from '../components/Inventory/AddStockModal';
 import WastageModal from '../components/Inventory/WastageModal';
 import SupplierModal from '../components/Inventory/SupplierModal';
 import { useBranchStore } from '../store/branchStore';
+import { api } from '../utils/api';
+import PageLoader from '../components/PageLoader';
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-type EnrichedItem = InventoryItem & { status: StockStatus };
-
-const MOCK_ITEMS: EnrichedItem[] = [
-  { id: 'i1', restaurantId:'r1', name:'Paneer', category:'Dairy', unit:'kg', currentQty:4.5, minThreshold:2, reorderQty:10, costPerUnit:280, isActive:true, linkedMenuItems:[], allergenTags:[], status:'HEALTHY', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i2', restaurantId:'r1', name:'Tomatoes', category:'Vegetables', unit:'kg', currentQty:1.2, minThreshold:3, reorderQty:15, costPerUnit:30, isActive:true, linkedMenuItems:[], status:'LOW', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i3', restaurantId:'r1', name:'Cooking Oil (Sunflower)', category:'Oil', unit:'litres', currentQty:0.5, minThreshold:5, reorderQty:20, costPerUnit:110, isActive:true, linkedMenuItems:[], status:'CRITICAL', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i4', restaurantId:'r1', name:'Basmati Rice', category:'Grains', unit:'kg', currentQty:25, minThreshold:10, reorderQty:50, costPerUnit:85, isActive:true, linkedMenuItems:[], status:'HEALTHY', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i5', restaurantId:'r1', name:'Garam Masala', category:'Spices', unit:'grams', currentQty:300, minThreshold:100, reorderQty:500, costPerUnit:0.8, isActive:true, linkedMenuItems:[], status:'HEALTHY', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i6', restaurantId:'r1', name:'Atta (Wheat Flour)', category:'Grains', unit:'kg', currentQty:3, minThreshold:5, reorderQty:25, costPerUnit:40, isActive:true, linkedMenuItems:[], status:'LOW', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i7', restaurantId:'r1', name:'Fresh Cream', category:'Dairy', unit:'litres', currentQty:1.5, minThreshold:1, reorderQty:5, costPerUnit:180, isActive:true, linkedMenuItems:[], status:'HEALTHY', createdAt: new Date(), updatedAt: new Date() } as any,
-  { id: 'i8', restaurantId:'r1', name:'Chicken (Boneless)', category:'Proteins', unit:'kg', currentQty:0, minThreshold:5, reorderQty:20, costPerUnit:220, isActive:true, linkedMenuItems:[], status:'CRITICAL', createdAt: new Date(), updatedAt: new Date() } as any,
-];
+type EnrichedItem = InventoryItem & { status: StockStatus, _id: string, id?: string };
 
 const CATEGORIES = ['All', 'Dairy', 'Vegetables', 'Spices', 'Grains', 'Oil', 'Proteins', 'Beverages', 'Other'];
 
@@ -51,7 +40,11 @@ function statusBadge(status: StockStatus) {
 export default function Inventory() {
   const { selectedBranchId } = useBranchStore();
   const isAllBranches = selectedBranchId === 'all';
-  const [items, setItems]             = useState<EnrichedItem[]>(MOCK_ITEMS);
+  
+  const [items, setItems]             = useState<EnrichedItem[]>([]);
+  const [suppliers, setSuppliers]     = useState<any[]>([]);
+  const [loading, setLoading]         = useState(true);
+  
   const [search, setSearch]           = useState('');
   const [categoryFilter, setCat]      = useState('All');
   const [statusFilter, setStatus]     = useState<'ALL'|StockStatus>('ALL');
@@ -61,7 +54,35 @@ export default function Inventory() {
   const [itemModal, setItemModal]     = useState<{ open: boolean; item: EnrichedItem | null }>({ open: false, item: null });
   const [stockModal, setStockModal]   = useState<EnrichedItem | null>(null);
   const [wastageModal, setWaste]      = useState<EnrichedItem | null>(null);
-  const [supplierModal, setSupplier]  = useState(false);
+  const [supplierModal, setSupplier]  = useState<{ open: boolean; supplier: any | null }>({ open: false, supplier: null });
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const qs = isAllBranches ? '' : `?branchId=${selectedBranchId}`;
+      const [itemsRes, suppliersRes] = await Promise.all([
+        api.get(`/inventory/items${qs}`),
+        api.get(`/inventory/suppliers${qs}`)
+      ]);
+      // Normalize ids for the UI
+      const fetchedItems = itemsRes.data.map((i: any) => ({ ...i, id: i._id }));
+      const fetchedSuppliers = suppliersRes.data.map((s: any) => ({ ...s, id: s._id }));
+      setItems(fetchedItems);
+      setSuppliers(fetchedSuppliers);
+    } catch (e) {
+      console.error('Failed to fetch inventory:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [selectedBranchId]);
+
+  if (loading) {
+    return <PageLoader />;
+  }
 
   const lowCount      = items.filter(i => i.status === 'LOW').length;
   const criticalCount = items.filter(i => i.status === 'CRITICAL').length;
@@ -73,33 +94,67 @@ export default function Inventory() {
     return matchSearch && matchCat && matchStatus;
   });
 
-  const handleSaveItem = (data: any) => {
-    if (itemModal.item) {
-      setItems(prev => prev.map(i => i.id === itemModal.item!.id ? { ...i, ...data } : i));
-    } else {
-      setItems(prev => [...prev, { ...data, id: Math.random().toString(), status: 'HEALTHY' }]);
+  const handleSaveItem = async (data: any) => {
+    try {
+      if (itemModal.item) {
+        await api.put(`/inventory/items/${itemModal.item._id}`, data);
+      } else {
+        await api.post('/inventory/items', data);
+      }
+      setItemModal({ open: false, item: null });
+      fetchData();
+    } catch (e) {
+      console.error('Failed to save item:', e);
+      alert('Failed to save item. Please try again.');
     }
-    setItemModal({ open: false, item: null });
   };
 
-  const handleAddStock = (itemId: string, qty: number, cpu: number) => {
-    setItems(prev => prev.map(i => {
-      if (i.id !== itemId) return i;
-      const newQty = +(i.currentQty + qty).toFixed(3);
-      const s: StockStatus = newQty <= 0 ? 'CRITICAL' : newQty <= i.minThreshold ? 'LOW' : 'HEALTHY';
-      return { ...i, currentQty: newQty, costPerUnit: cpu, status: s };
-    }));
-    setStockModal(null);
+  const handleAddStock = async (itemId: string, qty: number, cpu: number, supplierName?: string, invoiceNumber?: string) => {
+    try {
+      await api.post('/inventory/stock/add', {
+        inventoryItemId: itemId,
+        quantityAdded: qty,
+        costPerUnit: cpu,
+        supplierName,
+        invoiceNumber
+      });
+      setStockModal(null);
+      fetchData();
+    } catch (e) {
+      console.error('Failed to add stock:', e);
+      alert('Failed to add stock. Please try again.');
+    }
   };
 
-  const handleWastage = (itemId: string, qty: number) => {
-    setItems(prev => prev.map(i => {
-      if (i.id !== itemId) return i;
-      const newQty = Math.max(0, +(i.currentQty - qty).toFixed(3));
-      const s: StockStatus = newQty <= 0 ? 'CRITICAL' : newQty <= i.minThreshold ? 'LOW' : 'HEALTHY';
-      return { ...i, currentQty: newQty, status: s };
-    }));
-    setWaste(null);
+  const handleWastage = async (itemId: string, qty: number, reason?: string, notes?: string) => {
+    try {
+      await api.post('/inventory/stock/wastage', {
+        inventoryItemId: itemId,
+        quantity: qty,
+        reason: reason || 'Spoilage',
+        notes: notes || ''
+      });
+      setWaste(null);
+      fetchData();
+    } catch (e: any) {
+      console.error('Failed to log wastage:', e);
+      alert(e.response?.data?.error || 'Failed to log wastage.');
+    }
+  };
+  
+  const handleSaveSupplier = async (data: any) => {
+    try {
+      if (supplierModal.supplier) {
+        await api.put(`/inventory/suppliers/${supplierModal.supplier._id}`, data);
+      } else {
+        await api.post('/inventory/suppliers', data);
+      }
+      setSupplier({ open: false, supplier: null });
+      fetchData();
+    } catch (e) {
+      console.error('Failed to save supplier:', e);
+      alert('Failed to save supplier. Please try again.');
+    }
   };
 
   const handleReorder = (item: EnrichedItem) => {
@@ -194,7 +249,7 @@ export default function Inventory() {
             {filtered.map(item => {
               const pct = stockPct(item);
               return (
-                <div key={item.id}
+                <div key={item._id}
                   className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
                   {/* Card Header */}
                   <div className="flex justify-between items-start mb-3">
@@ -256,12 +311,24 @@ export default function Inventory() {
                 </div>
               );
             })}
+            
+            {filtered.length === 0 && (
+              <div className="col-span-full py-12 text-center text-gray-500">
+                <Package size={48} className="mx-auto text-gray-300 mb-4" />
+                <p>No inventory items found.</p>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {activeTab === 'suppliers' && (
-        <SuppliersTab onAdd={() => setSupplier(true)} isAllBranches={isAllBranches} />
+        <SuppliersTab 
+          suppliers={suppliers} 
+          onAdd={() => setSupplier({ open: true, supplier: null })} 
+          onEdit={(s) => setSupplier({ open: true, supplier: s })}
+          isAllBranches={isAllBranches} 
+        />
       )}
 
       {/* Modals */}
@@ -276,50 +343,55 @@ export default function Inventory() {
         <AddStockModal
           item={stockModal}
           onClose={() => setStockModal(null)}
-          onSave={(qty, cpu) => handleAddStock(stockModal.id, qty, cpu)}
+          onSave={(qty, cpu, supplier, inv) => handleAddStock(stockModal._id, qty, cpu, supplier, inv)}
         />
       )}
       {wastageModal && (
         <WastageModal
           item={wastageModal}
           onClose={() => setWaste(null)}
-          onSave={(qty) => handleWastage(wastageModal.id, qty)}
+          onSave={(qty, reason, notes) => handleWastage(wastageModal._id, qty, reason, notes)}
         />
       )}
-      {supplierModal && (
-        <SupplierModal onClose={() => setSupplier(false)} onSave={() => setSupplier(false)} />
+      {supplierModal.open && (
+        <SupplierModal 
+          supplier={supplierModal.supplier}
+          onClose={() => setSupplier({ open: false, supplier: null })} 
+          onSave={handleSaveSupplier} 
+        />
       )}
     </div>
   );
 }
 
-function SuppliersTab({ onAdd, isAllBranches }: { onAdd: () => void, isAllBranches: boolean }) {
-  const MOCK_SUPPLIERS = [
-    { id:'s1', name:'Fresh Farms Pvt. Ltd.', contactName:'Ramesh Kumar', phone:'9876543210', email:'ramesh@freshfarms.in', address:'Azadpur Mandi, Delhi' },
-    { id:'s2', name:'Spice Garden Traders',  contactName:'Priya Singh',  phone:'8765432109', email:'priya@spicegarden.in',  address:'Khari Baoli, Delhi' },
-  ];
-
+function SuppliersTab({ suppliers, onAdd, onEdit, isAllBranches }: { suppliers: any[], onAdd: () => void, onEdit: (s: any) => void, isAllBranches: boolean }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="font-bold text-gray-700">Suppliers ({MOCK_SUPPLIERS.length})</h2>
+        <h2 className="font-bold text-gray-700">Suppliers ({suppliers.length})</h2>
         <button onClick={onAdd} disabled={isAllBranches} title={isAllBranches ? "Select a specific branch to add suppliers" : ""} className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
           <Plus size={16}/> Add Supplier
         </button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {MOCK_SUPPLIERS.map(s => (
-          <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        {suppliers.map(s => (
+          <div key={s._id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
             <h3 className="font-bold text-gray-800 mb-1">{s.name}</h3>
-            <p className="text-sm text-gray-500 mb-3">{s.contactName}</p>
+            <p className="text-sm text-gray-500 mb-3">{s.contactName || 'No contact specified'}</p>
             <div className="space-y-1.5">
-              <a href={`tel:${s.phone}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                <Phone size={14}/> {s.phone}
-              </a>
-              <a href={`mailto:${s.email}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                <Mail size={14}/> {s.email}
-              </a>
-              <p className="text-xs text-gray-400">{s.address}</p>
+              {s.phone && (
+                <a href={`tel:${s.phone}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                  <Phone size={14}/> {s.phone}
+                </a>
+              )}
+              {s.email && (
+                <a href={`mailto:${s.email}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">
+                  <Mail size={14}/> {s.email}
+                </a>
+              )}
+              {s.address && (
+                <p className="text-xs text-gray-400">{s.address}</p>
+              )}
             </div>
             <div className="mt-3 flex gap-2">
               <a
@@ -330,12 +402,17 @@ function SuppliersTab({ onAdd, isAllBranches }: { onAdd: () => void, isAllBranch
               >
                 WhatsApp Reorder
               </a>
-              <button className="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-50">
+              <button onClick={() => onEdit(s)} className="px-3 py-1.5 border border-gray-300 rounded text-xs hover:bg-gray-50">
                 <Edit2 size={13}/>
               </button>
             </div>
           </div>
         ))}
+        {suppliers.length === 0 && (
+          <div className="col-span-full py-12 text-center text-gray-500">
+            <p>No suppliers found.</p>
+          </div>
+        )}
       </div>
     </div>
   );

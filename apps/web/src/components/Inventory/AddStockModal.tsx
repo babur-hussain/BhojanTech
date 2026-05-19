@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { InventoryItem } from '@restaurant/types';
 import { X, Package } from 'lucide-react';
 
-interface Props { item: InventoryItem & { status: any }; onClose: () => void; onSave: (qty: number, cpu: number) => void; }
+interface Props { item: InventoryItem & { status: any }; onClose: () => void; onSave: (qty: number, cpu: number, supplierName?: string, invoiceNumber?: string) => void; }
 
 export default function AddStockModal({ item, onClose, onSave }: Props) {
   const [qty, setQty]               = useState('');
@@ -43,7 +43,7 @@ export default function AddStockModal({ item, onClose, onSave }: Props) {
         </div>
         <div className="px-5 py-4 border-t flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
-          <button onClick={() => onSave(+qty, +cpu)} disabled={!qty || +qty <= 0} className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50">Save Stock</button>
+          <button onClick={() => onSave(+qty, +cpu, supplier, invNum)} disabled={!qty || +qty <= 0} className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-50">Save Stock</button>
         </div>
       </div>
     </div>

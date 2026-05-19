@@ -133,7 +133,7 @@ export const liveActivity = async (req: AuthRequest, res: Response) => {
 export const liveDashboard = async (req: AuthRequest, res: Response) => {
   try {
     const rid = new mongoose.Types.ObjectId(req.user!.restaurantId);
-    const bId = req.user!.branchId || 'all';
+    const bId = req.query.branchId || req.user!.branchId || 'all';
     const cacheKey = `analytics:liveDashboard:${rid.toString()}:${bId}`;
     try {
       const cached = await redis.get(cacheKey);
@@ -147,6 +147,11 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
     const lastWeekSameDay = new Date(todayStart); lastWeekSameDay.setDate(lastWeekSameDay.getDate() - 7);
 
     const query = getBaseQuery(req);
+    if (req.query.branchId && req.query.branchId !== 'all') {
+      query.branchId = req.query.branchId;
+    } else if (req.query.branchId === 'all') {
+      delete query.branchId; // allow fetching for all branches
+    }
 
     const [todayInvoices, ydayInvoices, lwInvoices, tables, activeOrders, recentOrders] = await Promise.all([
       Invoice.find({ ...query, createdAt: { $gte: todayStart, $lte: todayEnd } }).lean(),
@@ -154,7 +159,7 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
       Invoice.find({ ...query, createdAt: { $gte: new Date(lastWeekSameDay.setHours(0, 0, 0, 0)), $lte: new Date(lastWeekSameDay.setHours(23, 59, 59, 999)) } }).lean(),
       Table.find(query).lean(),
       Order.countDocuments({ ...query, status: 'OPEN' }),
-      Invoice.find(query).sort('-createdAt').limit(10),
+      Invoice.find(query).sort('-createdAt').limit(10).populate('branchId', 'name').lean(),
     ]);
 
     const todayRevenue = todayInvoices.reduce((s, i) => s + i.grandTotalINR, 0);
@@ -181,6 +186,7 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
         grandTotal: i.grandTotalINR,
         paymentMode: i.paymentMode,
         createdAt: i.createdAt,
+        branchName: (i.branchId as any)?.name || 'Main Branch',
       })),
     };
 

@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
-import Razorpay from 'razorpay';
+import { razorpay } from '../config/razorpay';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { Order } from '../models/Order';
 import { Table } from '../models/Table';
@@ -12,6 +12,7 @@ import { MenuItem } from '../models/MenuItem';
 import { buildLineItems, computeGSTBreakup, generateInvoiceNumber } from '../utils/gst';
 import { amountInWords } from '../utils/numberToWords';
 import { io } from '../index';
+import { getBaseQuery } from '../utils/queryHelpers';
 import { Customer } from '../models/Customer';
 import {
   upsertCustomer,
@@ -34,10 +35,7 @@ export const getInvoice = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_key',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret',
-});
+// Razorpay instance imported from shared config (config/razorpay.ts)
 
 // ─── Preview Bill (before payment) ─────────────────────────────────────────
 
@@ -66,12 +64,12 @@ export const previewBill = async (req: AuthRequest, res: Response) => {
     });
 
     const lineItems = buildLineItems(enrichedItems as any);
-    const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2);
+    const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2); // Pre-tax total
     const gstBreakup = computeGSTBreakup(lineItems);
     const totalGST = +gstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0).toFixed(2);
-    const raw = subtotal; // GST-inclusive
-    const rounded = Math.round(raw);
-    const roundOff = +(rounded - raw).toFixed(2);
+    const grandTotalRaw = subtotal + totalGST; // Subtotal + GST
+    const rounded = Math.round(grandTotalRaw);
+    const roundOff = +(rounded - grandTotalRaw).toFixed(2);
 
     return res.json({
       order,
@@ -91,6 +89,9 @@ export const previewBill = async (req: AuthRequest, res: Response) => {
 
 export const createRazorpayOrder = async (req: AuthRequest, res: Response) => {
   try {
+    if (!razorpay) {
+      return res.status(500).json({ error: 'Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.' });
+    }
     const { amountINR } = req.body;
     const rpOrder = await razorpay.orders.create({
       amount: Math.round(amountINR * 100), // paise
@@ -469,8 +470,15 @@ export const eodSummary = async (req: AuthRequest, res: Response) => {
     const start = new Date(year, month - 1, day, 0, 0, 0);
     const end = new Date(year, month - 1, day, 23, 59, 59);
 
+    const query = getBaseQuery(req);
+    if (req.query.branchId && req.query.branchId !== 'all') {
+      query.branchId = req.query.branchId;
+    } else if (req.query.branchId === 'all') {
+      delete query.branchId; // allow fetching for all branches
+    }
+
     const invoices = await Invoice.find({
-      restaurantId,
+      ...query,
       createdAt: { $gte: start, $lte: end },
     });
 

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { StaffMember, UserRole } from '@restaurant/types';
-import { Plus, Phone, Edit2, UserCheck, UserX, ArrowRightLeft } from 'lucide-react';
+import { Plus, Phone, Edit2, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { useBranchStore } from '../../store/branchStore';
+import { api } from '../../utils/api';
 
 const ROLE_COLORS: Record<string, string> = {
   OWNER: 'bg-purple-100 text-purple-700',
@@ -10,21 +11,79 @@ const ROLE_COLORS: Record<string, string> = {
   KITCHEN_STAFF: 'bg-orange-100 text-orange-700',
 };
 
-interface Props { staff: (StaffMember & { status: string })[]; }
+interface Props { staff: (StaffMember & { status: string, id: string })[]; fetchStaff: () => void; }
 
-export default function StaffDirectory({ staff }: Props) {
+export default function StaffDirectory({ staff, fetchStaff }: Props) {
   const { selectedBranchId } = useBranchStore();
   const isAllBranches = selectedBranchId === 'all';
   const [search, setSearch] = useState('');
+  
+  // Modal states
   const [showAdd, setShowAdd] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
   const [targetBranchId, setTargetBranchId] = useState('');
+  
   const [form, setForm] = useState({ name: '', phone: '', role: UserRole.WAITER, salaryType: 'MONTHLY', salaryAmount: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = staff.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     s.role.toLowerCase().includes(search.toLowerCase())
   );
+
+  const openAddModal = () => {
+    setForm({ name: '', phone: '', role: UserRole.WAITER, salaryType: 'MONTHLY', salaryAmount: '' });
+    setEditingStaffId(null);
+    setShowAdd(true);
+  };
+
+  const openEditModal = (s: any) => {
+    setForm({
+      name: s.name,
+      phone: s.phone,
+      role: s.role,
+      salaryType: s.salaryType,
+      salaryAmount: String(s.salaryAmount)
+    });
+    setEditingStaffId(s.id);
+    setShowAdd(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSubmitting(true);
+      const payload = {
+        ...form,
+        salaryAmount: Number(form.salaryAmount)
+      };
+
+      if (editingStaffId) {
+        await api.put(`/staff/${editingStaffId}`, payload);
+      } else {
+        await api.post('/staff', payload);
+      }
+      
+      setShowAdd(false);
+      fetchStaff();
+    } catch (e: any) {
+      console.error('Failed to save staff:', e);
+      alert(e.response?.data?.error || 'Failed to save staff');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this staff member?')) return;
+    try {
+      await api.delete(`/staff/${id}`);
+      fetchStaff();
+    } catch (e) {
+      console.error('Failed to delete staff:', e);
+    }
+  };
 
   return (
     <div>
@@ -34,7 +93,7 @@ export default function StaffDirectory({ staff }: Props) {
           placeholder="Search staff…"
           className="flex-1 border rounded-lg px-4 py-2 text-sm focus:ring-saffron focus:border-saffron"
         />
-        <button onClick={() => setShowAdd(true)}
+        <button onClick={openAddModal}
           disabled={isAllBranches}
           title={isAllBranches ? "Select a specific branch to invite staff" : ""}
           className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
@@ -44,65 +103,70 @@ export default function StaffDirectory({ staff }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map(s => (
-          <div key={s.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-start gap-3 mb-3">
-              <img src={s.photoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${s.name}`}
-                className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" alt={s.name} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-gray-900 truncate">{s.name}</h3>
-                  {s.isOnDuty
-                    ? <span className="flex items-center gap-1 text-xs text-green-600 font-semibold"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> On Duty</span>
-                    : <span className="text-xs text-gray-400">Off Duty</span>
-                  }
+          <div key={s.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div>
+              <div className="flex items-start gap-3 mb-3">
+                <img src={s.photoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${s.name}`}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-gray-100" alt={s.name} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-gray-900 truncate">{s.name}</h3>
+                    {s.isOnDuty
+                      ? <span className="flex items-center gap-1 text-xs text-green-600 font-semibold"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> On Duty</span>
+                      : <span className="text-xs text-gray-400">Off Duty</span>
+                    }
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[s.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {s.role.replace('_', ' ')}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[s.role] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {s.role.replace('_', ' ')}
-                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setTransferStaffId(s.id)}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                    title="Transfer Branch"
+                  >
+                    <ArrowRightLeft size={14} />
+                  </button>
+                  <button onClick={() => openEditModal(s)} className="p-1.5 text-gray-400 hover:text-maroon hover:bg-red-50 rounded" title="Edit">
+                    <Edit2 size={14} />
+                  </button>
+                  <button onClick={() => handleDelete(s.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded" title="Remove">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setTransferStaffId(s.id)}
-                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                  title="Transfer Branch"
-                >
-                  <ArrowRightLeft size={14} />
-                </button>
-                <button className="p-1.5 text-gray-400 hover:text-maroon hover:bg-red-50 rounded" title="Edit">
-                  <Edit2 size={14} />
-                </button>
-              </div>
-            </div>
 
-            <div className="space-y-1 text-sm text-gray-600">
-              <a href={`tel:${s.phone}`} className="flex items-center gap-2 hover:text-blue-600">
-                <Phone size={13} /> {s.phone}
-              </a>
-              <div className="flex justify-between text-xs text-gray-500 pt-2 border-t">
-                <span>Joined {new Date(s.joiningDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
-                <span className="font-semibold text-gray-700">
-                  ₹{s.salaryType === 'MONTHLY'
-                    ? `${(s.salaryAmount / 1000).toFixed(0)}K/mo`
-                    : `${s.salaryAmount}/day`}
-                </span>
-              </div>
-              {s.currentShift && (
-                <div className="text-xs text-indigo-600 font-medium">
-                  Current Shift: {s.currentShift}
+              <div className="space-y-1 text-sm text-gray-600">
+                <a href={`tel:${s.phone}`} className="flex items-center gap-2 hover:text-blue-600">
+                  <Phone size={13} /> {s.phone}
+                </a>
+                <div className="flex justify-between text-xs text-gray-500 pt-2 border-t">
+                  <span>Joined {new Date(s.joiningDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</span>
+                  <span className="font-semibold text-gray-700">
+                    ₹{s.salaryType === 'MONTHLY'
+                      ? `${(s.salaryAmount / 1000).toFixed(0)}K/mo`
+                      : `${s.salaryAmount}/day`}
+                  </span>
                 </div>
-              )}
+                {s.currentShift && (
+                  <div className="text-xs text-indigo-600 font-medium">
+                    Current Shift: {s.currentShift}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Add Staff Modal */}
+      {/* Add/Edit Staff Modal */}
       {showAdd && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
             <div className="px-5 py-4 border-b bg-cream rounded-t-xl">
-              <h2 className="font-bold text-maroon text-lg">Invite Staff Member</h2>
-              <p className="text-xs text-gray-500 mt-0.5">They'll receive an SMS to download the app</p>
+              <h2 className="font-bold text-maroon text-lg">{editingStaffId ? 'Edit Staff Member' : 'Invite Staff Member'}</h2>
+              {!editingStaffId && <p className="text-xs text-gray-500 mt-0.5">They'll receive an SMS to download the app</p>}
             </div>
             <div className="p-5 space-y-4">
               {[
@@ -140,8 +204,8 @@ export default function StaffDirectory({ staff }: Props) {
             </div>
             <div className="px-5 py-4 border-t flex justify-end gap-3">
               <button onClick={() => setShowAdd(false)} className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
-              <button onClick={() => setShowAdd(false)} className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold">
-                Send Invite SMS
+              <button onClick={handleSave} disabled={isSubmitting || !form.name || !form.phone} className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+                {isSubmitting ? 'Saving...' : (editingStaffId ? 'Save Changes' : 'Send Invite SMS')}
               </button>
             </div>
           </div>

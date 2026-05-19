@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StaffMember, AttendanceStatus } from '@restaurant/types';
 import { ChevronLeft, ChevronRight, CheckCircle, XCircle, Clock, Minus } from 'lucide-react';
+import { api } from '../../utils/api';
+import PageLoader from '../PageLoader';
 
 const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; icon: React.ReactNode }> = {
   PRESENT:  { label:'P',  color:'bg-green-500 text-white',  icon:<CheckCircle size={12}/> },
@@ -10,37 +12,65 @@ const STATUS_CONFIG: Record<AttendanceStatus, { label: string; color: string; ic
   HOLIDAY:  { label:'HO', color:'bg-gray-300 text-gray-600',icon:<Minus size={12}/> },
 };
 
-// Generate mock attendance for a month
-function mockAttendance(staffId: string, year: number, month: number): Record<string, AttendanceStatus> {
-  const days = new Date(year, month, 0).getDate();
-  const out: Record<string, AttendanceStatus> = {};
-  for (let d = 1; d <= days; d++) {
-    const dt = new Date(year, month - 1, d);
-    if (dt > new Date()) continue;
-    const key = dt.toISOString().slice(0, 10);
-    const rand = Math.random();
-    if (dt.getDay() === 0) out[key] = 'HOLIDAY';
-    else if (rand > 0.88) out[key] = 'ABSENT';
-    else if (rand > 0.78) out[key] = 'LATE';
-    else if (rand > 0.72) out[key] = 'HALF_DAY';
-    else out[key] = 'PRESENT';
-  }
-  return out;
-}
-
-interface Props { staff: StaffMember[]; }
+interface Props { staff: (StaffMember & { id: string })[]; fetchStaff: () => void; }
 
 export default function AttendanceView({ staff }: Props) {
   const now = new Date();
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [selected, setSelected] = useState(staff[0]?.id ?? '');
+  const [selected, setSelected] = useState(staff.length > 0 ? staff[0].id : '');
   const [override, setOverride] = useState<{ date: string; status: AttendanceStatus } | null>(null);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+  const [loading, setLoading] = useState(true);
+
+  // Sync selected staff if the list changes
+  useEffect(() => {
+    if (!selected && staff.length > 0) setSelected(staff[0].id);
+  }, [staff, selected]);
+
+  const fetchAttendance = async () => {
+    if (!selected) return;
+    try {
+      setLoading(true);
+      const mStr = `${year}-${String(month).padStart(2, '0')}`;
+      const res = await api.get(`/staff/attendance/${selected}/${mStr}`);
+      const map: Record<string, AttendanceStatus> = {};
+      res.data.forEach((rec: any) => {
+        map[rec.date] = rec.status;
+      });
+      setAttendance(map);
+    } catch (e) {
+      console.error('Failed to fetch attendance:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [selected, year, month]);
 
   const prevMonth = () => { if (month === 1) { setYear(y => y-1); setMonth(12); } else setMonth(m => m-1); };
   const nextMonth = () => { if (month === 12) { setYear(y => y+1); setMonth(1); } else setMonth(m => m+1); };
 
-  const attendance = mockAttendance(selected, year, month);
+  const handleManualMark = async (status: AttendanceStatus) => {
+    if (!override || !selected) return;
+    try {
+      await api.post('/staff/attendance/manual', {
+        staffId: selected,
+        date: override.date,
+        status,
+        shift: 'MORNING', // default
+        notes: 'Manual override'
+      });
+      setOverride(null);
+      fetchAttendance();
+    } catch (e) {
+      console.error('Failed to mark attendance manually:', e);
+      alert('Failed to mark attendance');
+    }
+  };
+
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month - 1, 1).getDay();
 
@@ -48,8 +78,6 @@ export default function AttendanceView({ staff }: Props) {
   const late     = Object.values(attendance).filter(s => s === 'LATE').length;
   const absent   = Object.values(attendance).filter(s => s === 'ABSENT').length;
   const halfDays = Object.values(attendance).filter(s => s === 'HALF_DAY').length;
-
-  const selectedStaff = staff.find(s => s.id === selected);
 
   return (
     <div className="space-y-4">
@@ -83,7 +111,7 @@ export default function AttendanceView({ staff }: Props) {
       </div>
 
       {/* Calendar Grid */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className={`bg-white rounded-xl border border-gray-200 overflow-hidden transition-opacity ${loading ? 'opacity-50' : ''}`}>
         <div className="grid grid-cols-7 border-b">
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
             <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">{d}</div>
@@ -106,6 +134,14 @@ export default function AttendanceView({ staff }: Props) {
                     onClick={() => setOverride({ date: dateStr, status: status! })}
                   >
                     {cfg.label}
+                  </div>
+                )}
+                {!cfg && !isFuture && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer bg-gray-100 text-gray-400 hover:bg-gray-200"
+                    title="Mark Attendance"
+                    onClick={() => setOverride({ date: dateStr, status: 'PRESENT' })}
+                  >
+                    ?
                   </div>
                 )}
               </div>
@@ -131,7 +167,7 @@ export default function AttendanceView({ staff }: Props) {
             <h3 className="font-bold text-gray-800 mb-4">Override Attendance — {override.date}</h3>
             <div className="grid grid-cols-2 gap-2">
               {(Object.keys(STATUS_CONFIG) as AttendanceStatus[]).map(s => (
-                <button key={s} onClick={() => { setOverride(null); }}
+                <button key={s} onClick={() => handleManualMark(s)}
                   className={`py-2 rounded-lg text-xs font-bold transition-colors ${STATUS_CONFIG[s].color} hover:opacity-80`}>
                   {s.replace('_',' ')}
                 </button>

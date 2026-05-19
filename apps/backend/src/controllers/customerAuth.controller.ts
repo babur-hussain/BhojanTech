@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Customer } from '../models/Customer';
 import { getOrInitSettings } from '../services/loyaltyService';
 import { sendOTP } from '../services/smsService';
 
 const OTP_EXPIRY_MINUTES = 10;
+const OTP_HASH_ROUNDS = 10;
 
 // ─── Send OTP (customer mobile login) ────────────────────────────────────────
 
@@ -14,8 +16,17 @@ export const sendCustomerOTP = async (req: Request, res: Response) => {
         const { phone, restaurantId } = req.body;
         if (!phone || !restaurantId) return res.status(400).json({ error: 'phone and restaurantId required' });
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // Validate phone format (10 digits, Indian mobile)
+        if (!/^[6-9]\d{9}$/.test(phone)) {
+            return res.status(400).json({ error: 'Invalid phone number format' });
+        }
+
+        // Cryptographically secure OTP generation
+        const otp = crypto.randomInt(100000, 999999).toString();
         const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+        // Hash OTP before storing (never store plaintext)
+        const hashedOtp = await bcrypt.hash(otp, OTP_HASH_ROUNDS);
 
         // Upsert minimal customer record (first-time users who don't have a full profile yet)
         let customer = await Customer.findOne({ restaurantId, phone });
@@ -35,7 +46,7 @@ export const sendCustomerOTP = async (req: Request, res: Response) => {
             });
         }
 
-        customer.otp = otp;
+        customer.otp = hashedOtp;
         customer.otpExpiresAt = expiresAt;
         await customer.save();
 
@@ -50,12 +61,9 @@ export const sendCustomerOTP = async (req: Request, res: Response) => {
             });
         }
 
-        // In dev/no-MSG91 mode, return OTP in response (remove in production!)
-        const devMode = !settings.msg91AuthKey;
-
+        // SECURITY: Never return OTP in response, even in dev mode
         return res.json({
-            message: smsSent ? 'OTP sent via SMS' : 'OTP generated (SMS not configured)',
-            ...(devMode && { otp }), // only in dev
+            message: smsSent ? 'OTP sent via SMS' : 'OTP generated (SMS not configured — check server logs)',
         });
     } catch (err) {
         console.error(err);
@@ -72,19 +80,35 @@ export const verifyCustomerOTP = async (req: Request, res: Response) => {
 
         const customer = await Customer.findOne({ restaurantId, phone });
         if (!customer) return res.status(404).json({ error: 'Customer not found' });
-        if (!customer.otp || customer.otp !== otp) return res.status(401).json({ error: 'Invalid OTP' });
-        if (!customer.otpExpiresAt || customer.otpExpiresAt < new Date()) {
+
+        if (!customer.otp || !customer.otpExpiresAt) {
+            return res.status(401).json({ error: 'No OTP pending. Request a new one.' });
+        }
+
+        if (customer.otpExpiresAt < new Date()) {
+            customer.otp = undefined;
+            customer.otpExpiresAt = undefined;
+            await customer.save();
             return res.status(401).json({ error: 'OTP expired' });
         }
+
+        // Compare submitted OTP with hashed version
+        const isMatch = await bcrypt.compare(otp, customer.otp);
+        if (!isMatch) return res.status(401).json({ error: 'Invalid OTP' });
 
         // Clear OTP
         customer.otp = undefined;
         customer.otpExpiresAt = undefined;
         await customer.save();
 
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET) {
+            return res.status(500).json({ error: 'Server misconfiguration' });
+        }
+
         const token = jwt.sign(
-            { customerId: customer._id, phone: customer.phone, restaurantId },
-            process.env.JWT_SECRET || 'secret',
+            { customerId: customer._id, phone: customer.phone, restaurantId, type: 'customer' },
+            JWT_SECRET,
             { expiresIn: '30d' }
         );
 
@@ -116,7 +140,10 @@ export const getMyProfile = async (req: Request, res: Response) => {
         const auth = req.headers.authorization?.split(' ')[1];
         if (!auth) return res.status(401).json({ error: 'Unauthorized' });
 
-        const decoded: any = jwt.verify(auth, process.env.JWT_SECRET || 'secret');
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET) return res.status(500).json({ error: 'Server misconfiguration' });
+
+        const decoded: any = jwt.verify(auth, JWT_SECRET);
         const customer = await Customer.findById(decoded.customerId).select('-otp -otpExpiresAt');
         if (!customer) return res.status(404).json({ error: 'Customer not found' });
 

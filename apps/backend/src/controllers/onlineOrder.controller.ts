@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { Order } from '../models/Order';
 import { KOT } from '../models/KOT';
 import { Table } from '../models/Table';
 import { Customer } from '../models/Customer';
+import { Branch } from '../models/Branch';
+import { MenuItem } from '../models/MenuItem';
 import { razorpay } from '../config/razorpay';
 import { sendOrderConfirmationWA } from '../services/whatsappService';
 // Assuming io is exported from index.ts or a separate socket.ts file
@@ -27,17 +30,33 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
     try {
         const { restaurantId, tableId, items, customerName, customerPhone, pickupTime, paymentMode } = req.body;
 
-        const mongoose = require('mongoose');
-        
-        // In a real scenario, we'd fetch actual prices from DB. Here we trust the request for stub purposes
-        const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
+        // Server-side price validation: look up actual prices from DB
+        const menuItemIds = items.map((item: any) => item.menuItemId).filter(Boolean);
+        const menuItems = menuItemIds.length > 0
+            ? await MenuItem.find({ _id: { $in: menuItemIds }, restaurantId })
+            : [];
 
-        // Sanitize mock IDs from frontend so they don't crash Mongoose ObjectId casting
-        const sanitizedItems = items.map((item: any) => ({
-            ...item,
-            menuItemId: mongoose.Types.ObjectId.isValid(item.menuItemId) ? item.menuItemId : new mongoose.Types.ObjectId().toString(),
-            categoryId: item.categoryId || (mongoose.Types.ObjectId.isValid(item.menuItemId) ? item.menuItemId : new mongoose.Types.ObjectId().toString()),
-        }));
+        const priceMap = new Map(menuItems.map((mi: any) => [mi._id.toString(), mi]));
+
+        const sanitizedItems = items.map((item: any) => {
+            const dbItem = priceMap.get(item.menuItemId);
+            // Use DB price if available, otherwise reject
+            const price = dbItem ? dbItem.price : item.priceAtOrderTime;
+            return {
+                menuItemId: mongoose.Types.ObjectId.isValid(item.menuItemId)
+                    ? item.menuItemId
+                    : new mongoose.Types.ObjectId().toString(),
+                categoryId: item.categoryId || (dbItem?.categoryId?.toString()) || new mongoose.Types.ObjectId().toString(),
+                name: item.name,
+                variantName: item.variantName,
+                quantity: item.quantity,
+                priceAtOrderTime: price,
+                notes: item.notes,
+                gstSlab: dbItem?.gstSlab,
+            };
+        });
+
+        const totalAmountINR = sanitizedItems.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
 
         let resolvedTableNumber = undefined;
         let branchId = undefined;
@@ -51,8 +70,6 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
 
         // If no tableId or table has no branchId, fallback to the first branch of the restaurant
         if (!branchId) {
-            const mongoose = require('mongoose');
-            const Branch = mongoose.model('Branch');
             const firstBranch = await Branch.findOne({ restaurantId });
             if (firstBranch) {
                 branchId = firstBranch._id;
@@ -84,7 +101,7 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
             customerName,
             customerPhone,
             paymentMode,
-            paymentStatus: paymentMode === 'PAY_AT_COUNTER' ? 'PENDING' : 'PENDING',
+            paymentStatus: paymentMode === 'PAY_AT_COUNTER' ? 'PENDING' : 'AWAITING_PAYMENT',
             items: sanitizedItems,
             totalAmountINR,
             status: 'OPEN'
@@ -125,14 +142,18 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
 
 export const verifyPaymentWebhook = async (req: Request, res: Response) => {
     try {
-        const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'fallback_secret';
+        const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        if (!secret) {
+            return res.status(500).json({ error: 'Razorpay webhook secret not configured' });
+        }
 
-        // Validate signature
+        // Validate signature using timing-safe comparison
         const shasum = crypto.createHmac('sha256', secret);
         shasum.update(JSON.stringify(req.body));
         const digest = shasum.digest('hex');
+        const signature = req.headers['x-razorpay-signature'] as string;
 
-        if (digest !== req.headers['x-razorpay-signature']) {
+        if (!signature || !crypto.timingSafeEqual(Buffer.from(digest, 'utf8'), Buffer.from(signature, 'utf8'))) {
             return res.status(400).json({ error: 'Invalid Signature' });
         }
 

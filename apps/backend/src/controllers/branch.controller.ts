@@ -22,8 +22,14 @@ export const createBranch = async (req: AuthRequest, res: Response) => {
         // Auto-uppercase prefix
         const invoicePrefix = req.body.invoicePrefix?.toUpperCase() || 'BR';
 
+        const { name, address, city, phone, gstNumber, managerId } = req.body;
         const branch = new Branch({
-            ...req.body,
+            name,
+            address,
+            city,
+            phone,
+            gstNumber,
+            managerId,
             restaurantId,
             invoicePrefix,
             isActive: true,
@@ -43,12 +49,18 @@ export const updateBranch = async (req: AuthRequest, res: Response) => {
         const restaurantId = new mongoose.Types.ObjectId(req.user!.restaurantId);
         const branchId = new mongoose.Types.ObjectId(req.params.id);
 
-        const invoicePrefix = req.body.invoicePrefix?.toUpperCase();
-
-        const updateData = { ...req.body };
-        if (invoicePrefix) updateData.invoicePrefix = invoicePrefix;
-        // prevent updating standard relational fields insecurely
-        delete updateData.restaurantId;
+        // Whitelist updatable fields — prevent overwriting restaurantId/_id
+        const { name, address, city, state, phone, gstNumber, invoicePrefix, managerId, isActive } = req.body;
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (address !== undefined) updateData.address = address;
+        if (city !== undefined) updateData.city = city;
+        if (state !== undefined) updateData.state = state;
+        if (phone !== undefined) updateData.phone = phone;
+        if (gstNumber !== undefined) updateData.gstNumber = gstNumber;
+        if (invoicePrefix !== undefined) updateData.invoicePrefix = invoicePrefix.toUpperCase();
+        if (managerId !== undefined) updateData.managerId = managerId;
+        if (isActive !== undefined) updateData.isActive = isActive;
 
         const branch = await Branch.findOneAndUpdate(
             { _id: branchId, restaurantId },

@@ -19,7 +19,7 @@ export const Checkout = () => {
         setIsProcessing(true);
         try {
             const payload = {
-                restaurantId: restaurantId || 'fallback_id',
+                restaurantId: restaurantId,
                 tableId: tableNumber, // tableNumber in state holds the Mongo ID from the QR code
                 items: items.map(i => ({
                     menuItemId: i.menuItemId,
@@ -41,7 +41,7 @@ export const Checkout = () => {
                 if (!scriptLoaded) throw new Error('Razorpay load failed');
 
                 const options = {
-                    key: 'rzp_test_stub', // Should use env var
+                    key: import.meta.env.VITE_RAZORPAY_KEY_ID || '',
                     amount: Math.round(finalTotal * 100),
                     currency: 'INR',
                     name: 'Restaurant Name',

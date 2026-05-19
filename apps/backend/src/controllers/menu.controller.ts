@@ -106,9 +106,17 @@ export const updateCategory = async (req: AuthRequest, res: Response) => {
     const query = getBaseQuery(req);
     query._id = id;
 
+    // Whitelist updatable fields — prevent overwriting restaurantId/branchId
+    const { name, order, imageUrl, isAvailable } = req.body;
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (order !== undefined) updateData.order = order;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+
     const category = await MenuCategory.findOneAndUpdate(
       query,
-      req.body,
+      { $set: updateData },
       { new: true }
     );
 
@@ -205,8 +213,9 @@ export const createMenuItem = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
     if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
+    const { categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder } = req.body;
     const item = await MenuItem.create({
-      ...req.body,
+      categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder,
       restaurantId: req.user!.restaurantId,
       branchId,
     });
@@ -227,9 +236,24 @@ export const updateMenuItem = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
+    // Whitelist updatable fields — never allow restaurantId/branchId overwrite
+    const { categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder } = req.body;
+    const updateData: any = {};
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (name !== undefined) updateData.name = name;
+    if (hindiName !== undefined) updateData.hindiName = hindiName;
+    if (description !== undefined) updateData.description = description;
+    if (price !== undefined) updateData.price = price;
+    if (variants !== undefined) updateData.variants = variants;
+    if (isVeg !== undefined) updateData.isVeg = isVeg;
+    if (gstSlab !== undefined) updateData.gstSlab = gstSlab;
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+    if (itemOrder !== undefined) updateData.order = itemOrder;
+
     const item = await MenuItem.findOneAndUpdate(
       query,
-      req.body,
+      updateData,
       { new: true }
     );
 

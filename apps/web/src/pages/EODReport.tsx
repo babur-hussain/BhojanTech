@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { EODSummary } from '@restaurant/types';
 import { TrendingUp, Banknote, CreditCard, Smartphone, Receipt, Tag, Download } from 'lucide-react';
 import { api } from '../utils/api';
+import { useBranchStore } from '../store/branchStore';
 
 export default function EODReport() {
+  const { selectedBranchId } = useBranchStore();
   const [date, setDate]     = useState(new Date().toISOString().slice(0, 10));
   const [eod, setEOD]       = useState<EODSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -11,7 +13,8 @@ export default function EODReport() {
   const fetch_ = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/billing/eod?date=${date}`);
+      const qs = selectedBranchId === 'all' ? `date=${date}&branchId=all` : `date=${date}&branchId=${selectedBranchId}`;
+      const res = await api.get(`/billing/eod?${qs}`);
       setEOD(res.data);
     } catch (e) {
       console.error(e);
@@ -20,7 +23,7 @@ export default function EODReport() {
     }
   };
 
-  useEffect(() => { fetch_(); }, []);
+  useEffect(() => { fetch_(); }, [date, selectedBranchId]);
 
   if (!eod) {
     return <div className="flex justify-center items-center h-96 text-gray-400">Loading EOD data…</div>;

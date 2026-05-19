@@ -16,7 +16,7 @@ export default function LiveAnalytics() {
     const fetchLive = async () => {
         try {
             setError(false);
-            const qs = selectedBranchId !== 'all' ? `?branchId=${selectedBranchId}` : '';
+            const qs = `?branchId=${selectedBranchId}`;
             const res = await api.get(`/analytics/dashboard${qs}`);
             setData(res.data);
             setLastTick(new Date());
@@ -111,7 +111,7 @@ export default function LiveAnalytics() {
                                 className="flex items-center justify-between p-4 bg-gray-900/50 rounded-xl border border-gray-800 hover:border-gray-600 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-saffron/20 text-saffron flex items-center justify-center font-bold">
+                                    <div className="min-w-[3rem] px-3 h-12 rounded-full bg-saffron/20 text-saffron flex items-center justify-center font-bold text-sm">
                                         {order.tableNumber || 'AW'}
                                     </div>
                                     <div>
@@ -120,6 +120,12 @@ export default function LiveAnalytics() {
                                             <span>{new Date(order.createdAt).toLocaleTimeString()}</span>
                                             <span>•</span>
                                             <span className="text-gray-300">{order.paymentMode}</span>
+                                            {selectedBranchId === 'all' && order.branchName && (
+                                                <>
+                                                    <span>•</span>
+                                                    <span className="text-blue-400 truncate max-w-[150px]">{order.branchName}</span>
+                                                </>
+                                            )}
                                         </p>
                                     </div>
                                 </div>

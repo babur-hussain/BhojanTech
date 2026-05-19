@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
+import { useBranchStore } from '../../store/branchStore';
 import { FileText, Download } from 'lucide-react';
 
 export default function InvoiceRegister() {
+    const { selectedBranchId } = useBranchStore();
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchInvoices();
-    }, []);
+    }, [selectedBranchId]);
 
     const fetchInvoices = async () => {
         try {
-            const response = await api.get('/accounting/invoices');
+            const branchQs = selectedBranchId === 'all' ? '?branchId=all' : `?branchId=${selectedBranchId}`;
+            const response = await api.get(`/accounting/invoices${branchQs}`);
             setInvoices(response.data);
         } catch (e) {
             console.error('Failed to fetch invoices');
@@ -59,7 +62,7 @@ export default function InvoiceRegister() {
                             <tr><td colSpan={7} className="px-6 py-10 text-center animate-pulse">Loading Invoices...</td></tr>
                         ) : invoices.length > 0 ? (
                             invoices.map((inv) => (
-                                <tr key={inv.id} className="border-b hover:bg-gray-50">
+                                <tr key={inv._id} className="border-b hover:bg-gray-50">
                                     <td className="px-6 py-4">{new Date(inv.createdAt).toLocaleString('en-IN')}</td>
                                     <td className="px-6 py-4 font-medium text-maroon">{inv.invoiceNumber}</td>
                                     <td className="px-6 py-4">{inv.orderType === 'DINE_IN' ? `Table ${inv.tableNumber}` : inv.orderType.replace('_', ' ')}</td>

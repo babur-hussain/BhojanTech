@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { firebaseAdmin } from '../config/firebase';
 import { User } from '../models/User';
-import { generateTokens } from '../utils/jwt';
+import { generateTokens, verifyToken, verifyRefreshToken } from '../utils/jwt';
 import { UserRole } from '@restaurant/types';
 import { redis } from '../config/redis';
+import jwt from 'jsonwebtoken';
+import { sendStaffInviteWA } from '../services/whatsappService';
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -77,45 +80,7 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-export const devLogin = async (req: Request, res: Response) => {
-  try {
-    let user = await User.findOne({ email: 'dev@bhojantech.com' });
-    if (!user) {
-      user = await User.create({
-        firebaseUid: 'dev_mock_uid',
-        email: 'dev@bhojantech.com',
-        phoneNumber: '+1234567890',
-        role: UserRole.SUPER_OWNER,
-        name: 'Dev Owner'
-      });
-    }
-
-    const payload = {
-      userId: user.id,
-      name: user.name,
-      role: user.role,
-      restaurantId: user.restaurantId?.toString(),
-      branchId: user.branchId?.toString(),
-      accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
-    };
-
-    const tokens = generateTokens(payload);
-
-    return res.status(200).json({
-      user: {
-        id: user.id,
-        role: user.role,
-        restaurantId: user.restaurantId,
-        branchId: user.branchId,
-        name: user.name,
-      },
-      ...tokens,
-    });
-  } catch (error) {
-    console.error('Dev Login error:', error);
-    return res.status(500).json({ error: 'Internal server error during dev login' });
-  }
-};
+// devLogin removed — was a security backdoor that granted SUPER_OWNER without authentication
 
 export const logout = async (req: Request, res: Response) => {
   try {
@@ -126,8 +91,8 @@ export const logout = async (req: Request, res: Response) => {
 
     const token = authHeader.split(' ')[1];
 
-    // Blacklist token in Redis for 1 hour (matching JWT_EXPIRES_IN)
-    await redis.setex(`bl_${token}`, 3600, 'true');
+    // Blacklist token in Redis for 2 hours (access token expires in 1h + safety buffer)
+    await redis.setex(`bl_${token}`, 7200, 'true');
 
     return res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -159,8 +124,10 @@ export const customerLogin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Phone number not found in token. Ensure phone auth was used.' });
     }
 
-    const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev';
-    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET not set' });
+    }
 
     const token = jwt.sign(
       {
@@ -205,7 +172,7 @@ export const inviteStaff = async (req: Request, res: Response) => {
     }
 
     user = await User.create({
-      firebaseUid: `temp_${Date.now()}`, // Temporary UID until they sign up
+      firebaseUid: `pending_${crypto.randomUUID()}`, // Secure unique UID until they sign up via Firebase
       phoneNumber,
       role,
       name,
@@ -215,12 +182,75 @@ export const inviteStaff = async (req: Request, res: Response) => {
     // Generate Dynamic Link (mocked here, should use Firebase REST API to create actual link)
     const dynamicLink = `https://restaurantapp.page.link/?link=https://restaurantapp.com/invite&apn=com.restaurant.mobile&ibi=com.restaurant.ios`;
 
-    // In a real app, send SMS via Twilio or Firebase here
-    console.log(`Sending SMS to ${phoneNumber} with link: ${dynamicLink}`);
+    // Send WhatsApp invite via LoomiFlow
+    const restaurant = await require('mongoose').model('Restaurant').findById(inviter.restaurantId).select('name').lean();
+    const restaurantName = (restaurant as any)?.name || 'your restaurant';
+    sendStaffInviteWA(phoneNumber, restaurantName, dynamicLink)
+      .catch(err => console.error(`[Staff Invite WA] Failed for ${phoneNumber}: ${err.message}`));
 
     return res.status(201).json({ message: 'Staff invited successfully', dynamicLink });
   } catch (error) {
     console.error('Invite staff error:', error);
     return res.status(500).json({ error: 'Internal server error during invitation' });
+  }
+};
+
+// ─── Refresh Token ────────────────────────────────────────────────────────────
+
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token is required' });
+    }
+
+    // Check if refresh token is blacklisted
+    const isBlacklisted = await redis.get(`bl_${refreshToken}`);
+    if (isBlacklisted) {
+      return res.status(401).json({ error: 'Refresh token has been revoked' });
+    }
+
+    // Verify the refresh token
+    const decoded = verifyRefreshToken(refreshToken);
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ error: 'Invalid token type' });
+    }
+
+    // Look up the user to get fresh role/branch data
+    const user = await User.findById(decoded.userId);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: 'User not found or deactivated' });
+    }
+
+    // Blacklist the old refresh token (one-time use / rotation)
+    await redis.setex(`bl_${refreshToken}`, 7 * 24 * 3600, 'true'); // 7 days TTL
+
+    // Generate new token pair
+    const payload = {
+      userId: user.id,
+      name: user.name,
+      role: user.role,
+      restaurantId: user.restaurantId?.toString(),
+      branchId: user.branchId?.toString(),
+      accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
+    };
+
+    const tokens = generateTokens(payload);
+
+    return res.json({
+      ...tokens,
+      user: {
+        id: user.id,
+        role: user.role,
+        restaurantId: user.restaurantId,
+        name: user.name,
+      },
+    });
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Refresh token expired. Please log in again.' });
+    }
+    console.error('Refresh token error:', error);
+    return res.status(401).json({ error: 'Invalid refresh token' });
   }
 };

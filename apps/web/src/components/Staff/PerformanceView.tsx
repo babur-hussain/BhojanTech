@@ -1,30 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, ShoppingBag, DollarSign, Star } from 'lucide-react';
+import { api } from '../../utils/api';
+import PageLoader from '../PageLoader';
 
-const MOCK_PERF = [
-  { staffName:'Rahul Sharma',  ordersHandled:142, totalRevenue:84200, avgOrderValue:593, feedbackScore:4.7 },
-  { staffName:'Amit Kumar',    ordersHandled:108, totalRevenue:61500, avgOrderValue:569, feedbackScore:4.3 },
-  { staffName:'Sunita Devi',   ordersHandled:96,  totalRevenue:58000, avgOrderValue:604, feedbackScore:4.8 },
-];
+export default function PerformanceView({ staff }: { staff?: any[] }) {
+  const now = new Date();
+  const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+  const [performance, setPerformance] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-export default function PerformanceView() {
+  useEffect(() => {
+    const fetchPerformance = async () => {
+      try {
+        setLoading(true);
+        const res = await api.get(`/staff/performance/${month}`);
+        setPerformance(res.data);
+      } catch (e) {
+        console.error('Failed to fetch performance:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPerformance();
+  }, [month]);
+
+  if (loading && performance.length === 0) return <PageLoader />;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="font-bold text-gray-700">Waiter Performance — {new Date().toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h2>
-        <select className="border rounded-lg px-3 py-2 text-sm">
-          {Array.from({length:3},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-i);return d;}).map(d=>(
-            <option key={d.toISOString()}>{d.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</option>
-          ))}
-        </select>
+        <h2 className="font-bold text-gray-700">Waiter Performance — {new Date(month).toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h2>
+        <input type="month" value={month} onChange={e => setMonth(e.target.value)}
+          className="border rounded-lg px-3 py-2 text-sm focus:ring-saffron" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {MOCK_PERF.map((p, i) => (
-          <div key={p.staffName} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity ${loading ? 'opacity-50' : ''}`}>
+        {performance.map((p, i) => (
+          <div key={p.staffName} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-4">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-white text-sm
-                ${i===0?'bg-amber-400':i===1?'bg-gray-400':'bg-orange-600'}`}>
+                ${i===0?'bg-amber-400':i===1?'bg-gray-400':i===2?'bg-orange-600':'bg-gray-200 text-gray-500'}`}>
                 {i+1}
               </div>
               <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${p.staffName}`}
@@ -53,6 +68,11 @@ export default function PerformanceView() {
             </div>
           </div>
         ))}
+        {performance.length === 0 && !loading && (
+          <div className="col-span-3 py-10 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed">
+            No performance data available for this month.
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 
-interface Props { onClose: () => void; onSave: () => void; }
+interface Props { supplier?: any; onClose: () => void; onSave: (data: any) => void; }
 
-export default function SupplierModal({ onClose, onSave }: Props) {
-  const [form, setForm] = useState({ name:'', contactName:'', phone:'', email:'', address:'', notes:'' });
+export default function SupplierModal({ supplier, onClose, onSave }: Props) {
+  const [form, setForm] = useState({
+    name: supplier?.name || '',
+    contactName: supplier?.contactName || '',
+    phone: supplier?.phone || '',
+    email: supplier?.email || '',
+    address: supplier?.address || '',
+    notes: supplier?.notes || ''
+  });
   const f = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(p => ({ ...p, [field]: e.target.value }));
 
@@ -12,7 +19,7 @@ export default function SupplierModal({ onClose, onSave }: Props) {
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
         <div className="flex justify-between items-center px-5 py-4 border-b bg-cream rounded-t-xl">
-          <h2 className="font-bold text-maroon text-lg">Add Supplier</h2>
+          <h2 className="font-bold text-maroon text-lg">{supplier ? 'Edit' : 'Add'} Supplier</h2>
           <button onClick={onClose}><X size={22} className="text-gray-500"/></button>
         </div>
         <div className="p-5 space-y-3">
@@ -27,7 +34,7 @@ export default function SupplierModal({ onClose, onSave }: Props) {
         </div>
         <div className="px-5 py-4 border-t flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
-          <button onClick={onSave} disabled={!form.name} className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 disabled:opacity-50">Save</button>
+          <button onClick={() => onSave(form)} disabled={!form.name} className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 disabled:opacity-50">Save</button>
         </div>
       </div>
     </div>

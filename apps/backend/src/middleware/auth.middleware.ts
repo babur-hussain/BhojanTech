@@ -38,7 +38,8 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
     } else if (headerBranchId === 'all') {
       const role = decoded.role;
       if (role === 'OWNER' || role === 'SUPER_OWNER') {
-        delete req.user.branchId;
+        // Create a new object instead of mutating the decoded JWT payload
+        req.user = { ...req.user!, branchId: undefined };
       }
     }
 
@@ -51,8 +52,8 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
 export const requireBranchAccess = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
-  // Super owners have global access
-  if (req.user.role === 'SUPER_OWNER') return next();
+  // Super owners and owners have global access
+  if (req.user.role === 'SUPER_OWNER' || req.user.role === 'OWNER') return next();
 
   // Route might specify branchId in params or body or query
   const targetBranchId = req.params.branchId || req.body.branchId || req.query.branchId;

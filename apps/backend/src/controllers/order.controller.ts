@@ -2,10 +2,14 @@ import { Response } from 'express';
 import { Order } from '../models/Order';
 import { Table } from '../models/Table';
 import { KOT } from '../models/KOT';
+import { MenuItem } from '../models/MenuItem';
 import { io } from '../index';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
 import mongoose from 'mongoose';
+
+// Escape special regex characters to prevent ReDoS
+const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const getActiveOrders = async (req: AuthRequest, res: Response) => {
   try {
@@ -48,11 +52,12 @@ export const getAllOrders = async (req: AuthRequest, res: Response) => {
     }
 
     if (search) {
+      const escapedSearch = escapeRegex(search as string);
       query.$or = [
-        { tableNumber: { $regex: search, $options: 'i' } },
-        { waiterName: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { customerPhone: { $regex: search, $options: 'i' } },
+        { tableNumber: { $regex: escapedSearch, $options: 'i' } },
+        { waiterName: { $regex: escapedSearch, $options: 'i' } },
+        { customerName: { $regex: escapedSearch, $options: 'i' } },
+        { customerPhone: { $regex: escapedSearch, $options: 'i' } },
       ];
     }
 
@@ -78,7 +83,23 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     const table = await Table.findOne({ _id: tableId, restaurantId, branchId });
     if (!table) return res.status(404).json({ error: 'Table not found' });
 
-    const totalAmountINR = items.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
+    // Server-side price validation: look up actual prices from DB
+    const menuItemIds = items.map((i: any) => i.menuItemId).filter(Boolean);
+    const menuItemDocs = menuItemIds.length > 0
+      ? await MenuItem.find({ _id: { $in: menuItemIds }, restaurantId })
+      : [];
+    const priceMap = new Map(menuItemDocs.map((mi: any) => [mi._id.toString(), mi.price]));
+
+    const validatedItems = items.map((i: any) => {
+      const dbPrice = priceMap.get(i.menuItemId);
+      return {
+        ...i,
+        _id: new mongoose.Types.ObjectId(),
+        priceAtOrderTime: dbPrice !== undefined ? dbPrice : i.priceAtOrderTime, // trust DB price
+      };
+    });
+
+    const totalAmountINR = validatedItems.reduce((sum: number, item: any) => sum + (item.priceAtOrderTime * item.quantity), 0);
 
     const order = await Order.create({
       restaurantId,
@@ -87,7 +108,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
       tableNumber: table.number,
       waiterId: req.user!.userId,
       waiterName: req.user!.name || 'Waiter',
-      items: items.map((i: any) => ({ ...i, _id: new mongoose.Types.ObjectId() })),
+      items: validatedItems,
       totalAmountINR,
     });
 
@@ -155,7 +176,7 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
     const order = await Order.create({
       restaurantId,
       ...(branchId ? { branchId } : {}),
-      tableId: new mongoose.Types.ObjectId(), // placeholder – takeaway has no real table
+      // Takeaway orders have no table — use null/undefined instead of a fake ObjectId
       tableNumber: 'TAKEAWAY',
       waiterId: req.user!.userId,
       waiterName: req.user!.name || 'Staff',

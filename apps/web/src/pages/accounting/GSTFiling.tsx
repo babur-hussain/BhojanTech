@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import PageLoader from '../../components/PageLoader';
 import { api } from '../../utils/api';
+import { useBranchStore } from '../../store/branchStore';
 import { Download, RefreshCw, AlertTriangle } from 'lucide-react';
 
 export default function GSTFiling() {
+    const { selectedBranchId } = useBranchStore();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -11,12 +13,13 @@ export default function GSTFiling() {
 
     useEffect(() => {
         fetchGSTR1();
-    }, [month, year]);
+    }, [month, year, selectedBranchId]);
 
     const fetchGSTR1 = async () => {
         try {
             setLoading(true);
-            const response = await api.get(`/accounting/gstr1?month=${month}&year=${year}`);
+            const branchQs = selectedBranchId === 'all' ? '&branchId=all' : `&branchId=${selectedBranchId}`;
+            const response = await api.get(`/accounting/gstr1?month=${month}&year=${year}${branchQs}`);
             setData(response.data);
         } catch (e) {
             console.error('Failed to fetch GSTR-1');
@@ -52,10 +55,25 @@ export default function GSTFiling() {
                         ))}
                     </select>
                     <button
+                        onClick={async () => {
+                            try {
+                                const m = `${year}-${String(month).padStart(2, '0')}`;
+                                const res = await api.get(`/analytics/gst/export?month=${m}`, { responseType: 'blob' });
+                                const url = window.URL.createObjectURL(new Blob([res.data]));
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.setAttribute('download', `GSTR1-${m}.xlsx`);
+                                document.body.appendChild(link);
+                                link.click();
+                                link.remove();
+                            } catch (e) {
+                                alert('Failed to download GSTR-1 Excel');
+                            }
+                        }}
                         className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition flex items-center shadow-sm"
                     >
                         <Download className="w-4 h-4 mr-2" />
-                        Download JSON for GSTN
+                        Download Excel for GSTN
                     </button>
                 </div>
             </div>

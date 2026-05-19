@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { StaffMember, ShiftType, UserRole } from '@restaurant/types';
-import { ChevronLeft, ChevronRight, Send, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { StaffMember, ShiftType } from '@restaurant/types';
+import { ChevronLeft, ChevronRight, Send, AlertCircle, Save } from 'lucide-react';
+import { api } from '../../utils/api';
 
 const SHIFTS: ShiftType[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'];
 const SHIFT_TIMES: Record<ShiftType, string> = {
@@ -36,18 +37,51 @@ const dateKey = (d: Date) => d.toISOString().slice(0, 10);
 
 type SlotMap = Record<string, Record<ShiftType, string[]>>; // date → shift → [staffId]
 
-interface Props { staff: StaffMember[]; }
+interface Props { staff: (StaffMember & { id: string })[]; }
 
 export default function ShiftPlanner({ staff }: Props) {
   const [weekStart, setWeekStart] = useState(getMondayOf(new Date()));
   const [slots, setSlots]         = useState<SlotMap>({});
   const [published, setPublished] = useState(false);
   const [dragging, setDragging]   = useState<string | null>(null);
+  const [loading, setLoading]     = useState(true);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekStartStr = dateKey(weekStart);
 
-  const prevWeek = () => { setWeekStart(d => addDays(d, -7)); setPublished(false); };
-  const nextWeek = () => { setWeekStart(d => addDays(d, 7));  setPublished(false); };
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        setLoading(true);
+        const res = await api.get(`/staff/schedule/${weekStartStr}`);
+        const schedule = res.data;
+        
+        const newSlots: SlotMap = {};
+        if (schedule && schedule.days) {
+          schedule.days.forEach((day: any) => {
+            newSlots[day.date] = {
+              MORNING: day.MORNING || [],
+              AFTERNOON: day.AFTERNOON || [],
+              EVENING: day.EVENING || [],
+              NIGHT: day.NIGHT || []
+            };
+          });
+          setPublished(schedule.isPublished || false);
+        } else {
+          setPublished(false);
+        }
+        setSlots(newSlots);
+      } catch (e) {
+        console.error('Failed to fetch schedule:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSchedule();
+  }, [weekStartStr]);
+
+  const prevWeek = () => setWeekStart(d => addDays(d, -7));
+  const nextWeek = () => setWeekStart(d => addDays(d, 7));
 
   const toggleSlot = (date: string, shift: ShiftType, staffId: string) => {
     setSlots(prev => {
@@ -59,6 +93,33 @@ export default function ShiftPlanner({ staff }: Props) {
   };
 
   const getStaffName = (id: string) => staff.find(s => s.id === id)?.name ?? id;
+
+  const handleSave = async () => {
+    try {
+      const daysPayload = days.map(d => {
+        const k = dateKey(d);
+        const daySlots = slots[k] || { MORNING: [], AFTERNOON: [], EVENING: [], NIGHT: [] };
+        return { date: k, ...daySlots };
+      });
+      await api.put(`/staff/schedule/${weekStartStr}`, { days: daysPayload });
+      alert('Schedule saved successfully');
+    } catch (e) {
+      console.error('Failed to save schedule:', e);
+      alert('Failed to save schedule');
+    }
+  };
+
+  const handlePublish = async () => {
+    try {
+      await handleSave(); // Ensure saved before publishing
+      await api.post(`/staff/schedule/${weekStartStr}/publish`);
+      setPublished(true);
+      alert('Schedule published successfully!');
+    } catch (e) {
+      console.error('Failed to publish schedule:', e);
+      alert('Failed to publish schedule');
+    }
+  };
 
   // Check for days with no staff assigned
   const unassignedDays = days.filter(d => {
@@ -81,7 +142,7 @@ export default function ShiftPlanner({ staff }: Props) {
         <button onClick={nextWeek} className="p-2 rounded-lg border hover:bg-gray-50"><ChevronRight size={18}/></button>
       </div>
 
-      {unassignedDays.length > 0 && (
+      {unassignedDays.length > 0 && !loading && (
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-amber-700 text-sm">
           <AlertCircle size={16}/> {unassignedDays.length} day(s) have no staff assigned yet.
         </div>
@@ -93,7 +154,7 @@ export default function ShiftPlanner({ staff }: Props) {
         <div className="flex flex-wrap gap-2">
           {staff.map(s => (
             <div key={s.id}
-              className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 text-xs font-medium cursor-pointer hover:border-maroon hover:text-maroon select-none"
+              className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 text-xs font-medium cursor-pointer hover:border-maroon hover:text-maroon select-none shadow-sm"
               onMouseDown={() => setDragging(s.id)}
               onMouseUp={() => setDragging(null)}
             >
@@ -105,8 +166,8 @@ export default function ShiftPlanner({ staff }: Props) {
         </div>
       </div>
 
-      {/* Planner Grid — horizontal scroll on small screens */}
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      {/* Planner Grid */}
+      <div className={`overflow-x-auto rounded-xl border border-gray-200 transition-opacity ${loading ? 'opacity-50' : ''}`}>
         <table className="w-full min-w-[700px] border-collapse bg-white text-sm">
           <thead>
             <tr>
@@ -138,7 +199,7 @@ export default function ShiftPlanner({ staff }: Props) {
                         {assigned.map(id => (
                           <span key={id}
                             onClick={e => { e.stopPropagation(); toggleSlot(key, shift, id); }}
-                            className="bg-white border border-gray-300 rounded px-1.5 py-0.5 text-xs cursor-pointer hover:bg-red-50 hover:border-red-300">
+                            className="bg-white border border-gray-300 shadow-sm rounded px-1.5 py-0.5 text-xs cursor-pointer hover:bg-red-50 hover:border-red-300">
                             {getStaffName(id).split(' ')[0]} ✕
                           </span>
                         ))}
@@ -156,9 +217,11 @@ export default function ShiftPlanner({ staff }: Props) {
       </div>
 
       <div className="flex justify-end gap-3">
-        <button className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">Save Draft</button>
+        <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">
+          <Save size={15}/> Save Draft
+        </button>
         <button
-          onClick={() => setPublished(true)}
+          onClick={handlePublish}
           className="flex items-center gap-2 px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700"
         >
           <Send size={15}/> Publish Schedule

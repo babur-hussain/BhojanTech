@@ -24,7 +24,8 @@ export const getStaff = async (req: AuthRequest, res: Response) => {
 export const createStaff = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
-    const member = await StaffMember.create({ ...req.body, restaurantId: req.user!.restaurantId, branchId });
+    const { name, phone, role, designation, salary, shift, joiningDate, email, address, emergencyContact, bankDetails } = req.body;
+    const member = await StaffMember.create({ name, phone, role, designation, salary, shift, joiningDate, email, address, emergencyContact, bankDetails, restaurantId: req.user!.restaurantId, branchId });
     // Real: send Firebase invite via firebase-admin.auth().createUser({ phoneNumber: req.body.phone })
     // then sendInviteSMS(req.body.phone, inviteLink)
     return res.status(201).json(member);
@@ -35,9 +36,27 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
+    // Whitelist updatable fields — never allow restaurantId/branchId/_id overwrite
+    const { name, phone, role, designation, salary, shift, joiningDate, email, address, emergencyContact, bankDetails, salaryType, salaryAmount, isActive } = req.body;
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (role !== undefined) updateData.role = role;
+    if (designation !== undefined) updateData.designation = designation;
+    if (salary !== undefined) updateData.salary = salary;
+    if (salaryType !== undefined) updateData.salaryType = salaryType;
+    if (salaryAmount !== undefined) updateData.salaryAmount = salaryAmount;
+    if (shift !== undefined) updateData.shift = shift;
+    if (joiningDate !== undefined) updateData.joiningDate = joiningDate;
+    if (email !== undefined) updateData.email = email;
+    if (address !== undefined) updateData.address = address;
+    if (emergencyContact !== undefined) updateData.emergencyContact = emergencyContact;
+    if (bankDetails !== undefined) updateData.bankDetails = bankDetails;
+    if (isActive !== undefined) updateData.isActive = isActive;
+
     const member = await StaffMember.findOneAndUpdate(
       query,
-      req.body, { new: true }
+      { $set: updateData }, { new: true }
     );
     if (!member) return res.status(404).json({ error: 'Not found' });
     return res.json(member);

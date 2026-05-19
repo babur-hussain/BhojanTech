@@ -29,8 +29,13 @@ export const createExpense = async (req: AuthRequest, res: Response) => {
         const branchId = getCreateBranchId(req);
         if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
 
+        const { category, amount, date, isGstEligible, description } = req.body;
         const expense = new ExpenseModel({
-            ...req.body,
+            category,
+            amount: Number(amount),
+            date: date ? new Date(date) : new Date(),
+            isGstEligible: !!isGstEligible,
+            description,
             restaurantId: req.user!.restaurantId,
             branchId,
             recordedBy: req.user!.userId

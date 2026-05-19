@@ -381,8 +381,8 @@ export default function AnalyticsDashboard() {
           {kpi.recentOrders.map((order: any, i: number) => (
             <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-cream rounded-lg flex items-center justify-center text-maroon font-bold text-sm">
-                  {order.tableNumber}
+                <div className="min-w-[2rem] px-2 h-8 bg-cream rounded-lg flex items-center justify-center text-maroon font-bold text-sm">
+                  {order.tableNumber || 'TK'}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-800">{order.invoiceNumber}</p>

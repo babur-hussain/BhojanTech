@@ -6,6 +6,8 @@ import { normalizeZomatoOrder, normalizeSwiggyOrder, normalizeOndcOrder } from '
 import { io } from '../index';
 import { AuthRequest } from '../middleware/auth.middleware';
 import mongoose from 'mongoose';
+import { getBaseQuery } from '../utils/queryHelpers';
+import { menuSyncQueue } from '../workers/menuSync.worker';
 
 export const handleZomatoWebhook = async (req: Request, res: Response): Promise<any> => {
     try {
@@ -26,11 +28,14 @@ export const handleZomatoWebhook = async (req: Request, res: Response): Promise<
             return res.status(404).json({ error: 'Zomato integration disabled or not found for this branch' });
         }
 
-        // Verify HMAC signature
-        if (integration.webhookSecret && signature) {
+        // Verify HMAC signature (required if secret is set)
+        if (integration.webhookSecret) {
+            if (!signature) {
+                return res.status(401).json({ error: 'Missing HMAC signature' });
+            }
             const hmac = crypto.createHmac('sha256', integration.webhookSecret);
             const computedHash = hmac.update(JSON.stringify(req.body)).digest('hex');
-            if (computedHash !== signature) {
+            if (!crypto.timingSafeEqual(Buffer.from(computedHash, 'utf8'), Buffer.from(signature, 'utf8'))) {
                 return res.status(401).json({ error: 'Invalid HMAC signature' });
             }
         }
@@ -103,11 +108,14 @@ export const handleSwiggyWebhook = async (req: Request, res: Response): Promise<
             return res.status(404).json({ error: 'Swiggy integration disabled or not found for this branch' });
         }
 
-        // Verify HMAC signature
-        if (integration.webhookSecret && signature) {
+        // Verify HMAC signature (required if secret is set)
+        if (integration.webhookSecret) {
+            if (!signature) {
+                return res.status(401).json({ error: 'Missing HMAC signature' });
+            }
             const hmac = crypto.createHmac('sha256', integration.webhookSecret);
             const computedHash = hmac.update(JSON.stringify(req.body)).digest('hex');
-            if (computedHash !== signature) {
+            if (!crypto.timingSafeEqual(Buffer.from(computedHash, 'utf8'), Buffer.from(signature, 'utf8'))) {
                 return res.status(401).json({ error: 'Invalid HMAC signature' });
             }
         }
@@ -235,17 +243,58 @@ export const handleOndcWebhook = async (req: Request, res: Response): Promise<an
 
 export const getIntegrations = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
-        const integrations = await Integration.find({ restaurantId: req.user!.restaurantId });
+        const query = getBaseQuery(req);
+        if (req.query.branchId && req.query.branchId !== 'all') {
+            query.branchId = req.query.branchId;
+        } else if (req.query.branchId === 'all') {
+            delete query.branchId;
+        }
+
+        const integrations = await Integration.find(query).select('-webhookSecret -apiSecret');
         return res.json(integrations);
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
     }
 };
 
+export const syncMenu = async (req: AuthRequest, res: Response): Promise<any> => {
+    try {
+        const integration = await Integration.findOne({ 
+            _id: req.params.id, 
+            restaurantId: req.user!.restaurantId 
+        });
+        
+        if (!integration) {
+            return res.status(404).json({ error: 'Integration not found' });
+        }
+
+        // Add a job to BullMQ
+        await menuSyncQueue.add('sync-menu', {
+            integrationId: integration._id,
+            restaurantId: integration.restaurantId,
+            branchId: integration.branchId,
+            platform: integration.platform
+        });
+
+        return res.json({ message: 'Menu sync queued' });
+    } catch (error) {
+        console.error('Menu sync error:', error);
+        return res.status(500).json({ error: 'Server error' });
+    }
+};
+
 export const createIntegration = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
+        const { platform, branchId, apiKey, apiSecret, webhookSecret, storeId, isActive } = req.body;
         const integration = await Integration.create({
-            ...req.body,
+            platform,
+            branchId,
+            apiKey,
+            apiSecret,
+            webhookSecret,
+            storeId,
+            isActive: isActive ?? true,
+            status: 'ACTIVE',
             restaurantId: req.user!.restaurantId,
         });
         return res.status(201).json(integration);
@@ -256,9 +305,17 @@ export const createIntegration = async (req: AuthRequest, res: Response): Promis
 
 export const updateIntegration = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
+        const { apiKey, apiSecret, webhookSecret, storeId, isActive } = req.body;
+        const updateData: any = {};
+        if (apiKey !== undefined) updateData.apiKey = apiKey;
+        if (apiSecret !== undefined) updateData.apiSecret = apiSecret;
+        if (webhookSecret !== undefined) updateData.webhookSecret = webhookSecret;
+        if (storeId !== undefined) updateData.storeId = storeId;
+        if (isActive !== undefined) updateData.isActive = isActive;
+
         const integration = await Integration.findOneAndUpdate(
             { _id: req.params.id, restaurantId: req.user!.restaurantId },
-            req.body,
+            updateData,
             { new: true }
         );
         if (!integration) return res.status(404).json({ error: 'Not found' });

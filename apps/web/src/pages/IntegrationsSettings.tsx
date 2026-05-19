@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useBranchStore } from '../store/branchStore';
+import { api } from '../utils/api';
+import { RefreshCw, Play, Pause, Save } from 'lucide-react';
 
 interface IntegrationSetting {
     _id?: string;
@@ -12,32 +15,29 @@ interface IntegrationSetting {
 }
 
 export default function IntegrationsSettings() {
-    const { accessToken, user } = useAuth();
+    const { user } = useAuth();
+    const { selectedBranchId } = useBranchStore();
     const [integrations, setIntegrations] = useState<IntegrationSetting[]>([]);
     const [loading, setLoading] = useState(true);
+    const [syncingMenu, setSyncingMenu] = useState<string | null>(null);
 
     // Form states
     const [newPlatform, setNewPlatform] = useState<'ZOMATO' | 'SWIGGY' | 'ONDC'>('ZOMATO');
     const [newId, setNewId] = useState('');
     const [newSecret, setNewSecret] = useState('');
 
-    const VITE_BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
-
     useEffect(() => {
-        if (user?.restaurantId && accessToken) {
+        if (user?.restaurantId) {
             fetchIntegrations();
         }
-    }, [user, accessToken]);
+    }, [user, selectedBranchId]);
 
     const fetchIntegrations = async () => {
         try {
-            const res = await fetch(`${VITE_BACKEND_URL}/api/integrations`, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setIntegrations(data);
-            }
+            setLoading(true);
+            const qs = selectedBranchId === 'all' ? '?branchId=all' : `?branchId=${selectedBranchId}`;
+            const res = await api.get(`/integrations${qs}`);
+            setIntegrations(res.data);
         } catch (err) {
             console.error(err);
         } finally {
@@ -47,54 +47,55 @@ export default function IntegrationsSettings() {
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!accessToken) return;
+        if (selectedBranchId === 'all') {
+            alert('Please select a specific branch to connect a platform.');
+            return;
+        }
+
         try {
-            const res = await fetch(`${VITE_BACKEND_URL}/api/integrations`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({
-                    branchId: user?.branchId || user?.accessibleBranches?.[0], // Simplification for demo
-                    platform: newPlatform,
-                    restaurantIdOnPlatform: newId,
-                    webhookSecret: newSecret,
-                    autoAccept: true,
-                    prepTimeMinutes: 30
-                })
+            await api.post(`/integrations`, {
+                branchId: selectedBranchId,
+                platform: newPlatform,
+                restaurantIdOnPlatform: newId,
+                webhookSecret: newSecret,
+                autoAccept: true,
+                prepTimeMinutes: 30
             });
-            if (res.ok) {
-                fetchIntegrations();
-                setNewId('');
-                setNewSecret('');
-            } else {
-                alert('Failed to configure integration');
-            }
+            fetchIntegrations();
+            setNewId('');
+            setNewSecret('');
+            alert(`Successfully connected ${newPlatform}`);
         } catch (err) {
             console.error(err);
+            alert('Failed to configure integration');
         }
     };
 
     const togglePause = async (id: string, currentStatus: string) => {
-        if (!accessToken) return;
         const nextStatus = currentStatus === 'PAUSED' ? 'ACTIVE' : 'PAUSED';
         try {
-            await fetch(`${VITE_BACKEND_URL}/api/integrations/${id}/pause`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`
-                },
-                body: JSON.stringify({ status: nextStatus })
-            });
+            await api.post(`/integrations/${id}/pause`, { status: nextStatus });
             fetchIntegrations();
         } catch (err) {
             console.error(err);
+            alert('Failed to toggle status');
         }
     }
 
-    if (loading) return <div className="p-8">Loading settings...</div>;
+    const syncMenu = async (id: string) => {
+        try {
+            setSyncingMenu(id);
+            await api.post(`/integrations/${id}/sync-menu`);
+            alert('Menu synchronization queued successfully! This happens in the background.');
+        } catch (e) {
+            console.error(e);
+            alert('Failed to sync menu');
+        } finally {
+            setSyncingMenu(null);
+        }
+    };
+
+    if (loading && integrations.length === 0) return <div className="p-8 flex justify-center text-gray-500">Loading settings...</div>;
 
     return (
         <div className="p-8 max-w-5xl mx-auto h-full overflow-y-auto">
@@ -102,16 +103,24 @@ export default function IntegrationsSettings() {
                 Third-Party Integrations
             </h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {selectedBranchId === 'all' && (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg">
+                    <strong>Note:</strong> You are viewing integrations across all branches. To connect a new platform, please select a specific branch from the top menu.
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div>
-                    <h2 className="text-xl font-bold mb-4">Connect New Platform</h2>
-                    <form onSubmit={handleSave} className="bg-white p-6 rounded-lg shadow border space-y-4">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                        <Save size={20} className="text-maroon"/> Connect New Platform
+                    </h2>
+                    <form onSubmit={handleSave} className={`bg-white p-6 rounded-xl shadow-sm border space-y-4 ${selectedBranchId === 'all' ? 'opacity-50 pointer-events-none' : ''}`}>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Platform</label>
+                            <label className="block text-sm font-semibold mb-1 text-gray-700">Platform</label>
                             <select
                                 value={newPlatform}
                                 onChange={e => setNewPlatform(e.target.value as any)}
-                                className="w-full p-2 border rounded"
+                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron"
                             >
                                 <option value="ZOMATO">Zomato</option>
                                 <option value="SWIGGY">Swiggy</option>
@@ -119,23 +128,23 @@ export default function IntegrationsSettings() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Restaurant ID on Platform</label>
+                            <label className="block text-sm font-semibold mb-1 text-gray-700">Restaurant ID on Platform</label>
                             <input
                                 type="text" required
                                 value={newId} onChange={e => setNewId(e.target.value)}
-                                className="w-full p-2 border rounded" placeholder="E.g., 123456"
+                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" placeholder="E.g., 123456"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Webhook Secret / API Key</label>
+                            <label className="block text-sm font-semibold mb-1 text-gray-700">Webhook Secret / API Key</label>
                             <input
                                 type="password" required
                                 value={newSecret} onChange={e => setNewSecret(e.target.value)}
-                                className="w-full p-2 border rounded" placeholder="Token for verification"
+                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" placeholder="Token for verification"
                             />
                         </div>
-                        <button type="submit" className="w-full bg-maroon text-white font-bold py-2 rounded uppercase tracking-wider hover:bg-red-900">
-                            Connect
+                        <button type="submit" disabled={selectedBranchId === 'all'} className="w-full bg-maroon text-white font-bold py-3 rounded-lg hover:bg-opacity-90 transition mt-2">
+                            CONNECT PLATFORM
                         </button>
                     </form>
                 </div>
@@ -143,21 +152,38 @@ export default function IntegrationsSettings() {
                 <div>
                     <h2 className="text-xl font-bold mb-4">Connected Platforms</h2>
                     {integrations.length === 0 ? (
-                        <p className="text-gray-500 italic bg-gray-50 p-4 border rounded">No integrations configured yet.</p>
+                        <p className="text-gray-500 italic bg-white p-8 text-center border rounded-xl shadow-sm">No integrations configured for this view.</p>
                     ) : (
                         <div className="space-y-4">
                             {integrations.map(intg => (
-                                <div key={intg._id} className="bg-white p-5 rounded-lg shadow border">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h3 className="font-bold text-lg tracking-wider">{intg.platform}</h3>
-                                        <span className={`text-xs px-2 py-1 font-bold rounded ${intg.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                <div key={intg._id} className="bg-white p-5 rounded-xl shadow-sm border transition hover:shadow-md">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white
+                                                ${intg.platform === 'ZOMATO' ? 'bg-red-600' : intg.platform === 'SWIGGY' ? 'bg-orange-500' : 'bg-blue-600'}`}>
+                                                {intg.platform[0]}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-lg">{intg.platform}</h3>
+                                                <p className="text-xs text-gray-500 font-mono">Store: {intg.restaurantIdOnPlatform}</p>
+                                            </div>
+                                        </div>
+                                        <span className={`text-xs px-2.5 py-1 font-bold rounded-full border ${intg.status === 'ACTIVE' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                             {intg.status}
                                         </span>
                                     </div>
-                                    <p className="text-sm text-gray-600 mb-4">Store ID: {intg.restaurantIdOnPlatform}</p>
-                                    <div className="flex items-center justify-between border-t pt-4">
-                                        <button onClick={() => togglePause(intg._id!, intg.status)} className="text-sm font-semibold border px-3 py-1.5 rounded hover:bg-gray-50 transition">
-                                            {intg.status === 'PAUSED' ? '▶ Resume Orders' : '⏸ Pause Orders'}
+                                    
+                                    <div className="flex items-center gap-3 border-t pt-4 mt-2">
+                                        <button onClick={() => togglePause(intg._id!, intg.status)} className="flex items-center gap-1.5 text-sm font-semibold border px-3 py-1.5 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                                            {intg.status === 'PAUSED' ? <Play size={14}/> : <Pause size={14}/>}
+                                            {intg.status === 'PAUSED' ? 'Resume' : 'Pause'}
+                                        </button>
+                                        <button 
+                                            onClick={() => syncMenu(intg._id!)} 
+                                            disabled={syncingMenu === intg._id}
+                                            className="flex items-center gap-1.5 text-sm font-semibold border border-maroon text-maroon px-3 py-1.5 rounded-lg hover:bg-maroon hover:text-white transition disabled:opacity-50">
+                                            <RefreshCw size={14} className={syncingMenu === intg._id ? 'animate-spin' : ''} />
+                                            {syncingMenu === intg._id ? 'Syncing...' : 'Sync Menu'}
                                         </button>
                                     </div>
                                 </div>
@@ -165,11 +191,6 @@ export default function IntegrationsSettings() {
                         </div>
                     )}
                 </div>
-            </div>
-            {/* Dummy UI for Menu Synchronisation Status  */}
-            <div className="mt-12 opacity-50 pointer-events-none">
-                <h2 className="text-xl font-bold mb-4">Menu Synchronization (Coming Soon)</h2>
-                <p>Sync all items from your menu to aggregators using BullMQ.</p>
             </div>
         </div>
     );

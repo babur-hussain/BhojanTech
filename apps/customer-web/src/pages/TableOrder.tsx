@@ -80,7 +80,7 @@ export const TableOrder = () => {
             const scriptLoaded = await loadRazorpay();
             if (!scriptLoaded) throw new Error('Razorpay load failed');
             const options = {
-                key: 'rzp_test_stub',
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID || '',
                 amount: res.amount,
                 currency: 'INR',
                 name: 'Restaurant',

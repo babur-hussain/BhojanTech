@@ -112,7 +112,7 @@ export const Login = () => {
         uid: firebaseUser.uid,
         phoneNumber: firebaseUser.phoneNumber || `+91${phone}`,
         token: data.token,
-        displayName: data.name,
+        displayName: data.name || firebaseUser.displayName || `+91${phone}`,
       });
 
       // Sign out of Firebase (we use our own JWT now)

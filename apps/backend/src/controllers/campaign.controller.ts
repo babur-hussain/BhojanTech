@@ -6,6 +6,7 @@ import { CampaignRecipient } from '../models/CampaignRecipient';
 import { Customer } from '../models/Customer';
 import { getOrInitSettings } from '../services/loyaltyService';
 import { sendBulkSMS } from '../services/smsService';
+import { sendCampaignWA } from '../services/whatsappService';
 import { LoyaltyTransaction } from '../models/LoyaltyTransaction';
 
 // ─── List campaigns ───────────────────────────────────────────────────────────
@@ -81,7 +82,7 @@ export const sendCampaign = async (req: AuthRequest, res: Response) => {
 
         const settings = await getOrInitSettings(restaurantId);
 
-        const filter: any = { restaurantId, smsOptIn: true };
+        const filter: any = { restaurantId, $or: [{ smsOptIn: true }, { whatsappOptIn: true }] };
         if (campaign.targetSegment !== 'ALL') filter.segment = campaign.targetSegment;
 
         const customers = await Customer.find(filter).select('_id phone name loyaltyPoints');
@@ -115,24 +116,47 @@ export const sendCampaign = async (req: AuthRequest, res: Response) => {
             );
         }
 
-        // Apply POINTS_BONUS offers immediately
+        // Send WhatsApp via LoomiFlow (non-blocking, fire-and-forget)
+        const restaurant = await mongoose.model('Restaurant').findById(restaurantId).select('name').lean();
+        const restaurantName = (restaurant as any)?.name || 'Your Restaurant';
+        const waCustomers = customers.filter((c: any) => c.whatsappOptIn !== false);
+        const waPromises = waCustomers.map(c =>
+            sendCampaignWA(c.phone, restaurantName, campaign.message, 'limited time')
+                .catch(err => console.error(`[Campaign WA] Failed for ${c.phone}: ${err.message}`))
+        );
+        // Run in batches of 10 to respect rate limits
+        for (let i = 0; i < waPromises.length; i += 10) {
+            await Promise.allSettled(waPromises.slice(i, i + 10));
+        }
+
+        // Apply POINTS_BONUS offers in a transaction to prevent race conditions
         if (campaign.offerType === 'POINTS_BONUS' && campaign.offerValue > 0) {
-            for (const customer of customers) {
-                const balanceBefore = customer.loyaltyPoints;
-                const balanceAfter = balanceBefore + campaign.offerValue;
-                await Customer.findByIdAndUpdate(customer._id, { loyaltyPoints: balanceAfter });
-                await LoyaltyTransaction.create({
-                    customerId: customer._id,
-                    restaurantId,
-                    type: 'BONUS',
-                    points: campaign.offerValue,
-                    balanceBefore,
-                    balanceAfter,
-                    description: `Campaign bonus: ${campaign.name}`,
+            const session = await mongoose.startSession();
+            try {
+                await session.withTransaction(async () => {
+                    for (const customer of customers) {
+                        const freshCustomer = await Customer.findById(customer._id).session(session);
+                        if (!freshCustomer) continue;
+                        const balanceBefore = freshCustomer.loyaltyPoints;
+                        const balanceAfter = balanceBefore + campaign.offerValue;
+                        await Customer.findByIdAndUpdate(customer._id, { loyaltyPoints: balanceAfter }, { session });
+                        await LoyaltyTransaction.create([{
+                            customerId: customer._id,
+                            restaurantId,
+                            type: 'BONUS',
+                            points: campaign.offerValue,
+                            balanceBefore,
+                            balanceAfter,
+                            description: `Campaign bonus: ${campaign.name}`,
+                        }], { session });
+                    }
                 });
+            } finally {
+                await session.endSession();
             }
         }
 
+        // Mark campaign as SENT only after all operations complete successfully
         campaign.status = 'SENT';
         campaign.sentAt = new Date();
         campaign.totalRecipients = customers.length;
