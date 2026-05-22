@@ -25,7 +25,15 @@ const server = http.createServer(app);
 export const io = new Server(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production'
-      ? ['https://bhojantech.com', 'https://pos.bhojantech.com', 'http://localhost:3000', 'http://localhost:5173']
+      ? [
+          'https://bhojantech.com',
+          'https://pos.bhojantech.com',
+          'http://localhost:3000',
+          'http://localhost:5173',
+          'https://bhojan-tech-web.vercel.app',
+          'https://restaurantos.lfvs.in',
+          'http://restaurantos.lfvs.in'
+        ]
       : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
     credentials: true,
@@ -48,7 +56,15 @@ app.use(helmet({
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
-  ? ['https://bhojantech.com', 'https://pos.bhojantech.com', 'http://localhost:3000', 'http://localhost:5173']
+  ? [
+      'https://bhojantech.com',
+      'https://pos.bhojantech.com',
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://bhojan-tech-web.vercel.app',
+      'https://restaurantos.lfvs.in',
+      'http://restaurantos.lfvs.in'
+    ]
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
 app.use(cors({
   origin: ALLOWED_ORIGINS,
