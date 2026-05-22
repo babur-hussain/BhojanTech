@@ -66,14 +66,14 @@ export const Login = () => {
     try {
       setupRecaptcha();
       const phoneWithCode = `+91${phone}`;
-      
+
       const result = await signInWithPhoneNumber(auth, phoneWithCode, window.recaptchaVerifier!);
       setConfirmationResult(result);
       setStep('OTP');
       setResendTimer(30);
     } catch (err: any) {
       console.error('OTP send error:', err);
-      
+
       if (err.code === 'auth/invalid-phone-number') {
         setError('Invalid phone number. Please check and try again.');
       } else if (err.code === 'auth/too-many-requests') {
@@ -91,7 +91,7 @@ export const Login = () => {
       } else {
         setError('Failed to send OTP. Please try again.');
       }
-      
+
       // Reset recaptcha on error
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
@@ -171,11 +171,10 @@ export const Login = () => {
         {/* Header */}
         <div className="text-center space-y-3">
           <div
-            className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-lg mb-2 transition-all duration-500 ${
-              step === 'PHONE'
+            className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl shadow-lg mb-2 transition-all duration-500 ${step === 'PHONE'
                 ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white'
                 : 'bg-gradient-to-br from-green-500 to-emerald-600 text-white'
-            }`}
+              }`}
           >
             {step === 'PHONE' ? <Smartphone size={36} /> : <ShieldCheck size={36} />}
           </div>

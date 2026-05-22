@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,39 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Stable refs — survive re-renders, never touch React-owned DOM
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+  const recaptchaWidgetIdRef = useRef<number | null>(null);
+
+  /**
+   * Lazily create the RecaptchaVerifier on first use, then reuse it.
+   * On subsequent calls, reset the existing widget for a fresh token
+   * via grecaptcha.reset() — no DOM manipulation needed.
+   */
+  const getVerifier = async (): Promise<RecaptchaVerifier> => {
+    // If we already have a verifier, just reset the widget for a fresh token
+    if (recaptchaVerifierRef.current) {
+      try {
+        const g = (window as any).grecaptcha;
+        if (g && recaptchaWidgetIdRef.current != null) {
+          g.reset(recaptchaWidgetIdRef.current);
+        }
+      } catch {
+        // reset failed — will still try to use verifier as-is
+      }
+      return recaptchaVerifierRef.current;
+    }
+
+    // First time: create and render the verifier
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+    });
+    const widgetId = await verifier.render();
+    recaptchaVerifierRef.current = verifier;
+    recaptchaWidgetIdRef.current = widgetId;
+    return verifier;
+  };
+
   const handleGoogleSignIn = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -27,52 +60,46 @@ export default function Login() {
     }
   };
 
-  const setupRecaptcha = () => {
-    try {
-      if (!(window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible'
-        });
-      }
-    } catch (e) {
-      // If it throws "already rendered", we can ignore or clear
-      console.log("Recaptcha already initialized");
-    }
-  };
-
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    
+
     try {
-      setupRecaptcha();
+      const verifier = await getVerifier();
       const formattedPhone = phone.startsWith('+91') ? phone : `+91${phone}`;
-      
-      const result = await signInWithPhoneNumber(auth, formattedPhone, (window as any).recaptchaVerifier);
+      const result = await signInWithPhoneNumber(auth, formattedPhone, verifier);
       setConfirmationResult(result);
     } catch (error: any) {
       console.error('Send OTP error', error);
-      
-      // Filter out scary internal Firebase messages and show user-friendly ones
-      if (error.code === 'auth/invalid-phone-number') {
-        setError('Invalid phone number format.');
-      } else if (error.message && error.message.includes('reCAPTCHA has already been rendered')) {
-        // This is a known React StrictMode bug. If it happens, we forcefully clear and retry.
-        if ((window as any).recaptchaVerifier) {
-          (window as any).recaptchaVerifier.clear();
-          (window as any).recaptchaVerifier = null;
-        }
-        document.getElementById('recaptcha-container')!.innerHTML = '';
-        setError('Please click Send OTP again.');
-      } else {
-        setError(error.message || 'Failed to send OTP. Please try again.');
-      }
-      
-      // Cleanup recaptcha so it doesn't get stuck
-      if ((window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier.clear();
-        (window as any).recaptchaVerifier = null;
+
+      // Map Firebase error codes to user-friendly messages
+      const errorCode = error.code || '';
+      switch (errorCode) {
+        case 'auth/invalid-phone-number':
+          setError('Invalid phone number. Please check and try again.');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many attempts. Please wait a few minutes before trying again.');
+          break;
+        case 'auth/invalid-app-credential':
+          setError('Authentication configuration error. Please contact support.');
+          break;
+        case 'auth/captcha-check-failed':
+          setError('reCAPTCHA verification failed. Please try again.');
+          break;
+        case 'auth/quota-exceeded':
+          setError('SMS quota exceeded. Please try again later.');
+          break;
+        case 'auth/missing-phone-number':
+          setError('Please enter a valid phone number.');
+          break;
+        case 'auth/operation-not-allowed':
+          setError('Phone authentication is not enabled. Please contact support.');
+          break;
+        default:
+          setError('Failed to send OTP. Please try again.');
+          break;
       }
     } finally {
       setLoading(false);
@@ -96,7 +123,16 @@ export default function Login() {
       navigate('/');
     } catch (error: any) {
       console.error('Verify OTP error', error);
-      setError(error.message || 'Invalid OTP. Please try again.');
+      const errorCode = error.code || '';
+      if (errorCode === 'auth/invalid-verification-code') {
+        setError('Invalid OTP. Please check and try again.');
+      } else if (errorCode === 'auth/code-expired') {
+        setError('OTP has expired. Please request a new one.');
+        setConfirmationResult(null);
+        setOtp('');
+      } else {
+        setError('Verification failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -118,13 +154,14 @@ export default function Login() {
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border-t-4 border-saffron">
-          
+
           {error && (
             <div className="mb-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
               {error}
             </div>
           )}
 
+          {/* reCAPTCHA invisible widget mounts here — never manipulate this div directly */}
           <div id="recaptcha-container"></div>
 
           {!confirmationResult ? (
