@@ -20,4 +20,4 @@ const AIInsightSchema: Schema = new Schema({
     isRead: { type: Boolean, default: false }
 });
 
-export default mongoose.model<IAIInsight>('AIInsight', AIInsightSchema);
+export default mongoose.models.AIInsight || mongoose.model<IAIInsight>('AIInsight', AIInsightSchema);

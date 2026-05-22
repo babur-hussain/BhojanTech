@@ -85,17 +85,21 @@ DOCKERFILE
   sudo docker rm backend-server || true
 
   # 6. Run the new container
+  echo "🔧 Ensuring Redis is running..."
+  if ! sudo docker ps | grep -q redis-server; then
+    sudo docker run -d --name redis-server --restart unless-stopped -p 6379:6379 redis:alpine
+  fi
+
   echo "🌟 Starting the new backend container..."
   # We run passing the apps/backend/.env file so credentials securely go into docker
   sudo docker run -d \
     --name backend-server \
     --restart unless-stopped \
-    -p 80:8080 \
     -p 8080:8080 \
     --env-file apps/backend/.env \
     restaurant-backend
 
   echo "==========================================================="
-  echo "✅ Deployment Successful! Backend running on Port 80 & 8080"
+  echo "✅ Deployment Successful! Backend running on Port 8080"
   echo "==========================================================="
 EOF

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get base URL for backend API. In production, this might be relative if proxy is used
-const API_URL = import.meta.env.VITE_API_URL || '';
+const API_URL = import.meta.env.VITE_API_URL || 'https://server.bhojantech.lfvs.in/api';
 
 export const api = axios.create({
     baseURL: API_URL,

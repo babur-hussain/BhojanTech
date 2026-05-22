@@ -13,7 +13,7 @@ export default function InsightsWidget() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8080/api/ai/insights')
+        fetch('https://server.bhojantech.lfvs.in/api/ai/insights')
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {

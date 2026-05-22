@@ -33,7 +33,7 @@ export default function FloatingChatWidget() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = () => {
-        fetch(`http://localhost:8080/api/ai/chat/sessions?restaurantId=${DUMMY_RESTAURANT_ID}`)
+        fetch(`https://server.bhojantech.lfvs.in/api/ai/chat/sessions?restaurantId=${DUMMY_RESTAURANT_ID}`)
             .then(r => r.json())
             .then(data => {
                 if (Array.isArray(data)) setSessions(data);
@@ -49,7 +49,7 @@ export default function FloatingChatWidget() {
         setSessionId(sid);
         setShowSidebar(false);
         try {
-            const res = await fetch(`http://localhost:8080/api/ai/chat/sessions/${sid}`);
+            const res = await fetch(`https://server.bhojantech.lfvs.in/api/ai/chat/sessions/${sid}`);
             const data = await res.json();
             if (Array.isArray(data)) {
                 setMessages(data.map((m: any, i: number) => ({
@@ -122,7 +122,7 @@ export default function FloatingChatWidget() {
         setMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '' }]);
 
         try {
-            const response = await fetch('http://localhost:8080/api/ai/chat', {
+            const response = await fetch('https://server.bhojantech.lfvs.in/api/ai/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

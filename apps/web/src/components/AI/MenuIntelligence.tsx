@@ -16,7 +16,7 @@ export default function MenuIntelligenceModal({ onClose, restaurantId }: MenuInt
     const generateSuggestions = async () => {
         setLoading(true);
         try {
-            const res = await fetch('http://localhost:8080/api/ai/menu-suggestions', {
+            const res = await fetch('https://server.bhojantech.lfvs.in/api/ai/menu-suggestions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ restaurantId, competitorContext })

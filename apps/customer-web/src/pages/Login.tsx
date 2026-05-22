@@ -10,6 +10,7 @@ import { auth } from '../config/firebase';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { Smartphone, ShieldCheck, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
+import { OTPInput } from '../components/OTPInput';
 
 declare global {
   interface Window {
@@ -42,19 +43,16 @@ export const Login = () => {
     return () => clearTimeout(t);
   }, [resendTimer]);
 
-  // Setup invisible reCAPTCHA
   const setupRecaptcha = () => {
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
+    try {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          size: 'invisible'
+        });
+      }
+    } catch (e) {
+      console.log("Recaptcha already initialized");
     }
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      size: 'invisible',
-      callback: () => {},
-      'expired-callback': () => {
-        setError('reCAPTCHA expired. Please try again.');
-        setLoading(false);
-      },
-    });
   };
 
   const handleSendOtp = async () => {
@@ -68,19 +66,32 @@ export const Login = () => {
     try {
       setupRecaptcha();
       const phoneWithCode = `+91${phone}`;
+      
       const result = await signInWithPhoneNumber(auth, phoneWithCode, window.recaptchaVerifier!);
       setConfirmationResult(result);
       setStep('OTP');
       setResendTimer(30);
     } catch (err: any) {
       console.error('OTP send error:', err);
+      
       if (err.code === 'auth/invalid-phone-number') {
         setError('Invalid phone number. Please check and try again.');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many requests. Please wait a while before trying again.');
+      } else if (err.message && err.message.includes('reCAPTCHA has already been rendered')) {
+        // React StrictMode bug fix
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = undefined;
+        }
+        if (document.getElementById('recaptcha-container')) {
+          document.getElementById('recaptcha-container')!.innerHTML = '';
+        }
+        setError('Please click Get OTP again.');
       } else {
         setError('Failed to send OTP. Please try again.');
       }
+      
       // Reset recaptcha on error
       if (window.recaptchaVerifier) {
         window.recaptchaVerifier.clear();
@@ -145,8 +156,8 @@ export const Login = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6">
-      {/* Invisible reCAPTCHA container */}
-      <div id="recaptcha-container" ref={recaptchaContainerRef} />
+      {/* Invisible reCAPTCHA container - Rendered persistently to avoid DOM wipeouts */}
+      <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
 
       {/* Back Button */}
       <button
@@ -241,32 +252,12 @@ export const Login = () => {
               <>
                 {/* OTP Input */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    6-Digit OTP
-                  </label>
-                  <input
-                    id="otp-input"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    value={otp}
-                    onChange={(e) => {
-                      setError('');
-                      setOtp(e.target.value.replace(/\D/g, ''));
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyOtp()}
-                    placeholder="• • • • • •"
-                    autoFocus
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-center text-3xl tracking-[1em] font-black text-gray-900 focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all"
-                  />
-                  <p className="text-xs text-gray-400 text-center mt-1">
-                    Sent to +91 {phone}
-                  </p>
+                  <OTPInput value={otp} onChange={setOtp} length={6} onComplete={handleVerifyOtp} />
                 </div>
 
                 {/* Error */}
                 {error && (
-                  <div className="flex items-start gap-2 bg-red-50 text-red-600 text-sm px-3 py-2 rounded-xl border border-red-100">
+                  <div className="flex items-start gap-2 bg-red-50 text-red-600 text-sm px-3 py-2 rounded-xl border border-red-100 mb-4">
                     <span className="text-base">⚠️</span>
                     <span>{error}</span>
                   </div>
@@ -293,7 +284,7 @@ export const Login = () => {
                 </button>
 
                 {/* Resend */}
-                <div className="flex items-center justify-center gap-2 pt-1">
+                <div className="flex items-center justify-center gap-2 pt-1 mt-2">
                   {resendTimer > 0 ? (
                     <p className="text-sm text-gray-400">
                       Resend OTP in <span className="font-bold text-orange-500">{resendTimer}s</span>
