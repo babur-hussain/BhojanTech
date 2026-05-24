@@ -6,55 +6,8 @@ import { useQZTray } from '../hooks/useQZTray';
 import { api } from '../utils/api';
 import { printKOT, type KOTData } from '../utils/thermalPrint';
 
-// ─── Audio helpers ────────────────────────────────────────────────────────────
-
-let sharedAudioCtx: AudioContext | null = null;
-
-function getAudioCtx(): AudioContext {
-  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
-    sharedAudioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }
-  return sharedAudioCtx;
-}
-
-function playTone(
-  freq: number,
-  duration: number,
-  volume: number,
-  delay = 0,
-  type: OscillatorType = 'sine'
-) {
-  const ctx = getAudioCtx();
-  if (ctx.state === 'suspended') ctx.resume();
-
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(volume, ctx.currentTime + delay);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
-
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(ctx.currentTime + delay);
-  osc.stop(ctx.currentTime + delay + duration);
-}
-
-function playNewOrderAlert(volume: number) {
-  if (volume === 0) return;
-  // Three rising tones
-  playTone(440, 0.15, volume, 0.0, 'square');
-  playTone(550, 0.15, volume, 0.18, 'square');
-  playTone(660, 0.3, volume, 0.36, 'square');
-}
-
-function playReadyAlert(volume: number) {
-  if (volume === 0) return;
-  // Soft two-tone confirmation
-  playTone(880, 0.2, volume, 0.0);
-  playTone(1100, 0.2, volume, 0.25);
-}
+import { playReadyAlert } from '../utils/audio';
+import { useGlobalSettingsStore } from '../store/globalSettingsStore';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -75,8 +28,7 @@ export default function KDS() {
   const [kots, setKots] = useState<any[]>([]);
   const [now, setNow] = useState(new Date());
   const [stationFilter, setStationFilter] = useState('ALL');
-  const [volume, setVolume] = useState(0.5);
-  const [muted, setMuted] = useState(false);
+  const { globalMuted, globalVolume, setGlobalMuted, setGlobalVolume } = useGlobalSettingsStore();
   const [newOrderFlash, setNewOrderFlash] = useState(false);
 
   // Tick every 30 s so timers stay fresh
@@ -99,13 +51,6 @@ export default function KDS() {
       .catch(console.error);
   }, []);
 
-  // Unlock audio context on first user click (browser policy)
-  useEffect(() => {
-    const unlock = () => { getAudioCtx(); };
-    window.addEventListener('click', unlock, { once: true });
-    return () => window.removeEventListener('click', unlock);
-  }, []);
-
   // ── Socket.io subscriptions ──────────────────────────────────────────────
   useEffect(() => {
     const unsub1 = subscribe('kot_created', (kot: any) => {
@@ -113,7 +58,7 @@ export default function KDS() {
       setKots(prev => [parsed, ...prev]);
       setNewOrderFlash(true);
       setTimeout(() => setNewOrderFlash(false), 800);
-      if (!muted) playNewOrderAlert(volume);
+      // NOTE: global sound player handles the order sound automatically
 
       // ── Auto-print KOT slip to kitchen printer via QZ Tray ────────────────
       const printer = kitchenPrinter || localStorage.getItem('qz_kitchen_printer') || '';
@@ -144,7 +89,7 @@ export default function KDS() {
     });
 
     return () => { unsub1(); unsub2(); };
-  }, [subscribe, muted, volume, kitchenPrinter, qzConnected]);
+  }, [subscribe, kitchenPrinter, qzConnected]);
 
   // ── Item tap cycles PENDING → PREPARING → READY ──────────────────────────
   const handleItemTap = useCallback(async (kotId: string, itemId: string, current: string) => {
@@ -159,7 +104,7 @@ export default function KDS() {
         );
         const allReady = items.every((i: any) => i.status === 'READY');
         const anyActive = items.some((i: any) => i.status === 'PREPARING' || i.status === 'READY');
-        if (allReady && !muted) playReadyAlert(volume);
+        if (allReady && !globalMuted) playReadyAlert(globalVolume);
         return {
           ...k,
           items,
@@ -173,7 +118,7 @@ export default function KDS() {
     } catch (e) {
       console.error('Failed to update item status', e);
     }
-  }, [muted, volume]);
+  }, [globalMuted, globalVolume]);
 
   const handleNotifyWaiter = async (kot: any) => {
     try {
@@ -227,26 +172,7 @@ export default function KDS() {
             </select>
           </div>
 
-          {/* Volume */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setMuted(m => !m)}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              {muted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-            </button>
-            <input
-              type="range" min="0" max="1" step="0.05" value={muted ? 0 : volume}
-              onChange={e => { setVolume(+e.target.value); setMuted(false); }}
-              className="w-24 accent-amber-500 cursor-pointer"
-            />
-            <button
-              onClick={() => !muted && playNewOrderAlert(volume)}
-              className="text-xs text-gray-500 hover:text-gray-300 bg-gray-900 px-2 py-1 rounded border border-gray-700"
-            >
-              Test
-            </button>
-          </div>
+          {/* Volume controls removed from KDS view as they are now in the global header */}
 
         </div>
       </div>
