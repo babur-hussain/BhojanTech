@@ -12,7 +12,7 @@ export const generateTableQrCodeSVG = async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Table not found' });
         }
 
-        const baseUrl = process.env.CUSTOMER_APP_URL || 'http://localhost:3001';
+        const baseUrl = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
         const orderUrl = `${baseUrl}/table/${table.restaurantId}/${tableId}`;
 
         // Generate high resolution SVG
@@ -63,7 +63,7 @@ export const downloadAllTableQRsPDF = async (req: Request, res: Response) => {
 
         let x = startX;
         let y = startY;
-        const baseUrl = process.env.CUSTOMER_APP_URL || 'http://localhost:3001';
+        const baseUrl = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
 
         for (let i = 0; i < tables.length; i++) {
             const table = tables[i];
