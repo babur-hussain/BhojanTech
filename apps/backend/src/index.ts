@@ -32,7 +32,9 @@ export const io = new Server(server, {
           'http://localhost:5173',
           'https://bhojan-tech-web.vercel.app',
           'https://restaurantos.lfvs.in',
-          'http://restaurantos.lfvs.in'
+          'http://restaurantos.lfvs.in',
+          'https://restaurantsos.lfvs.in',
+          'http://restaurantsos.lfvs.in'
         ]
       : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
@@ -63,7 +65,9 @@ const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
       'http://localhost:5173',
       'https://bhojan-tech-web.vercel.app',
       'https://restaurantos.lfvs.in',
-      'http://restaurantos.lfvs.in'
+      'http://restaurantos.lfvs.in',
+      'https://restaurantsos.lfvs.in',
+      'http://restaurantsos.lfvs.in'
     ]
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
 app.use(cors({
