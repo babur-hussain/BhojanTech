@@ -34,7 +34,9 @@ export const io = new Server(server, {
           'https://restaurantos.lfvs.in',
           'http://restaurantos.lfvs.in',
           'https://restaurantsos.lfvs.in',
-          'http://restaurantsos.lfvs.in'
+          'http://restaurantsos.lfvs.in',
+          'https://customer.lfvs.in',
+          'http://customer.lfvs.in'
         ]
       : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'],
     methods: ['GET', 'POST'],
@@ -67,7 +69,9 @@ const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
       'https://restaurantos.lfvs.in',
       'http://restaurantos.lfvs.in',
       'https://restaurantsos.lfvs.in',
-      'http://restaurantsos.lfvs.in'
+      'http://restaurantsos.lfvs.in',
+      'https://customer.lfvs.in',
+      'http://customer.lfvs.in'
     ]
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
 app.use(cors({
