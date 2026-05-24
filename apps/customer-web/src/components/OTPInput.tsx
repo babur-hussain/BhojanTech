@@ -1,4 +1,5 @@
-import React, { useRef, KeyboardEvent } from 'react';
+import React, { useRef } from 'react';
+import type { KeyboardEvent } from 'react';
 
 interface OTPInputProps {
   length?: number;

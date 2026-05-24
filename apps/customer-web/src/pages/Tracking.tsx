@@ -9,7 +9,10 @@ export const Tracking = () => {
     const [status, setStatus] = useState('PENDING'); // PENDING | PREPARING | READY
 
     useEffect(() => {
-        if (!orderId) return navigate('/menu');
+        if (!orderId) {
+            navigate('/menu');
+            return;
+        }
 
         const socket = getSocket();
 

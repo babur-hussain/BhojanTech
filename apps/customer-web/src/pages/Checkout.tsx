@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCartStore } from '../store/cartStore';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { createOrder, loadRazorpay } from '../services/api';
 
 export const Checkout = () => {
@@ -47,7 +47,7 @@ export const Checkout = () => {
                     name: 'Restaurant Name',
                     description: 'Food Order',
                     order_id: res.razorpayOrderId,
-                    handler: function (response: any) {
+                    handler: function (_response: any) {
                         clearCart();
                         navigate(`/tracking/${res.orderId}`);
                     },
