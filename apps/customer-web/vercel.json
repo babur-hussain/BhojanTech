@@ -1,5 +1,9 @@
 {
-  "installCommand": "npm install -g pnpm@9.12.0 && pnpm install",
+  "build": {
+    "env": {
+      "ENABLE_EXPERIMENTAL_COREPACK": "1"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
