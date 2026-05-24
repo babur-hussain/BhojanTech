@@ -40,8 +40,17 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
 
         const sanitizedItems = items.map((item: any) => {
             const dbItem = priceMap.get(item.menuItemId);
-            // Use DB price if available, otherwise reject
-            const price = dbItem ? dbItem.price : item.priceAtOrderTime;
+            // Use DB price from variant if available, otherwise fallback to frontend price
+            let price = item.priceAtOrderTime;
+            if (dbItem && dbItem.variants && dbItem.variants.length > 0) {
+                const variant = dbItem.variants.find((v: any) => v.name === item.variantName);
+                if (variant) {
+                    price = variant.specialPriceINR || variant.priceINR;
+                } else {
+                    // Fallback to first variant if variantName doesn't match for some reason
+                    price = dbItem.variants[0].specialPriceINR || dbItem.variants[0].priceINR;
+                }
+            }
             return {
                 menuItemId: mongoose.Types.ObjectId.isValid(item.menuItemId)
                     ? item.menuItemId
