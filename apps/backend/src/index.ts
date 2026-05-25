@@ -44,7 +44,9 @@ export const io = new Server(server, {
   },
 });
 
-// ─── CORS & Middleware Setup ──────────────────────────────────────────────────
+// ─── CORS — Manual implementation (nuclear approach) ─────────────────────────
+// The cors npm package was unreliable with Helmet. We set headers manually
+// on EVERY response before any other middleware can interfere.
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
   ? [
       'https://bhojantech.com',
@@ -61,29 +63,30 @@ const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
     ]
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
 
-// CORS MUST come BEFORE helmet and all other middleware.
-// This ensures OPTIONS preflight responses always include the right headers.
-app.use(cors({
-  origin: ALLOWED_ORIGINS,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'x-branch-id'],
-}));
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-Id,x-branch-id');
+    res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight for 24h
+  }
 
-// Explicitly handle preflight so no other middleware can interfere
-app.options('*', cors({
-  origin: ALLOWED_ORIGINS,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'x-branch-id'],
-}));
+  // Handle preflight immediately — don't let ANY other middleware touch it
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
 
-// Helmet — security headers (AFTER cors so it doesn't stomp on preflight)
+  next();
+});
+
+// Helmet — security headers (AFTER our manual CORS)
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP — we serve an API, not HTML pages
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: false, // Disable — was causing "window.closed" warnings
-  crossOriginResourcePolicy: false, // Allow cross-origin resource loading
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
 }));
 
 app.use(express.json({ limit: '2mb' })); // Support base64 images in menu items
