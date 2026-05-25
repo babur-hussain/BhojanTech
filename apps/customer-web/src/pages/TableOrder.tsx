@@ -12,6 +12,7 @@ export const TableOrder = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [sessionClosed, setSessionClosed] = useState(false);
+    const [error, setError] = useState('');
 
     const fetchOrder = async () => {
         if (!tableNumber) { navigate('/menu'); return; }
@@ -59,20 +60,23 @@ export const TableOrder = () => {
     }, [tableNumber, navigate]);
 
     const handleRequestBill = async () => {
+        setError('');
         if (!order) return;
         if (!window.confirm('Are you done eating and ready for the bill?')) return;
         setProcessing(true);
         try {
             await requestBill(order._id);
             fetchOrder();
-        } catch {
-            alert('Failed to request bill. Please call a waiter.');
+        } catch (err) {
+            console.error(err);
+            setError('Failed to request bill. Please call a waiter.');
         } finally {
             setProcessing(false);
         }
     };
 
     const handlePayOnline = async () => {
+        setError('');
         if (!order) return;
         setProcessing(true);
         try {
@@ -90,8 +94,9 @@ export const TableOrder = () => {
                 theme: { color: '#B91C1C' }
             };
             new (window as any).Razorpay(options).open();
-        } catch {
-            alert('Payment failed. Please ask the waiter.');
+        } catch (err) {
+            console.error(err);
+            setError('Payment failed. Please ask the waiter.');
         } finally {
             setProcessing(false);
         }
@@ -203,6 +208,13 @@ export const TableOrder = () => {
                     </div>
                 </div>
             </main>
+
+            {error && (
+                <div className="bg-red-50 border border-red-100 text-red-600 p-4 m-4 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm animate-pulse">
+                    <span className="text-xl">⚠️</span>
+                    <span>{error}</span>
+                </div>
+            )}
 
             <div className="p-4 bg-white border-t border-gray-100 mt-auto space-y-3 pb-8">
                 {order.status === 'OPEN' && (

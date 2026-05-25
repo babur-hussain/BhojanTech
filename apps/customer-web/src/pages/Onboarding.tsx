@@ -9,12 +9,14 @@ export const Onboarding = () => {
     const [name, setName] = useState('');
     const [dob, setDob] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
     const { user, setUser } = useAuthStore();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         if (!name.trim()) {
-            alert('Please enter your name');
+            setError('Please enter your full name to continue.');
             return;
         }
 
@@ -28,7 +30,7 @@ export const Onboarding = () => {
             navigate('/menu', { replace: true });
         } catch (error) {
             console.error(error);
-            alert('Failed to update profile. Please try again.');
+            setError('Failed to update profile. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -79,6 +81,13 @@ export const Onboarding = () => {
                         </div>
                         <p className="text-[10px] text-gray-400 mt-2 ml-1">We'll use this to send you special birthday rewards!</p>
                     </div>
+
+                    {error && (
+                        <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm animate-pulse">
+                            <span className="text-xl">⚠️</span>
+                            <span>{error}</span>
+                        </div>
+                    )}
 
                     <button
                         type="submit"

@@ -19,6 +19,7 @@ export const Checkout = () => {
     const [otpStep, setOtpStep] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [authError, setAuthError] = useState('');
+    const [checkoutError, setCheckoutError] = useState('');
     const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
     const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
 
@@ -96,15 +97,18 @@ export const Checkout = () => {
     };
 
     const handlePlaceOrder = async (payOnline: boolean) => {
+        setCheckoutError('');
         if (!isAuthenticated) {
             if (!customerName || customerPhone.length < 10) {
-                return alert('Please enter your Name and Phone number to continue.');
+                setCheckoutError('Please enter your Name and a valid 10-digit Phone number to continue.');
+                return;
             }
             if (!otpStep) {
                 await handleSendOtp();
                 return;
             } else {
-                return alert('Please verify your OTP first.');
+                setCheckoutError('Please verify your OTP first before placing the order.');
+                return;
             }
         }
 
@@ -162,7 +166,7 @@ export const Checkout = () => {
             }
         } catch (e) {
             console.error(e);
-            alert('Order failed. Please try again.');
+            setCheckoutError('Order failed. Please try again.');
             setIsProcessing(false);
         }
     };
@@ -313,6 +317,13 @@ export const Checkout = () => {
                     <div className="border-t border-dashed my-3"></div>
                     <div className="flex justify-between font-black text-lg text-gray-900"><span>Grand Total</span><span>₹{finalTotal.toFixed(2)}</span></div>
                 </div>
+
+                {checkoutError && (
+                    <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm animate-pulse">
+                        <span className="text-xl">⚠️</span>
+                        <span>{checkoutError}</span>
+                    </div>
+                )}
             </main>
 
             <div className="p-4 space-y-3">
