@@ -9,13 +9,32 @@ export default function GlobalSoundPlayer() {
 
   useEffect(() => {
     initAudioOnInteraction();
+
+    // Request browser notification permission on load
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   }, []);
 
   useEffect(() => {
     if (globalMuted) return;
 
-    const handleNewOrder = () => {
+    const handleNewOrder = (data: any) => {
       playNewOrderAlert(globalVolume);
+
+      // Show browser notification if permitted
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const title = '🔔 New Order Received!';
+        const options = {
+          body: 'A new order or KOT has just arrived at the restaurant.',
+          icon: '/favicon.ico',
+        };
+        const notification = new Notification(title, options);
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
     };
 
     const unsubKot = subscribe('kot_created', handleNewOrder);
