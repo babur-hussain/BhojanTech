@@ -19,6 +19,7 @@ export const MenuItemCard = ({ item }: { item: any }) => {
             gstSlab: item.gstSlab ?? 0,
         });
         setShowVariants(false);
+        navigate('/checkout');
     };
 
     const mainPrice = item.variants?.length ? item.variants[0].priceINR : 0;

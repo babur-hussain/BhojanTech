@@ -55,7 +55,10 @@ export const ItemDetail = () => {
             gstSlab: item.gstSlab ?? 0,
         });
         setAdded(true);
-        setTimeout(() => setAdded(false), 1500);
+        setTimeout(() => {
+            setAdded(false);
+            navigate('/checkout');
+        }, 500);
     };
 
     return (
