@@ -164,7 +164,7 @@ io.on('connection', (socket) => {
     }
 
     socket.join(`restaurant_${restaurantId}`);
-    if (branchId) {
+    if (branchId && branchId !== 'all') {
       // OWNER and SUPER_OWNER can join any branch
       if (user.role !== 'SUPER_OWNER' && user.role !== 'OWNER' && user.role !== 'BRANCH_MANAGER' && user.branchId !== branchId) {
         return; // Only join allowed branches
@@ -173,6 +173,17 @@ io.on('connection', (socket) => {
       console.log(`Socket ${socket.id} joined room restaurant_${restaurantId}_branch_${branchId}`);
     } else {
       console.log(`Socket ${socket.id} joined room restaurant_${restaurantId} (SUPER_OWNER or Legacy)`);
+      // Auto-join all branches for owners who want a consolidated view
+      if (user.role === 'SUPER_OWNER' || user.role === 'OWNER') {
+        import('./models/Branch').then(({ Branch }) => {
+          Branch.find({ restaurantId }).then(branches => {
+            branches.forEach(b => {
+              socket.join(`restaurant_${restaurantId}_branch_${b._id}`);
+              console.log(`Socket ${socket.id} auto-joined branch room restaurant_${restaurantId}_branch_${b._id}`);
+            });
+          });
+        });
+      }
     }
   });
 

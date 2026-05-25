@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
 import { useGlobalSettingsStore } from '../store/globalSettingsStore';
 import { playNewOrderAlert, initAudioOnInteraction } from '../utils/audio';
+import { useBranchStore } from '../store/branchStore';
 
 export default function GlobalSoundPlayer() {
   const { subscribe } = useSocket();
@@ -19,7 +20,16 @@ export default function GlobalSoundPlayer() {
   useEffect(() => {
     if (globalMuted) return;
 
+    const shouldIgnore = (data: any) => {
+      const currentBranchId = useBranchStore.getState().selectedBranchId;
+      if (!currentBranchId || currentBranchId === 'all') return false;
+      const targetBranchId = data?.branchId || data?.order?.branchId;
+      if (targetBranchId && targetBranchId !== currentBranchId) return true;
+      return false;
+    };
+
     const handleNewOrder = (data: any) => {
+      if (shouldIgnore(data)) return;
       playNewOrderAlert(globalVolume);
 
       // Show browser notification if permitted
@@ -38,6 +48,7 @@ export default function GlobalSoundPlayer() {
     };
 
     const handleOrderUpdate = (data: any) => {
+      if (shouldIgnore(data)) return;
       if (data?.type === 'ITEMS_ADDED') {
         playNewOrderAlert(globalVolume);
 

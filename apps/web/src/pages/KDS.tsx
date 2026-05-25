@@ -8,6 +8,7 @@ import { printKOT, type KOTData } from '../utils/thermalPrint';
 
 import { playReadyAlert } from '../utils/audio';
 import { useGlobalSettingsStore } from '../store/globalSettingsStore';
+import { useBranchStore } from '../store/branchStore';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +55,9 @@ export default function KDS() {
   // ── Socket.io subscriptions ──────────────────────────────────────────────
   useEffect(() => {
     const unsub1 = subscribe('kot_created', (kot: any) => {
+      const currentBranchId = useBranchStore.getState().selectedBranchId;
+      if (currentBranchId && currentBranchId !== 'all' && kot.branchId !== currentBranchId) return;
+
       const parsed = { ...kot, createdAt: new Date(kot.createdAt) };
       setKots(prev => [parsed, ...prev]);
       setNewOrderFlash(true);
@@ -85,6 +89,8 @@ export default function KDS() {
     });
 
     const unsub2 = subscribe('kot_update', ({ kot }: { type: string; kot: any }) => {
+      const currentBranchId = useBranchStore.getState().selectedBranchId;
+      if (currentBranchId && currentBranchId !== 'all' && kot.branchId !== currentBranchId) return;
       setKots(prev => prev.map(k => ((k._id || k.id) === (kot._id || kot.id) ? {...kot, createdAt: new Date(kot.createdAt)} : k)));
     });
 
