@@ -166,7 +166,7 @@ export const TableOrder = () => {
                 )}
             </header>
 
-            <main className="flex-1 p-4 space-y-4">
+            <main className="p-4 space-y-4">
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="bg-brand-50 p-4 border-b border-brand-100">
                         <h2 className="font-bold text-brand-900 flex items-center gap-2">
@@ -216,7 +216,7 @@ export const TableOrder = () => {
                 </div>
             )}
 
-            <div className="p-4 bg-white border-t border-gray-100 mt-auto space-y-3 pb-8">
+            <div className="p-4 space-y-3 pb-8">
                 {order.status === 'OPEN' && (
                     <button
                         onClick={() => navigate('/menu')}
