@@ -16,8 +16,13 @@ export const fetchMenu = async (restaurantId: string) => {
 };
 
 export const createOrder = async (orderData: any) => {
-    const { data } = await api.post('/online-orders/create', orderData);
-    return data;
+    const res = await api.post('/online-orders/create', orderData);
+    return res.data;
+};
+
+export const getOrderStatus = async (orderId: string) => {
+    const res = await api.get(`/online-orders/${orderId}/status`);
+    return res.data;
 };
 
 export const getLiveTableOrder = async (tableId: string) => {
@@ -26,8 +31,18 @@ export const getLiveTableOrder = async (tableId: string) => {
 };
 
 export const getTableInfo = async (tableId: string) => {
-    const { data } = await api.get(`/online-orders/table-info/${tableId}`);
-    return data;
+    const res = await api.get(`/online-orders/table-info/${tableId}`);
+    return res.data;
+};
+
+export const getProfile = async () => {
+    const res = await api.get('/customerAuth/me');
+    return res.data.customer;
+};
+
+export const updateProfile = async (data: { name: string; dob?: string }) => {
+    const res = await api.put('/customerAuth/me', data);
+    return res.data.customer;
 };
 
 export const payOnlineOrder = async (orderId: string) => {

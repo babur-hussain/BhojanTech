@@ -3,6 +3,7 @@ import { Menu } from './pages/Menu';
 import { Checkout } from './pages/Checkout';
 import { Tracking } from './pages/Tracking';
 import { Login } from './pages/Login';
+import { Onboarding } from './pages/Onboarding';
 import { MyAccount } from './pages/MyAccount';
 import { TableOrder } from './pages/TableOrder';
 import { ItemDetail } from './pages/ItemDetail';
@@ -36,12 +37,14 @@ function App() {
           {/* QR Scan link for Dine-in: /table/:restaurantId/:tableNumber */}
           <Route path="/table/:restaurantId/:tableNumber" element={<TableResolver />} />
 
+          <Route path="/" element={<Navigate to="/menu" replace />} />
           <Route path="/menu" element={<Menu />} />
           <Route path="/item/:id" element={<ItemDetail />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/table-order" element={<TableOrder />} />
           <Route path="/tracking/:orderId" element={<Tracking />} />
-          <Route path="/login" element={<Login />} />
           <Route path="/my-account" element={<MyAccount />} />
 
           <Route path="*" element={<Navigate to="/menu" replace />} />

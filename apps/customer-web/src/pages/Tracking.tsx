@@ -16,13 +16,15 @@ export const Tracking = () => {
 
         const socket = getSocket();
 
-        // In production we would join_order and get the current real status
-        // For stub/demo we'll just listen or artificially advance
+        // Join the order room to listen for real-time updates from POS/Kitchen
         socket.emit('join_order', orderId);
 
-        // Mock progress after 5 seconds to show UI if backend isn't connected
-        const timer = setTimeout(() => setStatus('PREPARING'), 5000);
-        const timer2 = setTimeout(() => setStatus('READY'), 15000);
+        // Fetch initial live status
+        import('../services/api').then(({ getOrderStatus }) => {
+            getOrderStatus(orderId)
+                .then(data => setStatus(data.status))
+                .catch(err => console.error('Failed to fetch order status', err));
+        });
 
         socket.on('order_status_update', (data: any) => {
             if (data.orderId === orderId) {
@@ -32,8 +34,6 @@ export const Tracking = () => {
 
         return () => {
             socket.off('order_status_update');
-            clearTimeout(timer);
-            clearTimeout(timer2);
         };
     }, [orderId, navigate]);
 

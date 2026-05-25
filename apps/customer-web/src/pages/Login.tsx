@@ -9,6 +9,7 @@ import type { ConfirmationResult } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { api } from '../services/api';
 import { useAuthStore } from '../store/authStore';
+import { useCartStore } from '../store/cartStore';
 import { Smartphone, ShieldCheck, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { OTPInput } from '../components/OTPInput';
 
@@ -134,19 +135,23 @@ export const Login = () => {
       const firebaseToken = await firebaseUser.getIdToken();
 
       // Exchange Firebase token for backend JWT
-      const { data } = await api.post('/auth/customer-login', { firebaseToken });
+      const { data } = await api.post('/auth/customer-login', { firebaseToken, restaurantId: useCartStore.getState().restaurantId });
 
       setUser({
         uid: firebaseUser.uid,
         phoneNumber: firebaseUser.phoneNumber || `+91${phone}`,
         token: data.token,
-        displayName: data.name || firebaseUser.displayName || `+91${phone}`,
+        displayName: data.customer?.name || firebaseUser.displayName || `+91${phone}`,
       });
 
       // Sign out of Firebase (we use our own JWT now)
       await signOut(auth);
 
-      navigate(from, { replace: true });
+      if (!data.customer?.name || data.customer?.name === 'Guest') {
+        navigate('/onboarding', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     } catch (err: any) {
       console.error('OTP verify error:', err);
       if (err.code === 'auth/invalid-verification-code') {
@@ -178,7 +183,14 @@ export const Login = () => {
 
       {/* Back Button */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => {
+          if (step === 'OTP') {
+            setStep('PHONE');
+            setError('');
+          } else {
+            navigate(-1);
+          }
+        }}
         className="absolute top-6 left-6 p-2 bg-white rounded-full shadow-md text-gray-500 hover:text-orange-600 hover:shadow-lg transition-all"
       >
         <ArrowLeft size={22} />

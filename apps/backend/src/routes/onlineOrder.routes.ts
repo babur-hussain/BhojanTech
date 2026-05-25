@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { validate } from '../middleware/validate.middleware';
 import { createOnlineOrderSchema } from '../validations/schemas';
-import { createOnlineOrder, verifyPaymentWebhook, getLiveTableOrder, requestBill, payOnlineOrder, getTableInfo, lookupCustomerForOnlineOrder } from '../controllers/onlineOrder.controller';
+import { createOnlineOrder, verifyPaymentWebhook, getLiveTableOrder, requestBill, payOnlineOrder, getTableInfo, lookupCustomerForOnlineOrder, getOrderStatus } from '../controllers/onlineOrder.controller';
 
 const router: Router = express.Router();
 
@@ -27,6 +27,7 @@ router.get('/:restaurantId/customer/:phone', lookupLimiter, lookupCustomerForOnl
 router.post('/create', orderCreationLimiter, validate(createOnlineOrderSchema), createOnlineOrder);
 router.get('/table-info/:tableId', getTableInfo);
 router.get('/table/:tableId', getLiveTableOrder);
+router.get('/:orderId/status', getOrderStatus);
 
 // Webhook — authenticated via HMAC signature (no JWT)
 router.post('/webhook', verifyPaymentWebhook);

@@ -1,20 +1,112 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useCartStore } from '../store/cartStore';
+import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
-import { createOrder, loadRazorpay } from '../services/api';
+import { ArrowLeft, Loader2 } from 'lucide-react';
+import { createOrder, loadRazorpay, api, updateProfile } from '../services/api';
+import { auth } from '../config/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth';
+import type { ConfirmationResult } from 'firebase/auth';
 
 export const Checkout = () => {
     const { items, getTotal, getGST, customerName, customerPhone, setCustomerDetails, updateQuantity, removeItem, clearCart, restaurantId, tableNumber } = useCartStore();
+    const { isAuthenticated, user, setUser } = useAuthStore();
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Auth State for Inline Login
+    const [dob, setDob] = useState('');
+    const [otp, setOtp] = useState('');
+    const [otpStep, setOtpStep] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [authError, setAuthError] = useState('');
+    const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+    const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
     const navigate = useNavigate();
 
     const total = getTotal();
     const gst = getGST();
     const finalTotal = total + gst;
 
+    // Sync logged-in user to cartStore
+    useEffect(() => {
+        if (isAuthenticated && user) {
+            setCustomerDetails(user.displayName || '', user.phoneNumber.replace('+91', ''));
+        }
+    }, [isAuthenticated, user, setCustomerDetails]);
+
+    const getVerifier = async (): Promise<RecaptchaVerifier> => {
+        if (recaptchaVerifierRef.current) return recaptchaVerifierRef.current;
+        const verifier = new RecaptchaVerifier(auth, 'checkout-recaptcha', { size: 'invisible' });
+        await verifier.render();
+        recaptchaVerifierRef.current = verifier;
+        return verifier;
+    };
+
+    const handleSendOtp = async () => {
+        setAuthError('');
+        if (customerPhone.length !== 10) return setAuthError('Enter a valid 10-digit number');
+        if (!customerName.trim()) return setAuthError('Please enter your name');
+
+        setIsVerifying(true);
+        try {
+            const verifier = await getVerifier();
+            const result = await signInWithPhoneNumber(auth, `+91${customerPhone}`, verifier);
+            setConfirmationResult(result);
+            setOtpStep(true);
+        } catch (err: any) {
+            console.error(err);
+            setAuthError('Failed to send OTP. Please try again.');
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        setAuthError('');
+        if (!confirmationResult || otp.length !== 6) return setAuthError('Enter 6-digit OTP');
+
+        setIsVerifying(true);
+        try {
+            const credential = await confirmationResult.confirm(otp);
+            const firebaseUser = credential.user;
+            const firebaseToken = await firebaseUser.getIdToken();
+            
+            const { data } = await api.post('/auth/customer-login', { firebaseToken, restaurantId });
+            setUser({
+                uid: firebaseUser.uid,
+                phoneNumber: firebaseUser.phoneNumber || `+91${customerPhone}`,
+                token: data.token,
+                displayName: customerName,
+            });
+            await signOut(auth);
+
+            // Update profile with name and dob
+            if (dob || customerName) {
+                await updateProfile({ name: customerName, dob: dob || undefined });
+            }
+
+            setOtpStep(false);
+        } catch (err: any) {
+            console.error(err);
+            setAuthError('Invalid OTP');
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
     const handlePlaceOrder = async (payOnline: boolean) => {
-        if (!customerName || customerPhone.length < 10) return alert('Please enter valid Name and Phone.');
+        if (!isAuthenticated) {
+            if (!customerName || customerPhone.length < 10) {
+                return alert('Please enter your Name and Phone number to continue.');
+            }
+            if (!otpStep) {
+                await handleSendOtp();
+                return;
+            } else {
+                return alert('Please verify your OTP first.');
+            }
+        }
 
         setIsProcessing(true);
         try {
@@ -86,12 +178,13 @@ export const Checkout = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen flex flex-col pb-6">
+            <div id="checkout-recaptcha"></div>
             <header className="bg-white p-4 shadow-sm flex items-center gap-3 sticky top-0 z-10">
                 <button onClick={() => navigate(-1)} className="p-2 border rounded-xl"><ArrowLeft size={20} /></button>
                 <h1 className="text-xl font-bold">Review Order</h1>
             </header>
 
-            <main className="flex-1 p-4 space-y-4">
+            <main className="p-4 space-y-4">
                 {/* Items List */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                     <h2 className="font-bold text-gray-900 mb-4">Your Items ({items.length})</h2>
@@ -124,44 +217,91 @@ export const Checkout = () => {
                 </div>
 
                 {/* User Details */}
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-                    <h2 className="font-bold text-gray-900">Your Details</h2>
-                    <div>
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Phone Number</label>
-                        <input
-                            type="tel"
-                            value={customerPhone}
-                            onChange={async (e) => {
-                                const phone = e.target.value;
-                                setCustomerDetails(customerName, phone);
-                                if (phone.length === 10) {
-                                    try {
-                                        const { lookupCustomer } = await import('../services/api');
-                                        const data = await lookupCustomer(restaurantId || '', phone);
-                                        if (data.name) {
-                                            setCustomerDetails(data.name, phone);
-                                        }
-                                    } catch (err) {
-                                        // Ignore
-                                    }
-                                }
-                            }}
-                            placeholder="10 digit mobile number"
-                            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
-                            maxLength={10}
-                        />
+                {!isAuthenticated && (
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-gray-900">Your Details</h2>
+                            {otpStep && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-1 rounded">OTP Sent</span>}
+                        </div>
+                        
+                        {!otpStep ? (
+                            <>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Phone Number *</label>
+                                    <div className="flex gap-2">
+                                        <span className="flex items-center px-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-600 font-semibold text-sm">
+                                            +91
+                                        </span>
+                                        <input
+                                            type="tel"
+                                            value={customerPhone}
+                                            onChange={e => setCustomerDetails(customerName, e.target.value.replace(/\D/g, ''))}
+                                            placeholder="10 digit mobile number"
+                                            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
+                                            maxLength={10}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Name *</label>
+                                    <input
+                                        type="text"
+                                        value={customerName}
+                                        onChange={e => setCustomerDetails(e.target.value, customerPhone)}
+                                        placeholder="e.g. Rahul Sharma"
+                                        className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Date of Birth (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={dob}
+                                        max={new Date().toISOString().split('T')[0]}
+                                        onChange={e => setDob(e.target.value)}
+                                        className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
+                                    />
+                                </div>
+                                {authError && <p className="text-red-500 text-xs font-bold">{authError}</p>}
+                                <button
+                                    onClick={handleSendOtp}
+                                    disabled={isVerifying}
+                                    className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isVerifying ? <Loader2 size={18} className="animate-spin" /> : 'Verify to Continue'}
+                                </button>
+                            </>
+                        ) : (
+                            <div className="space-y-4">
+                                <p className="text-sm text-gray-600">Enter the 6-digit code sent to +91 {customerPhone}</p>
+                                <input
+                                    type="text"
+                                    maxLength={6}
+                                    value={otp}
+                                    onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                                    placeholder="Enter OTP"
+                                    className="w-full text-center tracking-[0.5em] text-lg bg-gray-50 border border-gray-200 p-4 rounded-xl font-black focus:outline-none focus:border-brand-500"
+                                />
+                                {authError && <p className="text-red-500 text-xs font-bold text-center">{authError}</p>}
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setOtpStep(false)}
+                                        className="w-1/3 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl hover:bg-gray-200"
+                                    >
+                                        Back
+                                    </button>
+                                    <button
+                                        onClick={handleVerifyOtp}
+                                        disabled={isVerifying || otp.length !== 6}
+                                        className="flex-1 bg-brand-600 text-white font-bold py-3 rounded-xl hover:bg-brand-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {isVerifying ? <Loader2 size={18} className="animate-spin" /> : 'Confirm OTP'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Name</label>
-                        <input
-                            type="text"
-                            value={customerName}
-                            onChange={e => setCustomerDetails(e.target.value, customerPhone)}
-                            placeholder="e.g. Rahul Sharma"
-                            className="w-full bg-gray-50 border border-gray-200 p-3 rounded-xl font-medium focus:outline-none focus:border-brand-500"
-                        />
-                    </div>
-                </div>
+                )}
 
                 {/* Bill Details */}
                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -175,8 +315,15 @@ export const Checkout = () => {
                 </div>
             </main>
 
-            <div className="p-4 space-y-3 mt-auto">
-                {tableNumber ? (
+            <div className="p-4 space-y-3">
+                {(!isAuthenticated && !otpStep) ? (
+                     <button
+                        onClick={handleSendOtp}
+                        className="w-full bg-gray-200 text-gray-500 font-bold py-4 rounded-2xl shadow-sm opacity-70 cursor-not-allowed"
+                     >
+                        Verify details to order
+                     </button>
+                ) : tableNumber ? (
                     <button
                         disabled={isProcessing}
                         onClick={() => handlePlaceOrder(false)}

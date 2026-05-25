@@ -23,6 +23,7 @@ export interface ICustomer extends Document {
     referredBy?: string; // referral code of the referrer
     smsOptIn: boolean;
     whatsappOptIn: boolean;
+    dob?: Date;
     notes: string;
     otp?: string;
     otpExpiresAt?: Date;
@@ -54,6 +55,7 @@ const CustomerSchema: Schema = new Schema(
         referredBy: { type: String },
         smsOptIn: { type: Boolean, default: true },
         whatsappOptIn: { type: Boolean, default: true },
+        dob: { type: Date },
         notes: { type: String, default: '' },
         otp: { type: String },
         otpExpiresAt: { type: Date },

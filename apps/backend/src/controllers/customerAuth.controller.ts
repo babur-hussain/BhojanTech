@@ -152,3 +152,37 @@ export const getMyProfile = async (req: Request, res: Response) => {
         return res.status(401).json({ error: 'Invalid token' });
     }
 };
+
+// ─── Customer portal: update my profile (JWT protected) ──────────────────────
+
+export const updateMyProfile = async (req: Request, res: Response) => {
+    try {
+        const auth = req.headers.authorization?.split(' ')[1];
+        if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET) return res.status(500).json({ error: 'Server misconfiguration' });
+
+        const decoded: any = jwt.verify(auth, JWT_SECRET);
+        const { name, dob } = req.body;
+
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+
+        const customer = await Customer.findById(decoded.customerId);
+        if (!customer) return res.status(404).json({ error: 'Customer not found' });
+
+        customer.name = name;
+        if (dob) {
+            customer.dob = new Date(dob);
+            customer.birthdayMonth = customer.dob.getMonth() + 1; // 1-12
+        }
+
+        await customer.save();
+
+        return res.json({ message: 'Profile updated successfully', customer });
+    } catch (err) {
+        return res.status(500).json({ error: 'Failed to update profile' });
+    }
+};

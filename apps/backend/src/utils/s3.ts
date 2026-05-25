@@ -30,9 +30,12 @@ export const generatePresignedUrl = async (fileName: string, fileType: string) =
   return { signedUrl, publicUrl, key };
 };
 
+import sharp from 'sharp';
+
 /**
  * Upload a file buffer directly to S3 from the server.
  * This avoids CORS issues since the upload happens server-to-server.
+ * Automatically optimizes the image and converts it to WebP.
  */
 export const uploadToS3 = async (
   fileBuffer: Buffer,
@@ -40,14 +43,35 @@ export const uploadToS3 = async (
   mimeType: string
 ): Promise<{ publicUrl: string; key: string }> => {
   const bucketName = getBucketName();
-  const key = `menu-items/${Date.now()}-${fileName.replace(/\s+/g, '_')}`;
+  
+  // Optimize using sharp and convert to WebP
+  let optimizedBuffer = fileBuffer;
+  let finalMimeType = mimeType;
+  let optimizedFileName = fileName;
+
+  try {
+    // Only process if it's an image (and not already an optimized vector like SVG)
+    if (mimeType.startsWith('image/') && mimeType !== 'image/svg+xml') {
+      optimizedBuffer = await sharp(fileBuffer)
+        .webp({ quality: 80 })
+        .toBuffer();
+      finalMimeType = 'image/webp';
+      // Replace extension with .webp
+      optimizedFileName = fileName.replace(/\.[^/.]+$/, "") + ".webp";
+    }
+  } catch (error) {
+    console.error('Error optimizing image with sharp:', error);
+    // If sharp fails (e.g. invalid image), fallback to original buffer
+  }
+
+  const key = `menu-items/${Date.now()}-${optimizedFileName.replace(/\s+/g, '_')}`;
 
   await s3Client.send(
     new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
-      Body: fileBuffer,
-      ContentType: mimeType,
+      Body: optimizedBuffer,
+      ContentType: finalMimeType,
       CacheControl: 'max-age=31536000',
     })
   );

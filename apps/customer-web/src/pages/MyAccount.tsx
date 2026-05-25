@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Gift, Crown, History, LogOut, ChevronRight, Share2 } from 'lucide-react';
+import { User, Gift, Crown, History, LogOut, ChevronRight, Share2, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { getProfile } from '../services/api';
 
 export const MyAccount = () => {
     const navigate = useNavigate();
     const { user, isAuthenticated, logout } = useAuthStore();
+    const [liveProfile, setLiveProfile] = useState<any>(null);
 
     // Redirect to login if not authenticated
     useEffect(() => {
@@ -19,22 +21,33 @@ export const MyAccount = () => {
         navigate('/menu', { replace: true });
     };
 
-    // Display profile data from auth store
+    useEffect(() => {
+        if (isAuthenticated) {
+            getProfile()
+                .then(data => setLiveProfile(data))
+                .catch(err => console.error('Failed to load profile', err));
+        }
+    }, [isAuthenticated]);
+
+    // Display profile data from auth store (with fallback)
     const profile = {
-        name: user?.displayName || 'Guest',
-        phone: user?.phoneNumber || '',
-        tier: 'BRONZE',
-        points: 0,
-        visits: 0,
-        referralCode: '',
+        name: liveProfile?.name || user?.displayName || 'Guest',
+        phone: liveProfile?.phone || user?.phoneNumber || '',
+        tier: liveProfile?.tier || 'BRONZE',
+        points: liveProfile?.loyaltyPoints || 0,
+        visits: liveProfile?.totalVisits || 0,
+        referralCode: liveProfile?.referralCode || '',
     };
 
     return (
         <div className="flex flex-col min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-brand-700 text-white px-5 pt-8 pb-12 rounded-b-[2.5rem] shadow-lg relative">
-                <div className="flex justify-between items-start mb-6">
-                    <div>
+                <div className="flex items-center gap-3 mb-6">
+                    <button onClick={() => navigate('/menu')} className="bg-white bg-opacity-20 p-2 rounded-full backdrop-blur-sm text-white hover:bg-opacity-30">
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="flex-1">
                         <h1 className="text-2xl font-black">{profile.name}</h1>
                         <p className="text-white text-opacity-80 text-sm">{profile.phone}</p>
                     </div>
@@ -48,9 +61,9 @@ export const MyAccount = () => {
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
                             <Crown size={24} className="text-yellow-400" />
-                            <span className="font-black tracking-widest text-yellow-400 text-sm">GOLD MEMBER</span>
+                            <span className="font-black tracking-widest text-yellow-400 text-sm">{profile.tier} MEMBER</span>
                         </div>
-                        <p className="text-xs text-gray-400 font-medium">8 Visits</p>
+                        <p className="text-xs text-gray-400 font-medium">{profile.visits} Visits</p>
                     </div>
                     <div className="flex items-end justify-between">
                         <div>

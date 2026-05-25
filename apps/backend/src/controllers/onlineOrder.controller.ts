@@ -322,3 +322,19 @@ export const payOnlineOrder = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
+
+export const getOrderStatus = async (req: Request, res: Response) => {
+    try {
+        const { orderId } = req.params;
+        const order = await Order.findById(orderId).select('status');
+        
+        if (!order) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        return res.json({ status: order.status });
+    } catch (error) {
+        console.error('Error fetching order status:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { validate } from '../middleware/validate.middleware';
 import { sendOTPSchema, verifyOTPSchema } from '../validations/schemas';
-import { sendCustomerOTP, verifyCustomerOTP, getMyProfile } from '../controllers/customerAuth.controller';
+import { sendCustomerOTP, verifyCustomerOTP, getMyProfile, updateMyProfile } from '../controllers/customerAuth.controller';
 
 const router: Router = Router();
 
@@ -26,5 +26,6 @@ const otpVerifyLimiter = rateLimit({
 router.post('/send-otp', otpSendLimiter, validate(sendOTPSchema), sendCustomerOTP);
 router.post('/verify-otp', otpVerifyLimiter, validate(verifyOTPSchema), verifyCustomerOTP);
 router.get('/me', getMyProfile);
+router.put('/me', updateMyProfile);
 
 export default router;

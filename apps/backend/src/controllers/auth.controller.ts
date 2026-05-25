@@ -7,6 +7,7 @@ import { UserRole } from '@restaurant/types';
 import { redis } from '../config/redis';
 import jwt from 'jsonwebtoken';
 import { sendStaffInviteWA } from '../services/whatsappService';
+import { Customer } from '../models/Customer';
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -112,7 +113,7 @@ export const logout = async (req: Request, res: Response) => {
  */
 export const customerLogin = async (req: Request, res: Response) => {
   try {
-    const { firebaseToken } = req.body;
+    const { firebaseToken, restaurantId } = req.body;
     if (!firebaseToken) {
       return res.status(400).json({ error: 'Firebase token is required' });
     }
@@ -124,6 +125,26 @@ export const customerLogin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Phone number not found in token. Ensure phone auth was used.' });
     }
 
+    // Upsert minimal customer record if restaurantId is provided
+    let customer = null;
+    if (restaurantId) {
+      customer = await Customer.findOne({ restaurantId, phone: phone_number });
+      if (!customer) {
+        let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        while (await Customer.findOne({ referralCode })) {
+            referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        }
+        customer = await Customer.create({
+          restaurantId,
+          phone: phone_number,
+          name: 'Guest',
+          firstVisitDate: new Date(),
+          lastVisitDate: new Date(),
+          referralCode,
+        });
+      }
+    }
+
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET) {
       return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET not set' });
@@ -132,7 +153,9 @@ export const customerLogin = async (req: Request, res: Response) => {
     const token = jwt.sign(
       {
         uid,
+        customerId: customer?._id, // Add customerId for consistency with other routes
         phoneNumber: phone_number,
+        restaurantId,
         type: 'customer',
       },
       JWT_SECRET,
@@ -142,6 +165,17 @@ export const customerLogin = async (req: Request, res: Response) => {
     return res.status(200).json({
       token,
       phoneNumber: phone_number,
+      customer: customer ? {
+        _id: customer._id,
+        name: customer.name,
+        phone: customer.phone,
+        tier: customer.tier,
+        loyaltyPoints: customer.loyaltyPoints,
+        referralCode: customer.referralCode,
+        dob: customer.dob,
+        favoriteItems: customer.favoriteItems,
+        totalVisits: customer.totalVisits,
+      } : null,
     });
   } catch (error: any) {
     console.error('Customer login error:', error);
