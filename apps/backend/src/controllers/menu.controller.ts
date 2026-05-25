@@ -213,9 +213,9 @@ export const createMenuItem = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
     if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
-    const { categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder } = req.body;
+    const { categoryId, name, hindiName, description, variants, isVeg, gstSlab, imageUrl, imageUrls, isAvailable, allergenTags, dietaryTags, preparationTime, packingCharges, barcode, shortCode, costPriceINR, calories, order: itemOrder } = req.body;
     const item = await MenuItem.create({
-      categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder,
+      categoryId, name, hindiName, description, variants, isVeg, gstSlab, imageUrl, imageUrls, isAvailable, allergenTags, dietaryTags, preparationTime, packingCharges, barcode, shortCode, costPriceINR, calories, order: itemOrder,
       restaurantId: req.user!.restaurantId,
       branchId,
     });
@@ -236,19 +236,26 @@ export const updateMenuItem = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
-    // Whitelist updatable fields — never allow restaurantId/branchId overwrite
-    const { categoryId, name, hindiName, description, price, variants, isVeg, gstSlab, imageUrl, isAvailable, order: itemOrder } = req.body;
+    const { categoryId, name, hindiName, description, variants, isVeg, gstSlab, imageUrl, imageUrls, isAvailable, allergenTags, dietaryTags, preparationTime, packingCharges, barcode, shortCode, costPriceINR, calories, order: itemOrder } = req.body;
     const updateData: any = {};
     if (categoryId !== undefined) updateData.categoryId = categoryId;
     if (name !== undefined) updateData.name = name;
     if (hindiName !== undefined) updateData.hindiName = hindiName;
     if (description !== undefined) updateData.description = description;
-    if (price !== undefined) updateData.price = price;
     if (variants !== undefined) updateData.variants = variants;
     if (isVeg !== undefined) updateData.isVeg = isVeg;
     if (gstSlab !== undefined) updateData.gstSlab = gstSlab;
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+    if (imageUrls !== undefined) updateData.imageUrls = imageUrls;
     if (isAvailable !== undefined) updateData.isAvailable = isAvailable;
+    if (allergenTags !== undefined) updateData.allergenTags = allergenTags;
+    if (dietaryTags !== undefined) updateData.dietaryTags = dietaryTags;
+    if (preparationTime !== undefined) updateData.preparationTime = preparationTime;
+    if (packingCharges !== undefined) updateData.packingCharges = packingCharges;
+    if (barcode !== undefined) updateData.barcode = barcode;
+    if (shortCode !== undefined) updateData.shortCode = shortCode;
+    if (costPriceINR !== undefined) updateData.costPriceINR = costPriceINR;
+    if (calories !== undefined) updateData.calories = calories;
     if (itemOrder !== undefined) updateData.order = itemOrder;
 
     const item = await MenuItem.findOneAndUpdate(
