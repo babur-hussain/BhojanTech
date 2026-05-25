@@ -25,8 +25,12 @@ export default function GlobalSoundPlayer() {
     const shouldIgnore = (data: any): boolean => {
       const currentBranchId = useBranchStore.getState().selectedBranchId;
       if (!currentBranchId || currentBranchId === 'all') return false;
-      const targetBranchId = data?.branchId || data?.order?.branchId;
-      if (targetBranchId && targetBranchId !== currentBranchId) return true;
+      
+      const targetBranchId = (data?.branchId || data?.order?.branchId)?.toString();
+      if (targetBranchId && targetBranchId !== currentBranchId) {
+        console.log(`[Sound] Ignoring event for branch ${targetBranchId} (current: ${currentBranchId})`);
+        return true;
+      }
       return false;
     };
 

@@ -38,8 +38,8 @@ export default function KDS() {
     return () => clearInterval(t);
   }, []);
 
-  // Fetch live KOTs on mount
-  useEffect(() => {
+  // Fetch live KOTs on mount and when tab becomes visible (to recover from background throttling)
+  const fetchActiveKots = useCallback(() => {
     api.get('/kots/active')
       .then(res => {
         // Map string dates to Date objects
@@ -52,12 +52,34 @@ export default function KDS() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    fetchActiveKots();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchActiveKots();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchActiveKots]);
+
   // ── Socket.io subscriptions ──────────────────────────────────────────────
   useEffect(() => {
     const unsub1 = subscribe('kot_created', (kot: any) => {
+      console.log('[KDS] Received kot_created event:', kot);
       const currentBranchId = useBranchStore.getState().selectedBranchId;
-      if (currentBranchId && currentBranchId !== 'all' && kot.branchId !== currentBranchId) return;
+      
+      // Strict string comparison safely handling ObjectIds
+      const kotBranchId = kot.branchId?.toString();
+      console.log('[KDS] currentBranchId:', currentBranchId, 'kotBranchId:', kotBranchId);
 
+      if (currentBranchId && currentBranchId !== 'all' && kotBranchId !== currentBranchId) {
+        console.log('[KDS] Ignoring KOT because branch ID mismatch');
+        return;
+      }
+
+      console.log('[KDS] Updating KOT state...');
       const parsed = { ...kot, createdAt: new Date(kot.createdAt) };
       setKots(prev => [parsed, ...prev]);
       setNewOrderFlash(true);
@@ -90,7 +112,8 @@ export default function KDS() {
 
     const unsub2 = subscribe('kot_update', ({ kot }: { type: string; kot: any }) => {
       const currentBranchId = useBranchStore.getState().selectedBranchId;
-      if (currentBranchId && currentBranchId !== 'all' && kot.branchId !== currentBranchId) return;
+      const kotBranchId = kot.branchId?.toString();
+      if (currentBranchId && currentBranchId !== 'all' && kotBranchId !== currentBranchId) return;
       setKots(prev => prev.map(k => ((k._id || k.id) === (kot._id || kot.id) ? {...kot, createdAt: new Date(kot.createdAt)} : k)));
     });
 
