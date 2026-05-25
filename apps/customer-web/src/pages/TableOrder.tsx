@@ -62,7 +62,6 @@ export const TableOrder = () => {
     const handleRequestBill = async () => {
         setError('');
         if (!order) return;
-        if (!window.confirm('Are you done eating and ready for the bill?')) return;
         setProcessing(true);
         try {
             await requestBill(order._id);
