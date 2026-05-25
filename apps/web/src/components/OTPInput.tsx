@@ -13,14 +13,24 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 6, value, onChange 
     const inputValue = e.target.value.replace(/[^0-9]/g, '');
     if (!inputValue) return;
 
+    if (inputValue.length > 2) {
+      const pastedData = inputValue.slice(0, length);
+      onChange(pastedData);
+      
+      const nextIndex = Math.min(pastedData.length, length - 1);
+      inputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    const singleChar = inputValue.slice(-1);
     const newValue = value.split('');
-    newValue[index] = inputValue.slice(-1);
+    newValue[index] = singleChar;
     const updatedValue = newValue.join('');
     
     onChange(updatedValue);
 
     // Auto focus to next input
-    if (inputValue && index < length - 1) {
+    if (index < length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -70,7 +80,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 6, value, onChange 
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
-          maxLength={1}
+          maxLength={length}
           value={value[index] || ''}
           onChange={(e) => handleChange(e, index)}
           onKeyDown={(e) => handleKeyDown(e, index)}

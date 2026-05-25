@@ -12,13 +12,6 @@ import { useAuthStore } from '../store/authStore';
 import { Smartphone, ShieldCheck, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { OTPInput } from '../components/OTPInput';
 
-declare global {
-  interface Window {
-    recaptchaVerifier?: RecaptchaVerifier;
-    recaptchaWidgetId?: number;
-  }
-}
-
 export const Login = () => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
@@ -28,10 +21,42 @@ export const Login = () => {
   const [error, setError] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
 
-  const recaptchaContainerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const setUser = useAuthStore((s) => s.setUser);
+
+  // Stable refs — survive re-renders, never touch React-owned DOM
+  const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+  const recaptchaWidgetIdRef = useRef<number | null>(null);
+
+  /**
+   * Lazily create the RecaptchaVerifier on first use, then reuse it.
+   * On subsequent calls, reset the existing widget for a fresh token
+   * via grecaptcha.reset() — no DOM manipulation needed.
+   */
+  const getVerifier = async (): Promise<RecaptchaVerifier> => {
+    // If we already have a verifier, just reset the widget for a fresh token
+    if (recaptchaVerifierRef.current) {
+      try {
+        const g = (window as any).grecaptcha;
+        if (g && recaptchaWidgetIdRef.current != null) {
+          g.reset(recaptchaWidgetIdRef.current);
+        }
+      } catch {
+        // reset failed — will still try to use verifier as-is
+      }
+      return recaptchaVerifierRef.current;
+    }
+
+    // First time: create and render the verifier
+    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+      size: 'invisible',
+    });
+    const widgetId = await verifier.render();
+    recaptchaVerifierRef.current = verifier;
+    recaptchaWidgetIdRef.current = widgetId;
+    return verifier;
+  };
 
   // Where to redirect after login (from router state or default)
   const from = (location.state as any)?.from || '/my-account';
@@ -43,18 +68,6 @@ export const Login = () => {
     return () => clearTimeout(t);
   }, [resendTimer]);
 
-  const setupRecaptcha = () => {
-    try {
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible'
-        });
-      }
-    } catch (e) {
-      console.log("Recaptcha already initialized");
-    }
-  };
-
   const handleSendOtp = async () => {
     setError('');
     if (phone.length !== 10) {
@@ -64,38 +77,42 @@ export const Login = () => {
 
     setLoading(true);
     try {
-      setupRecaptcha();
+      const verifier = await getVerifier();
       const phoneWithCode = `+91${phone}`;
 
-      const result = await signInWithPhoneNumber(auth, phoneWithCode, window.recaptchaVerifier!);
+      const result = await signInWithPhoneNumber(auth, phoneWithCode, verifier);
       setConfirmationResult(result);
       setStep('OTP');
       setResendTimer(30);
     } catch (err: any) {
       console.error('OTP send error:', err);
 
-      if (err.code === 'auth/invalid-phone-number') {
-        setError('Invalid phone number. Please check and try again.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many requests. Please wait a while before trying again.');
-      } else if (err.message && err.message.includes('reCAPTCHA has already been rendered')) {
-        // React StrictMode bug fix
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = undefined;
-        }
-        if (document.getElementById('recaptcha-container')) {
-          document.getElementById('recaptcha-container')!.innerHTML = '';
-        }
-        setError('Please click Get OTP again.');
-      } else {
-        setError('Failed to send OTP. Please try again.');
-      }
-
-      // Reset recaptcha on error
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = undefined;
+      const errorCode = err.code || '';
+      switch (errorCode) {
+        case 'auth/invalid-phone-number':
+          setError('Invalid phone number. Please check and try again.');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many attempts. Please wait a few minutes before trying again.');
+          break;
+        case 'auth/invalid-app-credential':
+          setError('Authentication configuration error. Please contact support.');
+          break;
+        case 'auth/captcha-check-failed':
+          setError('reCAPTCHA verification failed. Please try again.');
+          break;
+        case 'auth/quota-exceeded':
+          setError('SMS quota exceeded. Please try again later.');
+          break;
+        case 'auth/missing-phone-number':
+          setError('Please enter a valid phone number.');
+          break;
+        case 'auth/operation-not-allowed':
+          setError('Phone authentication is not enabled. Please contact support.');
+          break;
+        default:
+          setError('Failed to send OTP. Please try again.');
+          break;
       }
     } finally {
       setLoading(false);
@@ -157,7 +174,7 @@ export const Login = () => {
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6">
       {/* Invisible reCAPTCHA container - Rendered persistently to avoid DOM wipeouts */}
-      <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
+      <div id="recaptcha-container"></div>
 
       {/* Back Button */}
       <button

@@ -15,16 +15,34 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 6, value, onChange,
     const inputValue = e.target.value.replace(/[^0-9]/g, '');
     if (!inputValue) return;
 
+    // Safari OTP Autofill injects the full OTP into the currently focused input.
+    // If we receive a string longer than 2 characters in a single onChange event,
+    // it's an autofill or paste event.
+    if (inputValue.length > 2) {
+      const pastedData = inputValue.slice(0, length);
+      onChange(pastedData);
+      
+      const nextIndex = Math.min(pastedData.length, length - 1);
+      inputRefs.current[nextIndex]?.focus();
+      
+      if (pastedData.length === length && onComplete) {
+        setTimeout(() => onComplete(), 50);
+      }
+      return;
+    }
+
+    // Normal single character typing (handles overwriting existing digit)
+    const singleChar = inputValue.slice(-1);
     const newValue = value.split('');
-    newValue[index] = inputValue.slice(-1);
+    newValue[index] = singleChar;
     const updatedValue = newValue.join('');
     
     onChange(updatedValue);
 
     // Auto focus to next input
-    if (inputValue && index < length - 1) {
+    if (index < length - 1) {
       inputRefs.current[index + 1]?.focus();
-    } else if (inputValue && index === length - 1 && onComplete) {
+    } else if (index === length - 1 && onComplete) {
       // If it's the last input and we have a value, we can optionally trigger onComplete
       // setTimeout to allow state to update first
       setTimeout(() => onComplete(), 50);
@@ -83,7 +101,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 6, value, onChange,
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
-          maxLength={1}
+          maxLength={length}
           value={value[index] || ''}
           onChange={(e) => handleChange(e, index)}
           onKeyDown={(e) => handleKeyDown(e, index)}
