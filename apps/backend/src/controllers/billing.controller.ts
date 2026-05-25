@@ -303,7 +303,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     // Look up branch prefix for invoice numbering
     let branchPrefix: string | undefined;
     if (branchId) {
-      const branch = await Branch.findById(branchId).select('invoicePrefix').lean();
+      const branch = await Branch.findById(branchId).select('invoicePrefix').lean() as any;
       branchPrefix = branch?.invoicePrefix;
     }
     const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
@@ -622,7 +622,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     // Look up branch prefix for invoice numbering
     let branchPrefix: string | undefined;
     if (branchId) {
-      const branch = await Branch.findById(branchId).select('invoicePrefix').lean();
+      const branch = await Branch.findById(branchId).select('invoicePrefix').lean() as any;
       branchPrefix = branch?.invoicePrefix;
     }
     const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
