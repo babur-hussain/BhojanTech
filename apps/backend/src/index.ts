@@ -94,6 +94,9 @@ app.use(cookieParser());
 app.use(mongoSanitize());
 app.use(compression());
 
+// Trust the first proxy (e.g. AWS ELB, NGINX) so rate limiters can correctly read X-Forwarded-For
+app.set('trust proxy', 1);
+
 const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "dev";
 app.set('etag', 'strong');
 app.use(morgan(morganFormat, {

@@ -40,4 +40,4 @@ const BranchSchema: Schema = new Schema(
 // Allow searching by restaurant and branch quickly
 BranchSchema.index({ restaurantId: 1, _id: 1 });
 
-export const Branch = mongoose.model<IBranch>('Branch', BranchSchema);
+export const Branch = mongoose.models.Branch || mongoose.model<IBranch>('Branch', BranchSchema);
