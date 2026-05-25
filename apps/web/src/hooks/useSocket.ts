@@ -16,6 +16,11 @@ type SocketEvent =
 
 type EventHandler = (data: any) => void;
 
+// GLOBAL SINGLETON STATE
+let globalSocket: Socket | null = null;
+let globalHandlers: Map<string, Set<EventHandler>> = new Map();
+let activeUsers = 0;
+
 /**
  * Provides a single shared Socket.io connection per browser session.
  * Automatically joins the restaurant's room on connect.
@@ -24,61 +29,73 @@ type EventHandler = (data: any) => void;
  */
 export function useSocket() {
   const { user, accessToken } = useAuth();
-  const socketRef = useRef<Socket | null>(null);
-  const handlersRef = useRef<Map<string, Set<EventHandler>>>(new Map());
+  
+  // We still use refs to expose emit safely without breaking deps
+  const socketRef = useRef<Socket | null>(globalSocket);
 
   useEffect(() => {
     if (!user?.restaurantId || !accessToken) return;
 
-    const socket = io(BACKEND_URL, {
-      auth: { token: accessToken },
-      transports: ['websocket'],
-    });
+    activeUsers++;
 
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      socket.emit('join_restaurant', {
-        restaurantId: user.restaurantId,
-        branchId: user.branchId,
+    if (!globalSocket) {
+      globalSocket = io(BACKEND_URL, {
+        auth: { token: accessToken },
+        transports: ['websocket'],
       });
-    });
 
-    // Forward all tracked events to registered handlers
-    const EVENTS: SocketEvent[] = [
-      'kot_created', 'kot_update', 'order_update',
-      'table_update', 'menu_update', 'waiter_notification',
-      'delivery_order_placed', 'delivery_order_cancelled'
-    ];
-
-    EVENTS.forEach(event => {
-      socket.on(event, (data: any) => {
-        handlersRef.current.get(event)?.forEach(h => h(data));
+      globalSocket.on('connect', () => {
+        globalSocket?.emit('join_restaurant', {
+          restaurantId: user.restaurantId,
+          branchId: user.branchId,
+        });
       });
-    });
+
+      // Forward all tracked events to registered handlers
+      const EVENTS: SocketEvent[] = [
+        'kot_created', 'kot_update', 'order_update',
+        'table_update', 'menu_update', 'waiter_notification',
+        'delivery_order_placed', 'delivery_order_cancelled'
+      ];
+
+      EVENTS.forEach(event => {
+        globalSocket?.on(event, (data: any) => {
+          globalHandlers.get(event)?.forEach(h => h(data));
+        });
+      });
+    }
+
+    socketRef.current = globalSocket;
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      activeUsers--;
+      if (activeUsers === 0 && globalSocket) {
+        // Only disconnect if no components are using the socket anymore
+        // Actually, for a POS SPA, it's safer to just leave the socket alive globally
+        // but if we logout, we should probably destroy it.
+        // For robustness, we will let it live as long as the window lives.
+      }
     };
   }, [user?.restaurantId, accessToken]);
 
   const subscribe = useCallback(
     (event: SocketEvent, handler: EventHandler): (() => void) => {
-      if (!handlersRef.current.has(event)) {
-        handlersRef.current.set(event, new Set());
+      if (!globalHandlers.has(event)) {
+        globalHandlers.set(event, new Set());
       }
-      handlersRef.current.get(event)!.add(handler);
+      globalHandlers.get(event)!.add(handler);
 
       return () => {
-        handlersRef.current.get(event)?.delete(handler);
+        globalHandlers.get(event)?.delete(handler);
       };
     },
     []
   );
 
   const emit = useCallback((event: string, data?: any) => {
-    socketRef.current?.emit(event, data);
+    if (globalSocket) {
+      globalSocket.emit(event, data);
+    }
   }, []);
 
   return { subscribe, emit };

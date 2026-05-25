@@ -329,7 +329,17 @@ export default function LiveOrders() {
           setSelectedOrder((prev: any) => prev?._id === idToRemove ? null : prev);
         }
       } else if (order) {
-        setOrders(prev => prev.map(o => o._id === order._id ? order : o));
+        // For KOT_SENT or other updates, upsert the order!
+        // If it's a new online order, we might not have it in state yet.
+        setOrders(prev => {
+          const exists = prev.some(o => o._id === order._id);
+          if (exists) {
+            return prev.map(o => o._id === order._id ? order : o);
+          } else {
+            // Upsert: Add to the top of the list if missing
+            return [order, ...prev];
+          }
+        });
         setSelectedOrder((prev: any) => prev?._id === order._id ? order : prev);
       }
     });

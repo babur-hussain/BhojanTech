@@ -33,6 +33,10 @@ export function playTone(
 
 export function playNewOrderAlert(volume: number) {
   if (volume === 0) return;
+  const ctx = getAudioCtx();
+  if (ctx.state === 'suspended') {
+    console.warn("AudioContext is suspended. Auto-play policy blocked the ringtone.");
+  }
   // Three rising tones
   playTone(440, 0.15, volume, 0.0, 'square');
   playTone(550, 0.15, volume, 0.18, 'square');
@@ -47,6 +51,13 @@ export function playReadyAlert(volume: number) {
 }
 
 export function initAudioOnInteraction() {
-  const unlock = () => { getAudioCtx(); };
+  const unlock = () => { 
+    const ctx = getAudioCtx(); 
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(console.error);
+    }
+  };
   window.addEventListener('click', unlock, { once: true });
+  window.addEventListener('touchstart', unlock, { once: true });
+  window.addEventListener('keydown', unlock, { once: true });
 }
