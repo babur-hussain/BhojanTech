@@ -49,6 +49,7 @@ export default function ItemModal({ item, categories, initialCategoryId, onClose
 
       const res = await api.post('/menu/upload', formData2, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000, // Allow up to 60 seconds for image uploads
       });
 
       const newUrls: string[] = res.data.urls;
