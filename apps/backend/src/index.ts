@@ -44,21 +44,7 @@ export const io = new Server(server, {
   },
 });
 
-// Middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://*.firebase.io", "https://*.googleapis.com"],
-      frameAncestors: ["'none'"], // Prevent clickjacking
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-}));
+// ─── CORS & Middleware Setup ──────────────────────────────────────────────────
 const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
   ? [
       'https://bhojantech.com',
@@ -74,11 +60,32 @@ const ALLOWED_ORIGINS = process.env.NODE_ENV === 'production'
       'http://customer.lfvs.in'
     ]
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5174'];
+
+// CORS MUST come BEFORE helmet and all other middleware.
+// This ensures OPTIONS preflight responses always include the right headers.
 app.use(cors({
   origin: ALLOWED_ORIGINS,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
 }));
+
+// Explicitly handle preflight so no other middleware can interfere
+app.options('*', cors({
+  origin: ALLOWED_ORIGINS,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+}));
+
+// Helmet — security headers (AFTER cors so it doesn't stomp on preflight)
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP — we serve an API, not HTML pages
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false, // Disable — was causing "window.closed" warnings
+  crossOriginResourcePolicy: false, // Allow cross-origin resource loading
+}));
+
 app.use(express.json({ limit: '2mb' })); // Support base64 images in menu items
 app.use(cookieParser());
 app.use(mongoSanitize());

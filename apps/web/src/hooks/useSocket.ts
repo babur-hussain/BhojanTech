@@ -95,10 +95,9 @@ function startHealthCheck() {
     if (!globalSocket.connected) {
       console.log('[Socket] ❌ Health check: disconnected — forcing reconnect');
       globalSocket.connect();
-    } else {
-      // Re-join rooms silently every cycle (idempotent, no cost)
-      joinAllRooms(globalSocket, cachedRestaurantId, cachedUserBranchId);
+      // joinAllRooms will be called automatically by the 'connect' event handler
     }
+    // If connected, do nothing — rooms are joined on connect/reconnect events
   }, HEALTH_CHECK_INTERVAL);
 }
 
