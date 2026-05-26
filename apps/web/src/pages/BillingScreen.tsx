@@ -289,7 +289,7 @@ export default function BillingScreen() {
       const generatePayload: any = {};
       if (customerPhone) {
         generatePayload.customerPhone = customerPhone;
-        generatePayload.customerName = customer?.name || customerName;
+        generatePayload.customerName = customerName;
         if (customerDob) {
           const parts = customerDob.split('/');
           if (parts.length === 3 && parts[2].length === 4) {
@@ -367,7 +367,7 @@ export default function BillingScreen() {
       }
       if (customerPhone) {
         body.customerPhone = customerPhone;
-        body.customerName = customer?.name || customerName;
+        body.customerName = customerName;
         if (customerDob) {
           const parts = customerDob.split('/');
           if (parts.length === 3 && parts[2].length === 4) {
@@ -445,14 +445,13 @@ export default function BillingScreen() {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder={customer ? customer.name : 'Enter name...'}
-                      value={customer ? customer.name : customerName}
+                      placeholder="Enter name..."
+                      value={customerName}
                       onFocus={() => setActiveInput('name')}
-                      onChange={e => { if (!customer) { setCustomerName(e.target.value); } }}
-                      readOnly={!!customer}
+                      onChange={e => setCustomerName(e.target.value)}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
                         customer
-                          ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
+                          ? 'border-green-200 focus:ring-2 focus:ring-maroon focus:border-transparent text-gray-700 font-semibold'
                           : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent'
                       }`}
                     />
@@ -470,19 +469,16 @@ export default function BillingScreen() {
                       type="text"
                       maxLength={10}
                       placeholder="DD/MM/YYYY"
-                      value={customer?.dob ? formatDateToDisplay(customer.dob) : customerDob}
+                      value={customerDob}
                       onChange={e => {
-                        if (!customer) {
-                          let val = e.target.value.replace(/\D/g, '');
-                          if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2);
-                          if (val.length > 5) val = val.substring(0, 5) + '/' + val.substring(5, 9);
-                          setCustomerDob(val);
-                        }
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2);
+                        if (val.length > 5) val = val.substring(0, 5) + '/' + val.substring(5, 9);
+                        setCustomerDob(val);
                       }}
-                      readOnly={!!customer?.dob}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
-                        customer?.dob
-                          ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
+                        customer
+                          ? 'border-green-200 focus:ring-2 focus:ring-maroon focus:border-transparent text-gray-700 font-semibold'
                           : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent text-gray-700'
                       }`}
                     />
