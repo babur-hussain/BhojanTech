@@ -295,6 +295,8 @@ export default function BillingScreen() {
           if (parts.length === 3 && parts[2].length === 4) {
             generatePayload.customerDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
           }
+        } else if (customerDob === '') {
+          generatePayload.customerDob = null;
         }
       }
       
@@ -373,6 +375,8 @@ export default function BillingScreen() {
           if (parts.length === 3 && parts[2].length === 4) {
             body.customerDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
           }
+        } else if (customerDob === '') {
+          body.customerDob = null;
         }
       }
       if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
