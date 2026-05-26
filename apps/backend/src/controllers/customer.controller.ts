@@ -77,8 +77,10 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
         let total;
 
         if (isPhoneSearch) {
+            console.log(`[listCustomers] Phone search triggered for q: ${q}, restaurantId: ${restaurantId}`);
             // For partial phone search, we must fetch and filter in memory because the DB field is encrypted
             const allCustomers = await Customer.find(filter).sort({ [sortField]: sortOrder }).select('-otp -otpExpiresAt');
+            console.log(`[listCustomers] Fetched ${allCustomers.length} total customers for memory filter`);
             
             const matchedCustomers = [];
             for (const c of allCustomers) {
@@ -87,6 +89,7 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
                     matchedCustomers.push(c);
                 }
             }
+            console.log(`[listCustomers] Matched ${matchedCustomers.length} customers for q: ${q}`);
             total = matchedCustomers.length;
             customers = matchedCustomers.slice(0, Number(limit));
         } else {
@@ -115,6 +118,7 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
             };
         });
 
+        console.log(`[listCustomers] Returning ${customersData.length} customers`);
         const nextCursor = customers.length > 0 ? customers[customers.length - 1]._id : null;
 
         return res.json({ customers: customersData, total, nextCursor });
