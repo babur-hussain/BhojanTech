@@ -40,7 +40,10 @@ export default function KDS() {
 
   // Fetch live KOTs on mount and when tab becomes visible (to recover from background throttling)
   const fetchActiveKots = useCallback(() => {
-    api.get('/kots/active')
+    const currentBranchId = useBranchStore.getState().selectedBranchId;
+    const branchQuery = currentBranchId && currentBranchId !== 'all' ? `?branchId=${currentBranchId}` : '';
+    
+    api.get(`/kots/active${branchQuery}`)
       .then(res => {
         // Map string dates to Date objects
         const liveKots = res.data.map((k: any) => ({
