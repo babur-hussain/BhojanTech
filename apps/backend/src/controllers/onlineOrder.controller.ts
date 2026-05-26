@@ -244,8 +244,10 @@ const createKOTForOnlineOrder = async (order: any, specificItems?: any[]) => {
     }
 
     // Notify Kitchen via Socket.io
-    io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('kot_created', newKOT);
-    io.to(`restaurant_${order.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'KOT_SENT', order });
+    const emitRoom = `restaurant_${order.restaurantId}_branch_${order.branchId}`;
+    console.log(`[Socket Emit] Emitting kot_created to room: ${emitRoom}`);
+    io.to(emitRoom).emit('kot_created', newKOT);
+    io.to(emitRoom).emit('order_update', { type: 'KOT_SENT', order });
 };
 
 export const getLiveTableOrder = async (req: Request, res: Response) => {
