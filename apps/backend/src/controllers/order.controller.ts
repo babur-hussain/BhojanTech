@@ -3,6 +3,7 @@ import { Order } from '../models/Order';
 import { Table } from '../models/Table';
 import { KOT } from '../models/KOT';
 import { MenuItem } from '../models/MenuItem';
+import { MenuCategory } from '../models/MenuCategory';
 import { io } from '../index';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
@@ -191,20 +192,33 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
     // Create KOT only for real menu items (not retail/placeholder items)
     const menuItems = formattedItems.filter((item: any) => !!item.menuItemId);
     if (menuItems.length > 0) {
-      const kotItems = menuItems.map((item: any) => ({
-        orderItemId: item._id,
-        menuItemId: item.menuItemId,
-        name: item.name,
-        variantName: item.variantName,
-        quantity: item.quantity,
-        status: 'PENDING',
-      }));
+      const menuItemIds = menuItems.map((i: any) => i.menuItemId);
+      
+      const dbMenuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
+      const categoryIds = dbMenuItems.map(m => m.categoryId);
+      const categories = await MenuCategory.find({ _id: { $in: categoryIds } });
+
+      const kotItems = menuItems.map((item: any) => {
+        const menuItem = dbMenuItems.find(m => m._id.toString() === item.menuItemId.toString());
+        const category = categories.find(c => c._id.toString() === menuItem?.categoryId.toString());
+        return {
+          orderItemId: item._id,
+          menuItemId: item.menuItemId,
+          categoryId: menuItem?.categoryId || new mongoose.Types.ObjectId(),
+          station: category?.station || 'General',
+          name: item.name,
+          variantName: item.variantName,
+          quantity: item.quantity,
+          status: 'PENDING',
+        };
+      });
 
       const newKOT = new KOT({
         restaurantId: order.restaurantId,
         branchId: order.branchId,
         orderId: order._id,
         tableNumber: order.tableNumber,
+        waiterName: order.waiterName,
         isOnlineOrder: false,
         customerName: order.customerName,
         items: kotItems,
@@ -252,8 +266,6 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
 
     // Fetch menu items to get category/station
     const menuItemIds = itemsToSend.map(i => i.menuItemId);
-    const { MenuItem } = await import('../models/MenuItem');
-    const { MenuCategory } = await import('../models/MenuCategory');
     
     const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
     const categoryIds = menuItems.map(m => m.categoryId);

@@ -30,7 +30,8 @@ const formatDateToDisplay = (dateString?: string | Date) => {
   if (!dateString) return '';
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return '';
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  // Use UTC to prevent timezone shifts changing the date
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth()+1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
 };
 
 export default function BillingScreen() {
@@ -403,9 +404,9 @@ export default function BillingScreen() {
         <span className="text-sm bg-white bg-opacity-20 px-3 py-1 rounded">{preview.order.waiterName}</span>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row gap-0 max-w-6xl mx-auto w-full p-4 gap-4">
+      <div className="flex-1 flex flex-col lg:flex-row lg:h-[calc(100vh-64px)] lg:overflow-hidden">
         {/* Left: Order & GST */}
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {/* Customer Section - Beautiful Live Search */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
@@ -475,10 +476,18 @@ export default function BillingScreen() {
                       placeholder="DD/MM/YYYY"
                       value={customerDob}
                       onChange={e => {
-                        let val = e.target.value.replace(/\D/g, '');
-                        if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2);
-                        if (val.length > 5) val = val.substring(0, 5) + '/' + val.substring(5, 9);
-                        setCustomerDob(val);
+                        const digits = e.target.value.replace(/\D/g, '');
+                        let formatted = '';
+                        if (digits.length > 0) {
+                          formatted += digits.substring(0, 2);
+                        }
+                        if (digits.length > 2) {
+                          formatted += '/' + digits.substring(2, 4);
+                        }
+                        if (digits.length > 4) {
+                          formatted += '/' + digits.substring(4, 8);
+                        }
+                        setCustomerDob(formatted);
                       }}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
                         customer
@@ -759,7 +768,7 @@ export default function BillingScreen() {
         </div>
 
         {/* Right: Payment Panel */}
-        <div className="w-full lg:w-96 space-y-4 self-start">
+        <div className="w-full lg:w-96 space-y-4 lg:self-start lg:overflow-y-auto lg:max-h-full p-4 lg:p-0">
 
           {/* Totals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

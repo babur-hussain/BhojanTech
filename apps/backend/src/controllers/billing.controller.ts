@@ -129,6 +129,7 @@ export const billingCustomerLookup = async (req: AuthRequest, res: Response) => 
         _id: customer._id,
         name: customer.name,
         phone: customer.phone,
+        dob: customer.dob,
         tier: customer.tier,
         segment: customer.segment,
         loyaltyPoints: customer.loyaltyPoints,
@@ -184,6 +185,9 @@ export const generateBill = async (req: AuthRequest, res: Response) => {
       if (customerDob) {
          customer.dob = new Date(customerDob);
          customer.birthdayMonth = customer.dob.getMonth() + 1;
+      } else if (customerDob === null) {
+         customer.dob = undefined;
+         customer.birthdayMonth = undefined;
       }
       
       await customer.save();
@@ -398,7 +402,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
           (order._id as any).toString(),
           order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity })),
           undefined, // referredByCode
-          customerDob ? new Date(customerDob) : undefined
+          customerDob === null ? null : (customerDob ? new Date(customerDob) : undefined)
         );
 
         // Deduct redeemed points if any

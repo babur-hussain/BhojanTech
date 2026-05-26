@@ -95,7 +95,7 @@ export async function upsertCustomer(
     orderId: string,
     orderItems: { name: string; menuItemId: string; quantity: number }[],
     referredByCode?: string,
-    dob?: Date
+    dob?: Date | null
 ): Promise<{
     customer: ICustomer;
     isFirstVisit: boolean;
@@ -167,6 +167,9 @@ export async function upsertCustomer(
         if (dob) {
             customer.dob = dob;
             customer.birthdayMonth = dob.getMonth() + 1;
+        } else if (dob === null) {
+            customer.dob = undefined;
+            customer.birthdayMonth = undefined;
         }
     }
 
