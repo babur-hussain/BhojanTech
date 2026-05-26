@@ -51,6 +51,7 @@ export default function BillingScreen() {
 
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerDob, setCustomerDob] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [customerLoading, setCustLoading] = useState(false);
   const [redeemPoints, setRedeemPoints] = useState('');
@@ -173,6 +174,11 @@ export default function BillingScreen() {
     justSelectedRef.current = true;
     setCustomerPhone(s.phone || '');
     setCustomerName(s.name || '');
+    if (s.dob) {
+      setCustomerDob(new Date(s.dob).toISOString().split('T')[0]);
+    } else {
+      setCustomerDob('');
+    }
     setShowSugg(false);
     setSuggestions([]);
     // Trigger full CRM lookup
@@ -317,7 +323,11 @@ export default function BillingScreen() {
       if (discountFlat > pointsDiscount && discountVal) {
         body.discount = { type: discountType, value: +discountVal, approvedBy: approver || undefined };
       }
-      if (customerPhone) { body.customerPhone = customerPhone; body.customerName = customer?.name || customerName; }
+      if (customerPhone) {
+        body.customerPhone = customerPhone;
+        body.customerName = customer?.name || customerName;
+        if (customerDob) body.customerDob = customerDob;
+      }
       if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
       if (whatsapp) body.whatsappNumber = whatsapp;
 
@@ -358,8 +368,8 @@ export default function BillingScreen() {
             </div>
 
             <div className="p-5 relative" ref={suggRef}>
-              {/* Phone + Name Row */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* Phone + Name + DOB Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 {/* Phone Input with live dropdown */}
                 <div className="relative">
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Mobile Number</label>
@@ -402,6 +412,24 @@ export default function BillingScreen() {
                     {suggLoading && activeInput === 'name' && !customer && (
                       <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-maroon" />
                     )}
+                  </div>
+                </div>
+
+                {/* Date of Birth Input */}
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Date of Birth</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={customer?.dob ? new Date(customer.dob).toISOString().split('T')[0] : customerDob}
+                      onChange={e => { if (!customer) { setCustomerDob(e.target.value); } }}
+                      readOnly={!!customer?.dob}
+                      className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
+                        customer?.dob
+                          ? 'border-green-200 bg-green-50 text-green-800 font-semibold cursor-not-allowed'
+                          : 'border-gray-200 focus:ring-2 focus:ring-maroon focus:border-transparent text-gray-700'
+                      }`}
+                    />
                   </div>
                 </div>
               </div>

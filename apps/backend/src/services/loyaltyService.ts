@@ -94,7 +94,8 @@ export async function upsertCustomer(
     amountPaid: number,
     orderId: string,
     orderItems: { name: string; menuItemId: string; quantity: number }[],
-    referredByCode?: string
+    referredByCode?: string,
+    dob?: Date
 ): Promise<{
     customer: ICustomer;
     isFirstVisit: boolean;
@@ -129,6 +130,8 @@ export async function upsertCustomer(
             referralCode,
             referredBy: referredByCode,
             loyaltyPoints: 0,
+            dob,
+            birthdayMonth: dob ? dob.getMonth() + 1 : undefined,
         });
 
         // Award referrer points if valid code
@@ -161,6 +164,10 @@ export async function upsertCustomer(
         customer.totalSpend += amountPaid;
         customer.avgOrderValue = +(customer.totalSpend / customer.totalVisits).toFixed(2);
         customer.lastVisitDate = now;
+        if (dob) {
+            customer.dob = dob;
+            customer.birthdayMonth = dob.getMonth() + 1;
+        }
     }
 
     // Update favorite items

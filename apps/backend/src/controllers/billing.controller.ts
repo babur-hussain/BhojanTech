@@ -184,6 +184,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       amountPaidINR,
       customerPhone,
       customerName,
+      customerDob,
       redeemPoints: pointsToRedeem,
       razorpayOrderId,
       razorpayPaymentId,
@@ -362,7 +363,9 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
           customerName || order.customerName || 'Guest',
           grandTotal,
           (order._id as any).toString(),
-          order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity }))
+          order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity })),
+          undefined, // referredByCode
+          customerDob ? new Date(customerDob) : undefined
         );
 
         // Deduct redeemed points if any
@@ -528,6 +531,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       amountPaidINR,
       customerPhone,
       customerName,
+      customerDob,
       redeemPoints: pointsToRedeem,
     } = req.body;
 
@@ -667,7 +671,9 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
           (order._id as any).toString(),
           order.items
             .filter((i: any) => i.menuItemId && i.menuItemId.toString() !== '000000000000000000000000')
-            .map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity }))
+            .map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity })),
+          undefined, // referredByCode
+          customerDob ? new Date(customerDob) : undefined
         );
 
         if (pointsToRedeem && loyaltyRedemptionDiscount > 0) {
