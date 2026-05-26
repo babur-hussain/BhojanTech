@@ -15,7 +15,8 @@ const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, 
 export const getActiveOrders = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
-    query.status = { $in: ['OPEN', 'BILLED'] };
+    // Include PAID orders so that Takeaway / Direct Invoices remain on LiveOrders until COMPLETED
+    query.status = { $in: ['OPEN', 'BILLED', 'PAID'] };
     const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
     return res.json(orders);
   } catch (error) {
@@ -146,6 +147,28 @@ export const addItemsToOrder = async (req: AuthRequest, res: Response) => {
 
     io.to(`restaurant_${req.user!.restaurantId}_branch_${order.branchId}`).emit('order_update', { type: 'ITEMS_ADDED', order });
 
+    return res.json(order);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const completeOrder = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const order = await Order.findOne(query);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    order.status = 'COMPLETED';
+    await order.save();
+
+    const room = order.branchId
+      ? `restaurant_${req.user!.restaurantId}_branch_${order.branchId}`
+      : `restaurant_${req.user!.restaurantId}`;
+      
+    io.to(room).emit('order_update', { type: 'ORDER_COMPLETED', orderId: order._id });
+    
     return res.json(order);
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });

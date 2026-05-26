@@ -740,12 +740,16 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
           pointsRedeemed: pointsToRedeem || 0,
           newBalance,
           tierDiscountINR,
-          loyaltyRedemptionDiscountINR: loyaltyRedemptionDiscount,
-        };
+          };
       } catch (loyaltyErr) {
         console.error('[Loyalty] Error processing loyalty:', loyaltyErr);
       }
     }
+
+    const room = branchId
+      ? `restaurant_${restaurantId}_branch_${branchId}`
+      : `restaurant_${restaurantId}`;
+    io.to(room).emit('order_update', { type: 'NEW_ORDER', order });
 
     return res.status(201).json({ invoice, loyaltyInfo, order });
   } catch (err) {

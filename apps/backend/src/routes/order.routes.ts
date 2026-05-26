@@ -16,5 +16,6 @@ router.post('/', validate(createOrderSchema), orderCtrl.createOrder);
 router.post('/takeaway', validate(createTakeawaySchema), orderCtrl.createTakeawayOrder);
 router.post('/:id/items', validate(addItemsSchema), orderCtrl.addItemsToOrder);
 router.post('/:id/kot', validate(generateKOTSchema), orderCtrl.generateKOT);
+router.put('/:id/complete', orderCtrl.completeOrder);
 
 export default router;

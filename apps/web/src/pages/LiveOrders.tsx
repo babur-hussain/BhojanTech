@@ -250,21 +250,49 @@ function OrderDetailPanel({ order, onClose }: { order: any; onClose: () => void 
 
         {/* Actions */}
         <div className="p-4 border-t border-gray-100 space-y-2">
-          {order.status === 'OPEN' && (
-            <button
-              onClick={() => navigate(`/bill/${order._id}`)}
-              className="w-full bg-maroon text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
-            >
-              <ReceiptText size={16} /> Generate Bill
-            </button>
-          )}
-          {order.status === 'BILLED' && (
-            <button
-              onClick={() => navigate(`/bill/${order._id}`)}
-              className="w-full bg-saffron text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
-            >
-              <ReceiptText size={16} /> View / Settle Bill
-            </button>
+          {order.tableNumber !== 'TAKEAWAY' && order.tableNumber !== 'DIRECT' && !order.isOnlineOrder ? (
+            <>
+              {order.status === 'OPEN' && (
+                <button
+                  onClick={() => navigate(`/bill/${order._id}`)}
+                  className="w-full bg-maroon text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
+                >
+                  <ReceiptText size={16} /> Generate Bill
+                </button>
+              )}
+              {order.status === 'BILLED' && (
+                <button
+                  onClick={() => navigate(`/bill/${order._id}`)}
+                  className="w-full bg-saffron text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
+                >
+                  <ReceiptText size={16} /> View / Settle Bill
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {order.status !== 'PAID' && (
+                <button
+                  onClick={() => navigate(`/bill/${order._id}`)}
+                  className="w-full bg-saffron text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
+                >
+                  <ReceiptText size={16} /> View / Settle Bill
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  try {
+                    await api.put(`/orders/${order._id}/complete`);
+                    onClose();
+                  } catch (err) {
+                    console.error('Failed to mark delivered:', err);
+                  }
+                }}
+                className="w-full bg-green-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-opacity-90 transition-colors"
+              >
+                <CheckCircle size={16} /> Mark Delivered
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -281,7 +309,7 @@ export default function LiveOrders() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'OPEN' | 'BILLED'>('OPEN');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'OPEN' | 'BILLED' | 'PAID'>('OPEN');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [, tick] = useState(0);
@@ -330,7 +358,7 @@ export default function LiveOrders() {
           if (prev.some(o => o._id === order._id)) return prev;
           return [order, ...prev];
         });
-      } else if (type === 'ORDER_PAID' || type === 'ORDER_COMPLETED' || type === 'ORDER_CANCELLED') {
+      } else if (type === 'ORDER_COMPLETED' || type === 'ORDER_CANCELLED') {
         const idToRemove = orderId || (order && order._id);
         if (idToRemove) {
           setOrders(prev => prev.filter(o => o._id !== idToRemove));
@@ -355,6 +383,10 @@ export default function LiveOrders() {
   }, [subscribe]);
 
   const filtered = orders.filter(o => {
+    // Hide dine-in orders that are already paid (they are effectively completed)
+    if (o.status === 'PAID' && o.tableNumber !== 'TAKEAWAY' && o.tableNumber !== 'DIRECT' && !o.isOnlineOrder) {
+      return false;
+    }
     if (statusFilter !== 'all' && o.status !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -433,7 +465,7 @@ export default function LiveOrders() {
           />
         </div>
         <div className="flex gap-2">
-          {(['all', 'OPEN', 'BILLED'] as const).map(s => (
+          {(['all', 'OPEN', 'BILLED', 'PAID'] as const).map(s => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -442,7 +474,7 @@ export default function LiveOrders() {
                   : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                 }`}
             >
-              {s === 'all' ? 'All' : s === 'OPEN' ? '🟢 Active' : '🟡 Billed'}
+              {s === 'all' ? 'All' : s === 'OPEN' ? '🟢 Active' : s === 'BILLED' ? '🟡 Billed' : '🔵 Paid'}
             </button>
           ))}
         </div>

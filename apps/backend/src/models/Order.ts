@@ -26,7 +26,7 @@ export interface IOrder extends Document {
   paymentMode?: string;
   paymentStatus?: 'PENDING' | 'PAID' | 'FAILED';
   items: IOrderItem[];
-  status: 'OPEN' | 'BILLED' | 'PAID' | 'CANCELLED';
+  status: 'OPEN' | 'BILLED' | 'PAID' | 'COMPLETED' | 'CANCELLED';
   totalAmountINR: number;
   deliveryPlatform?: 'ZOMATO' | 'SWIGGY' | 'ONDC' | 'MANUAL';
   externalOrderId?: string;
@@ -61,7 +61,7 @@ const OrderSchema: Schema = new Schema(
         sentToKitchen: { type: Boolean, default: false },
       },
     ],
-    status: { type: String, enum: ['OPEN', 'BILLED', 'PAID', 'CANCELLED'], default: 'OPEN' },
+    status: { type: String, enum: ['OPEN', 'BILLED', 'PAID', 'COMPLETED', 'CANCELLED'], default: 'OPEN' },
     totalAmountINR: { type: Number, required: true, default: 0 },
     deliveryPlatform: { type: String, enum: ['ZOMATO', 'SWIGGY', 'ONDC', 'MANUAL'] },
     externalOrderId: { type: String, index: true },
