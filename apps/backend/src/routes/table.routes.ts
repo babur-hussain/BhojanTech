@@ -10,6 +10,8 @@ router.use(requireAuth);
 
 router.get('/', tableCtrl.getTables);
 router.post('/', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), tableCtrl.createTable);
+router.put('/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), tableCtrl.updateTable);
+router.delete('/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), tableCtrl.deleteTable);
 router.patch('/:id/status', tableCtrl.updateTableStatus);
 
 export default router;

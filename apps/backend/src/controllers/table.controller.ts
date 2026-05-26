@@ -53,3 +53,39 @@ export const updateTableStatus = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
+export const updateTable = async (req: AuthRequest, res: Response) => {
+  try {
+    const { number, capacity, branchId } = req.body;
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    
+    const table = await Table.findOneAndUpdate(
+      query,
+      { number, capacity, branchId },
+      { new: true }
+    );
+
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${table.branchId}`).emit('table_update', { type: 'TABLE_UPDATED', table });
+    return res.json(table);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const deleteTable = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    
+    const table = await Table.findOneAndDelete(query);
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+
+    io.to(`restaurant_${req.user!.restaurantId}_branch_${table.branchId}`).emit('table_update', { type: 'TABLE_DELETED', tableId: table._id });
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
