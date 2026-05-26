@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Customer } from '../models/Customer';
+import { Order } from '../models/Order';
 import { getOrInitSettings } from '../services/loyaltyService';
 import { sendOTP } from '../services/smsService';
 
@@ -184,5 +185,29 @@ export const updateMyProfile = async (req: Request, res: Response) => {
         return res.json({ message: 'Profile updated successfully', customer });
     } catch (err) {
         return res.status(500).json({ error: 'Failed to update profile' });
+    }
+};
+
+// ─── Customer portal: get my orders (JWT protected) ──────────────────────────
+
+export const getMyOrders = async (req: Request, res: Response) => {
+    try {
+        const auth = req.headers.authorization?.split(' ')[1];
+        if (!auth) return res.status(401).json({ error: 'Unauthorized' });
+
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET) return res.status(500).json({ error: 'Server misconfiguration' });
+
+        const decoded: any = jwt.verify(auth, JWT_SECRET);
+        
+        const orders = await Order.find({ customerPhone: decoded.phone, status: { $ne: 'OPEN' } })
+            .sort({ createdAt: -1 })
+            .populate('items.menuItemId', 'name price imageUrl')
+            .lean();
+
+        return res.json({ orders });
+    } catch (err) {
+        console.error('getMyOrders Error:', err);
+        return res.status(500).json({ error: 'Failed to fetch orders' });
     }
 };

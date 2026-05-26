@@ -13,6 +13,8 @@ export const TableOrder = () => {
     const [processing, setProcessing] = useState(false);
     const [sessionClosed, setSessionClosed] = useState(false);
     const [error, setError] = useState('');
+    const [countdown, setCountdown] = useState<number | null>(null);
+    const { clearCart } = useCartStore();
 
     const fetchOrder = async () => {
         if (!tableNumber) { navigate('/menu'); return; }
@@ -58,6 +60,21 @@ export const TableOrder = () => {
             clearInterval(interval);
         };
     }, [tableNumber, navigate]);
+
+    // Timer effect for auto-close
+    useEffect(() => {
+        if ((sessionClosed || order?.status === 'BILLED') && countdown === null) {
+            setCountdown(10);
+        }
+        
+        if (countdown !== null && countdown > 0) {
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+            return () => clearTimeout(timer);
+        } else if (countdown === 0) {
+            clearCart();
+            navigate('/menu', { replace: true });
+        }
+    }, [sessionClosed, order?.status, countdown, clearCart, navigate]);
 
     const handleRequestBill = async () => {
         setError('');
@@ -134,8 +151,15 @@ export const TableOrder = () => {
                             <p className="text-3xl font-black text-green-700">₹{order.totalAmountINR.toFixed(2)}</p>
                         </div>
                     )}
+                    
+                    {countdown !== null && (
+                        <p className="text-sm text-gray-500 font-medium mt-4">
+                            Closing session in <span className="text-brand-600 font-bold">{countdown}</span> seconds...
+                        </p>
+                    )}
+
                     <button
-                        onClick={() => navigate('/menu')}
+                        onClick={() => { clearCart(); navigate('/menu'); }}
                         className="w-full text-white font-bold py-3.5 rounded-2xl transition-colors"
                         style={{ background: '#B91C1C' }}
                     >
@@ -159,9 +183,14 @@ export const TableOrder = () => {
                     <p className="text-xs text-gray-500 font-medium tracking-wide">Live Session</p>
                 </div>
                 {order.status === 'BILLED' && (
-                    <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-200">
-                        Bill Requested
-                    </span>
+                    <div className="flex flex-col items-end">
+                        <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-200">
+                            Bill Requested
+                        </span>
+                        {countdown !== null && (
+                            <span className="text-[10px] font-bold text-gray-400 mt-1">Closing in {countdown}s</span>
+                        )}
+                    </div>
                 )}
             </header>
 

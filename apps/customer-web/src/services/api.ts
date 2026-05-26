@@ -45,6 +45,11 @@ export const updateProfile = async (data: { name: string; dob?: string }) => {
     return res.data.customer;
 };
 
+export const getMyOrders = async () => {
+    const res = await api.get('/customerAuth/orders');
+    return res.data.orders;
+};
+
 export const payOnlineOrder = async (orderId: string) => {
     const { data } = await api.post(`/online-orders/${orderId}/pay`);
     return data;

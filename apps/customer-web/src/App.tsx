@@ -5,6 +5,7 @@ import { Tracking } from './pages/Tracking';
 import { Login } from './pages/Login';
 import { Onboarding } from './pages/Onboarding';
 import { MyAccount } from './pages/MyAccount';
+import { History } from './pages/History';
 import { TableOrder } from './pages/TableOrder';
 import { ItemDetail } from './pages/ItemDetail';
 import { useCartStore } from './store/cartStore';
@@ -46,6 +47,7 @@ function App() {
           <Route path="/table-order" element={<TableOrder />} />
           <Route path="/tracking/:orderId" element={<Tracking />} />
           <Route path="/my-account" element={<MyAccount />} />
+          <Route path="/history" element={<History />} />
 
           <Route path="*" element={<Navigate to="/menu" replace />} />
         </Routes>

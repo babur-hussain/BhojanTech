@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Gift, Crown, History, LogOut, ChevronRight, Share2, ArrowLeft } from 'lucide-react';
+import { User, Gift, Crown, History as HistoryIcon, LogOut, ChevronRight, Share2, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { getProfile } from '../services/api';
 
@@ -102,9 +102,9 @@ export const MyAccount = () => {
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
                     </button>
-                    <button className="w-full flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50">
+                    <button onClick={() => navigate('/history')} className="w-full flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-50 text-blue-500 p-2 rounded-lg"><History size={20} /></div>
+                            <div className="bg-blue-50 text-blue-500 p-2 rounded-lg"><HistoryIcon size={20} /></div>
                             <span className="font-semibold text-gray-800">Visit History</span>
                         </div>
                         <ChevronRight size={18} className="text-gray-400" />
