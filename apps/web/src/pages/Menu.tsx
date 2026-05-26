@@ -37,7 +37,7 @@ export default function MenuManagement() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [branchStoreId]);
 
   const handleToggleCategory = async (id: string, current: boolean) => {
     try {
