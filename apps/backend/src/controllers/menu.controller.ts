@@ -18,6 +18,7 @@ const clearMenuCache = async (restaurantId?: string, branchId?: string | null) =
   // Always also clear the 'all' public key — the customer menu uses this
   await redis.del(`menu_public:${restaurantId}:all`);
   await redis.del(`menu_categories:${restaurantId}:all`);
+  await redis.del(`menu_items:${restaurantId}:all`);
   // If it was a global (no-branch) update, wipe all related keys
   if (!branchId) {
     const keys = await redis.keys(`menu_*:${restaurantId}:*`);
