@@ -159,6 +159,10 @@ export const generateBill = async (req: AuthRequest, res: Response) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (order.status !== 'OPEN') return res.status(400).json({ error: 'Order is not open' });
 
+    if (!customerPhone || !customerName) {
+      return res.status(400).json({ error: 'Customer mobile number and name are required' });
+    }
+
     if (customerPhone) {
       order.customerPhone = customerPhone;
       
@@ -238,6 +242,10 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     if (!order) return res.status(404).json({ error: 'Order not found' });
     // Allow CANCELLED but nothing else outside the normal flow
     if (order.status === 'CANCELLED') return res.status(400).json({ error: 'Order is cancelled' });
+
+    if (!customerPhone || !customerName) {
+      return res.status(400).json({ error: 'Customer mobile number and name are required' });
+    }
 
     // If already PAID, return the most-recent invoice immediately (idempotent re-print)
     if (order.status === 'PAID') {
@@ -576,6 +584,10 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'No items provided' });
+    }
+
+    if (!customerPhone || !customerName) {
+      return res.status(400).json({ error: 'Customer mobile number and name are required' });
     }
 
     // 1. Create a "Direct" Order

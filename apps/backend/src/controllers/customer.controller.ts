@@ -105,9 +105,23 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
             total = dbTotal;
         }
 
+        const phones = customers.map((c: any) => c.phone).filter(Boolean);
+        const orderStats = await Order.aggregate([
+            { $match: { restaurantId: new mongoose.Types.ObjectId(restaurantId as string), customerPhone: { $in: phones }, status: { $in: ['PAID', 'COMPLETED'] } } },
+            { $group: { _id: '$customerPhone', totalSpent: { $sum: '$totalAmountINR' }, visits: { $sum: 1 } } }
+        ]);
+        const statsMap = new Map(orderStats.map(s => [s._id, s]));
+
         const customersData = customers.map((c: any) => {
             if (c.decryptFieldsSync) c.decryptFieldsSync();
             const obj = c.toJSON ? c.toJSON() : c;
+            
+            const stats = statsMap.get(obj.phone);
+            if (stats) {
+                obj.totalSpend = Math.max(obj.totalSpend || 0, stats.totalSpent);
+                obj.totalVisits = Math.max(obj.totalVisits || 0, stats.visits);
+            }
+
             // Remove sensitive fields but return everything else
             delete obj.otp;
             delete obj.otpExpiresAt;
@@ -137,11 +151,21 @@ export const getCustomerDetail = async (req: AuthRequest, res: Response) => {
 
         const [transactions, orders] = await Promise.all([
             LoyaltyTransaction.find({ customerId: customer._id }).sort({ createdAt: -1 }).limit(50),
-            Order.find({ restaurantId, customerPhone: customer.phone, status: { $in: ['PAID', 'BILLED'] } })
+            Order.find({ restaurantId, customerPhone: customer.phone, status: { $in: ['PAID', 'BILLED', 'COMPLETED'] } })
                 .sort({ createdAt: -1 })
                 .limit(20)
-                .select('items totalAmountINR createdAt tableNumber waiterName'),
+                .select('items totalAmountINR createdAt tableNumber waiterName status'),
         ]);
+
+        const orderStats = await Order.aggregate([
+            { $match: { restaurantId: new mongoose.Types.ObjectId(restaurantId as string), customerPhone: customer.phone, status: { $in: ['PAID', 'COMPLETED'] } } },
+            { $group: { _id: null, totalSpent: { $sum: '$totalAmountINR' }, visits: { $sum: 1 } } }
+        ]);
+        
+        if (orderStats.length > 0) {
+            customer.totalSpend = Math.max(customer.totalSpend || 0, orderStats[0].totalSpent);
+            customer.totalVisits = Math.max(customer.totalVisits || 0, orderStats[0].visits);
+        }
 
         return res.json({ customer, transactions, orders });
     } catch (err) {

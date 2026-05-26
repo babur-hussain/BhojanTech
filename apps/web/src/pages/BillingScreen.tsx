@@ -284,6 +284,15 @@ export default function BillingScreen() {
 
   // Generate Proforma Bill
   const handleGenerateBill = async () => {
+    if (!customerPhone || customerPhone.length !== 10) {
+      alert('Please provide a valid 10-digit mobile number before generating the bill.');
+      return;
+    }
+    if (!customerName || customerName.trim() === '') {
+      alert('Please provide the customer name before generating the bill.');
+      return;
+    }
+    
     try {
       setGeneratingBill(true);
       
@@ -356,6 +365,15 @@ export default function BillingScreen() {
 
   // Pay — live API call
   const handlePay = async () => {
+    if (!customerPhone || customerPhone.length !== 10) {
+      alert('Please provide a valid 10-digit mobile number before collecting payment.');
+      return;
+    }
+    if (!customerName || customerName.trim() === '') {
+      alert('Please provide the customer name before collecting payment.');
+      return;
+    }
+    
     try {
       setPaying(true);
       const body: any = {

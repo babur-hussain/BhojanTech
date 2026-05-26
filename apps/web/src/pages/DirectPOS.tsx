@@ -141,45 +141,35 @@ export default function DirectPOS() {
       const menuCartItems = cart.filter(c => c.type === 'menu');
       const retailCartItems = cart.filter(c => c.type === 'retail');
 
-      if (menuCartItems.length === 0 && retailCartItems.length > 0) {
-        // ── RETAIL-ONLY: use /billing/direct ──
-        const res = await api.post('/billing/direct', {
-          orderType: 'TAKEAWAY',
-          items: retailCartItems.map(c => ({
+      const res = await api.post('/orders/takeaway', {
+        orderType: 'TAKEAWAY',
+        items: menuCartItems.map(c => ({
+          menuItemId: c.id,
+          name: c.name,
+          variantName: c.variantName,
+          quantity: c.quantity,
+          priceAtOrderTime: c.price,
+          gstSlab: c.gstSlab,
+        })),
+        retailItems: retailCartItems.map(c => ({
+          _id: c.id,
+          name: c.name,
+          quantity: c.quantity,
+          priceAtOrderTime: c.price,
+          gstSlab: c.gstSlab,
+        })),
+      });
+      navigate(`/bill/${res.data._id}`, {
+        state: {
+          retailItems: retailCartItems.map(c => ({
+            _id: c.id,
             name: c.name,
             quantity: c.quantity,
-            priceAtOrderTime: c.price,
-            gstSlab: c.gstSlab,    // ← pass actual product GST
-          })),
-          paymentMode,
-        });
-        navigate(`/bill/${res.data.order._id}`);
-      } else {
-        // ── MENU (+ optional retail) ──
-        const res = await api.post('/orders/takeaway', {
-          orderType: 'TAKEAWAY',
-          items: menuCartItems.map(c => ({
-            menuItemId: c.id,
-            name: c.name,
-            variantName: c.variantName,
-            quantity: c.quantity,
-            priceAtOrderTime: c.price,
-            gstSlab: c.gstSlab,    // ← pass actual product GST
-          })),
-          retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
-        });
-        navigate(`/bill/${res.data._id}`, {
-          state: {
-            retailItems: retailCartItems.map(c => ({
-              _id: c.id,
-              name: c.name,
-              quantity: c.quantity,
-              priceINR: c.price,
-              gstSlab: c.gstSlab,
-            }))
-          }
-        });
-      }
+            priceINR: c.price,
+            gstSlab: c.gstSlab,
+          }))
+        }
+      });
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
       alert(e?.response?.data?.error || 'Failed to create order. Please try again.');
