@@ -363,7 +363,7 @@ export default function DirectPOS() {
       </div>
 
       {/* ── Right: Cart & Checkout ─────────────────────────────────────── */}
-      <div className="w-full lg:w-[380px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+      <div className="w-full lg:w-[380px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden self-start max-h-[calc(100vh-80px)]">
         {/* Header */}
         <div className="bg-maroon text-white p-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2"><ShoppingCart size={18} /> Current Order</h2>

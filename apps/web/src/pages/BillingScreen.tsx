@@ -758,7 +758,7 @@ export default function BillingScreen() {
         </div>
 
         {/* Right: Payment Panel */}
-        <div className="w-full lg:w-96 space-y-4">
+        <div className="w-full lg:w-96 space-y-4 self-start">
 
           {/* Totals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
