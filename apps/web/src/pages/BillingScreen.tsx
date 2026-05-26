@@ -63,6 +63,7 @@ export default function BillingScreen() {
   const [showSugg, setShowSugg] = useState(false);
   const [activeInput, setActiveInput] = useState<'phone' | 'name' | null>(null);
   const suggRef = React.useRef<HTMLDivElement>(null);
+  const justSelectedRef = React.useRef(false);
 
   // Retail items
   const [retailCatalog, setRetailCatalog] = useState<any[]>([]);
@@ -136,14 +137,14 @@ export default function BillingScreen() {
 
   // Debounced suggestions for phone
   useEffect(() => {
-    if (customer) return;
+    if (customer || justSelectedRef.current) return;
     const t = setTimeout(() => searchSuggestions(customerPhone), 300);
     return () => clearTimeout(t);
   }, [customerPhone, customer, searchSuggestions]);
 
   // Debounced suggestions for name
   useEffect(() => {
-    if (customer) return;
+    if (customer || justSelectedRef.current) return;
     const t = setTimeout(() => searchSuggestions(customerName), 300);
     return () => clearTimeout(t);
   }, [customerName, customer, searchSuggestions]);
@@ -169,12 +170,15 @@ export default function BillingScreen() {
 
   // Select a suggestion → autofill both fields + trigger CRM lookup
   const selectSuggestion = (s: any) => {
+    justSelectedRef.current = true;
     setCustomerPhone(s.phone || '');
     setCustomerName(s.name || '');
     setShowSugg(false);
     setSuggestions([]);
     // Trigger full CRM lookup
     handleCustomerSearch(s.phone);
+    // Allow debounced search again after 500ms (longer than debounce timeout)
+    setTimeout(() => { justSelectedRef.current = false; }, 500);
   };
 
   // ── Retail cart helpers ── MUST be before any early returns (Rules of Hooks) ──
