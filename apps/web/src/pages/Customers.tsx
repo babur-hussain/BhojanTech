@@ -3,6 +3,7 @@ import { api } from '../utils/api';
 import { Users, Crown, Calendar, Search, Filter, MessageSquare, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useBranchStore } from '../store/branchStore';
+import CustomerDetailPanel from '../components/CustomerDetailPanel';
 
 interface Customer {
     _id: string;
@@ -28,6 +29,7 @@ export default function Customers() {
     const [search, setSearch] = useState('');
     const [segmentFilter, setSegmentFilter] = useState('');
     const [tierFilter, setTierFilter] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchSummary();
@@ -187,7 +189,7 @@ export default function Customers() {
                             ) : customers.length === 0 ? (
                                 <tr><td colSpan={7} className="py-8 text-center text-gray-500">No customers found.</td></tr>
                             ) : customers.map(c => (
-                                <tr key={c._id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => window.location.href = `/customers/${c._id}`}>
+                                <tr key={c._id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedCustomerId(c._id)}>
                                     <td className="py-3 px-4">
                                         <div className="font-semibold text-gray-900">{c.name}</div>
                                         <div className="text-xs text-gray-500">{c.phone}</div>
@@ -220,6 +222,14 @@ export default function Customers() {
                     </table>
                 </div>
             </div>
+            
+            {/* Slide-over Panel */}
+            {selectedCustomerId && (
+                <CustomerDetailPanel 
+                    customerId={selectedCustomerId} 
+                    onClose={() => setSelectedCustomerId(null)} 
+                />
+            )}
         </div>
     );
 }
