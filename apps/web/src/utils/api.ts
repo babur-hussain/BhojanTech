@@ -25,6 +25,12 @@ api.interceptors.request.use((config) => {
   const selectedBranchId = localStorage.getItem('selectedBranchId');
   if (selectedBranchId) {
     config.headers['x-branch-id'] = selectedBranchId;
+    
+    // Add a cache buster query parameter so the browser doesn't cache GET requests 
+    // across different branches for the same URL.
+    if (config.method?.toLowerCase() === 'get') {
+      config.params = { ...config.params, _b: selectedBranchId };
+    }
   }
 
   return config;

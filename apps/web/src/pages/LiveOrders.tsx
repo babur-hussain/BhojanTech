@@ -316,11 +316,11 @@ export default function LiveOrders() {
 
   // Real-time socket updates
   useEffect(() => {
-    const unsub = subscribe('order_update', ({ type, order, orderId }: any) => {
+    const unsub = subscribe('order_update', ({ type, order, orderId, branchId }: any) => {
       // Filter by selected branch — ignore events for other branches
       const currentBranchId = useBranchStore.getState().selectedBranchId;
       if (currentBranchId && currentBranchId !== 'all') {
-        const eventBranchId = (order?.branchId)?.toString();
+        const eventBranchId = (order?.branchId || branchId)?.toString();
         if (eventBranchId && eventBranchId !== currentBranchId) return;
       }
 
