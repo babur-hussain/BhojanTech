@@ -317,6 +317,13 @@ export default function LiveOrders() {
   // Real-time socket updates
   useEffect(() => {
     const unsub = subscribe('order_update', ({ type, order, orderId }: any) => {
+      // Filter by selected branch — ignore events for other branches
+      const currentBranchId = useBranchStore.getState().selectedBranchId;
+      if (currentBranchId && currentBranchId !== 'all') {
+        const eventBranchId = (order?.branchId)?.toString();
+        if (eventBranchId && eventBranchId !== currentBranchId) return;
+      }
+
       if (type === 'NEW_ORDER' && order) {
         setOrders(prev => {
           if (prev.some(o => o._id === order._id)) return prev;

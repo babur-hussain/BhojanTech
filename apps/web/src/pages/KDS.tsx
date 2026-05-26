@@ -31,6 +31,7 @@ export default function KDS() {
   const [stationFilter, setStationFilter] = useState('ALL');
   const { globalMuted, globalVolume, setGlobalMuted, setGlobalVolume } = useGlobalSettingsStore();
   const [newOrderFlash, setNewOrderFlash] = useState(false);
+  const selectedBranchId = useBranchStore(s => s.selectedBranchId);
 
   // Tick every 30 s so timers stay fresh
   useEffect(() => {
@@ -65,7 +66,7 @@ export default function KDS() {
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [fetchActiveKots]);
+  }, [fetchActiveKots, selectedBranchId]);
 
   // ── Socket.io subscriptions ──────────────────────────────────────────────
   useEffect(() => {
