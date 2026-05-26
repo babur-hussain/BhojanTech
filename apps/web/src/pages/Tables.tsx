@@ -46,11 +46,12 @@ export default function Tables() {
     if (!newTable.number) return;
     try {
       setIsSubmitting(true);
-      await api.post('/tables', { ...newTable, branchId: (user as any)?.branchId });
+      await api.post('/tables', { ...newTable, branchId: selectedBranchId });
       setIsAddModalOpen(false);
       setNewTable({ number: '', capacity: 2 });
 
-      const res = await api.get('/tables');
+      const branchQuery = selectedBranchId && selectedBranchId !== 'all' ? `?branchId=${selectedBranchId}` : '';
+      const res = await api.get(`/tables${branchQuery}`);
       setTables(res.data);
     } catch (err) {
       console.error(err);
@@ -63,7 +64,8 @@ export default function Tables() {
   useEffect(() => {
     const fetchTables = async () => {
       try {
-        const res = await api.get('/tables');
+        const branchQuery = selectedBranchId && selectedBranchId !== 'all' ? `?branchId=${selectedBranchId}` : '';
+        const res = await api.get(`/tables${branchQuery}`);
         setTables(res.data);
       } catch (err) {
         console.error('Failed to fetch tables', err);
@@ -73,7 +75,7 @@ export default function Tables() {
 
     const timer = setInterval(() => setCurrentTime(new Date()), 60000); // update every minute for time seated
     return () => clearInterval(timer);
-  }, []);
+  }, [selectedBranchId]);
 
   const handleTableClick = (table: Table) => {
     navigate(`/order/${(table as any)._id || table.id}`);
