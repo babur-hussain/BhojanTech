@@ -10,7 +10,7 @@ async function run() {
   const items = await MenuItem.find({ restaurantId: rest._id });
   console.log("Items count:", items.length);
   if (items.length > 0) {
-     console.log("Sample item:", items[0].name, "branchId:", items[0].branchId);
+    console.log("Sample item:", items[0].name, "branchId:", items[0].branchId);
   }
   process.exit(0);
 }

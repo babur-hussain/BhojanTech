@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import { Branch } from '../models/Branch';
+import { User } from '../models/User';
 
 export const listBranches = async (req: AuthRequest, res: Response) => {
     try {
@@ -73,5 +74,48 @@ export const updateBranch = async (req: AuthRequest, res: Response) => {
     } catch (err: any) {
         console.error('Update Branch Error:', err);
         return res.status(500).json({ error: 'Error updating branch' });
+    }
+};
+
+/**
+ * Persist the user's selected branch so it syncs across devices.
+ * Accepts { branchId: "<ObjectId>" | "all" }
+ */
+export const selectBranch = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const { branchId } = req.body;
+
+        if (!branchId) {
+            return res.status(400).json({ error: 'branchId is required' });
+        }
+
+        // 'all' is only valid for OWNER / SUPER_OWNER
+        if (branchId === 'all') {
+            const role = req.user!.role;
+            if (role !== 'OWNER' && role !== 'SUPER_OWNER') {
+                return res.status(403).json({ error: 'Only owners can select consolidated view' });
+            }
+        } else {
+            // Validate the branch exists and belongs to the user's restaurant
+            const restaurantId = req.user!.restaurantId;
+            if (!restaurantId) {
+                return res.status(400).json({ error: 'No restaurant associated with your account' });
+            }
+            const branch = await Branch.findOne({
+                _id: new mongoose.Types.ObjectId(branchId),
+                restaurantId: new mongoose.Types.ObjectId(restaurantId),
+            });
+            if (!branch) {
+                return res.status(404).json({ error: 'Branch not found in your restaurant' });
+            }
+        }
+
+        await User.findByIdAndUpdate(userId, { selectedBranchId: branchId });
+
+        return res.json({ message: 'Branch selection saved', selectedBranchId: branchId });
+    } catch (err: any) {
+        console.error('Select Branch Error:', err);
+        return res.status(500).json({ error: 'Error saving branch selection' });
     }
 };

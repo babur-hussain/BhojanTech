@@ -3,6 +3,7 @@ import { UserRole } from '@restaurant/types';
 import { auth } from '../config/firebase';
 import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import axios from 'axios';
+import { useBranchStore } from '../store/branchStore';
 
 interface AuthUser {
   id: string;
@@ -37,6 +38,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(backendUser);
     setAccessToken(jwt);
     localStorage.setItem('accessToken', jwt);
+
+    // Hydrate branch store from server — this syncs the branch across devices
+    if (backendUser.selectedBranchId) {
+      useBranchStore.getState().initFromServer(backendUser.selectedBranchId);
+    }
   };
 
   const logout = async () => {
@@ -70,6 +76,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(backendUser);
           setAccessToken(jwt);
           localStorage.setItem('accessToken', jwt);
+
+          // Hydrate branch store from server — this syncs the branch across devices
+          if (backendUser.selectedBranchId) {
+            useBranchStore.getState().initFromServer(backendUser.selectedBranchId);
+          }
         } catch (err: any) {
           const status = err?.response?.status;
           if (status === 401 || status === 403) {

@@ -26,8 +26,11 @@ export default function BranchSelector() {
                 const data: BranchOption[] = res.data;
                 setBranches(data);
 
-                // Auto-select logic
-                if (!selectedBranchId || selectedBranchId === 'all') {
+                // Auto-select logic — only runs when no branch has been set
+                // (i.e., truly first-time user with no server-side preference).
+                // If the server already hydrated a selectedBranchId (via login/refresh),
+                // we skip this so the user's prior choice is preserved across devices.
+                if (!selectedBranchId) {
                     if (user.branchId) {
                         // Staff/waiters are scoped to a single branch
                         setSelectedBranchId(user.branchId);

@@ -72,6 +72,7 @@ export const login = async (req: Request, res: Response) => {
         restaurantId: user.restaurantId,
         branchId: user.branchId,
         name: user.name,
+        selectedBranchId: user.selectedBranchId || null,
       },
       ...tokens,
     });
@@ -278,6 +279,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
         role: user.role,
         restaurantId: user.restaurantId,
         name: user.name,
+        selectedBranchId: user.selectedBranchId || null,
       },
     });
   } catch (error: any) {
