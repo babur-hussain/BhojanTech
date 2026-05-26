@@ -275,6 +275,7 @@ function OrderDetailPanel({ order, onClose }: { order: any; onClose: () => void 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function LiveOrders() {
+  const navigate = useNavigate();
   const { subscribe } = useSocket();
   const { selectedBranchId } = useBranchStore();
   const [orders, setOrders] = useState<any[]>([]);
@@ -461,7 +462,7 @@ export default function LiveOrders() {
               <OrderCard
                 key={order._id}
                 order={order}
-                onClick={() => setSelectedOrder(order._id === selectedOrder?._id ? null : order)}
+                onClick={() => navigate(`/bill/${order._id}`)}
               />
             ))}
           </div>

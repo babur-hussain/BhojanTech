@@ -235,25 +235,27 @@ export default function AnalyticsDashboard() {
               <p className="text-xs">Orders will appear here as soon as a table is occupied</p>
             </div>
           ) : liveOrders.map((order: any, i: number) => (
-            <div key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-maroon text-white rounded-xl flex items-center justify-center font-black text-sm shadow">
-                  {order.tableNumber || 'TK'}
+            <Link to={`/bill/${order._id}`} key={i} className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors block">
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-maroon text-white rounded-xl flex items-center justify-center font-black text-sm shadow">
+                    {order.tableNumber || 'TK'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">
+                      {order.isOnlineOrder ? '🛵 Delivery' : `Table ${order.tableNumber}`}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {order.waiterName || 'Staff'} · {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''} · {timeAgo(order.createdAt)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-800">
-                    {order.isOnlineOrder ? '🛵 Delivery' : `Table ${order.tableNumber}`}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {order.waiterName || 'Staff'} · {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''} · {timeAgo(order.createdAt)}
-                  </p>
+                <div className="text-right">
+                  <p className="font-black text-gray-800 text-sm">{inrFormat(order.totalAmountINR || 0)}</p>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">OPEN</span>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="font-black text-gray-800 text-sm">{inrFormat(order.totalAmountINR || 0)}</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-700">OPEN</span>
-              </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
