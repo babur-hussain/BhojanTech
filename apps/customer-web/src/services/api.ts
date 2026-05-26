@@ -3,11 +3,21 @@ import axios from 'axios';
 // Get base URL for backend API. In production, this might be relative if proxy is used
 const API_URL = import.meta.env.VITE_API_URL || 'https://server.bhojantech.lfvs.in/api';
 
+import { useAuthStore } from '../store/authStore';
+
 export const api = axios.create({
     baseURL: API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
+});
+
+api.interceptors.request.use((config) => {
+    const token = useAuthStore.getState().getToken();
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
 });
 
 export const fetchMenu = async (restaurantId: string) => {
