@@ -9,10 +9,8 @@ interface BranchState {
 }
 
 export const useBranchStore = create<BranchState>((set) => ({
-    selectedBranchId: localStorage.getItem('selectedBranchId'),
+    selectedBranchId: null,
     setSelectedBranchId: (id) => {
-        if (id) localStorage.setItem('selectedBranchId', id);
-        else localStorage.removeItem('selectedBranchId');
         set({ selectedBranchId: id });
 
         // Persist to server so it syncs across devices (fire-and-forget)
@@ -30,9 +28,6 @@ export const useBranchStore = create<BranchState>((set) => ({
         }
     },
     initFromServer: (id) => {
-        if (id) {
-            localStorage.setItem('selectedBranchId', id);
-        }
         set({ selectedBranchId: id });
     },
 }));

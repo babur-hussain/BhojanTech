@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useBranchStore } from '../store/branchStore';
 
 /**
  * Pre-configured Axios instance for the backend REST API.
@@ -22,7 +23,7 @@ api.interceptors.request.use((config) => {
   }
 
   // Inject the selected branch so the backend can scope data per-outlet
-  const selectedBranchId = localStorage.getItem('selectedBranchId');
+  const selectedBranchId = useBranchStore.getState().selectedBranchId;
   if (selectedBranchId) {
     config.headers['x-branch-id'] = selectedBranchId;
     
