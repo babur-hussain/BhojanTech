@@ -404,25 +404,25 @@ export default function BillingScreen() {
 
               {/* Live suggestions dropdown */}
               {showSugg && suggestions.length > 0 && !customer && (
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden" style={{top: '100%'}}>
-                  <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center gap-1.5">
-                    <Search size={11} className="text-gray-400" />
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Matching Customers</span>
+                <div className="absolute z-50 left-5 right-5 mt-1 bg-white border-2 border-maroon border-opacity-30 rounded-xl overflow-hidden" style={{top: '80px', boxShadow: '0 8px 30px rgba(0,0,0,0.18)'}}>
+                  <div className="px-3 py-2 bg-maroon bg-opacity-5 border-b border-maroon border-opacity-10 flex items-center gap-1.5">
+                    <Search size={12} className="text-maroon" />
+                    <span className="text-[11px] font-bold text-maroon uppercase tracking-wide">Matching Customers</span>
                   </div>
                   {suggestions.map((s: any) => (
                     <button
                       key={s._id}
                       onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-maroon hover:bg-opacity-5 transition-colors text-left border-b border-gray-50 last:border-0"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left border-b border-gray-100 last:border-0"
                     >
-                      <div className="w-7 h-7 rounded-full bg-maroon bg-opacity-10 flex items-center justify-center text-maroon font-black text-xs shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-maroon text-white flex items-center justify-center font-black text-sm shrink-0">
                         {s.name?.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">{s.name}</p>
-                        <p className="text-xs text-gray-400">+91 {s.phone} · {s.totalVisits || 0} visits</p>
+                        <p className="font-bold text-gray-900 text-sm truncate">{s.name}</p>
+                        <p className="text-xs text-gray-500 font-medium">+91 {s.phone} · {s.totalVisits || 0} visits · ₹{(s.totalSpend || 0).toLocaleString()} spent</p>
                       </div>
-                      <span className="text-xs text-maroon font-bold">Select →</span>
+                      <span className="text-xs bg-maroon text-white px-2 py-1 rounded-md font-bold">Select</span>
                     </button>
                   ))}
                 </div>
@@ -481,11 +481,11 @@ export default function BillingScreen() {
                 </div>
               )}
 
-              {/* No CRM Match hint */}
-              {!customer && customerPhone.length === 10 && !customerLoading && preview?.order?.status !== 'BILLED' && (
+              {/* No CRM Match hint — hide if customer name is already filled (selected from suggestions) */}
+              {!customer && !customerName && customerPhone.length === 10 && !customerLoading && preview?.order?.status !== 'BILLED' && (
                 <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
                   <span className="w-2 h-2 rounded-full bg-gray-300 shrink-0"></span>
-                  No existing customer found
+                  No existing customer found — will be created on payment
                 </div>
               )}
             </div>
