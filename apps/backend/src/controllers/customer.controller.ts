@@ -57,7 +57,6 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
         if (cursor) {
             filter._id = { $lt: cursor };
         }
-        if (q) filter.$or = [{ name: { $regex: q, $options: 'i' } }, { phone: { $regex: q as string } }];
         if (segment) filter.segment = segment;
         if (tier) filter.tier = tier;
 
@@ -66,17 +65,46 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
             ? (sortBy as string)
             : 'totalSpend';
 
-        const [customers, total] = await Promise.all([
-            Customer.find(filter)
-                .sort({ _id: -1 }) // Sort exactly by ID for cursor approach
-                .limit(Number(limit))
-                .select('-otp -otpExpiresAt'),
-            Customer.countDocuments(filter),
-        ]);
+        // If searching by query, check if it's numeric (phone search)
+        const isPhoneSearch = q && /^\d+$/.test(q as string);
+
+        if (q && !isPhoneSearch) {
+            // Text search by name only (phone regex won't work on encrypted fields)
+            filter.name = { $regex: q, $options: 'i' };
+        }
+
+        let customers;
+        let total;
+
+        if (isPhoneSearch) {
+            // For partial phone search, we must fetch and filter in memory because the DB field is encrypted
+            const allCustomers = await Customer.find(filter).sort({ [sortField]: sortOrder }).select('-otp -otpExpiresAt');
+            
+            const matchedCustomers = [];
+            for (const c of allCustomers) {
+                if (c.decryptFieldsSync) c.decryptFieldsSync();
+                if (c.phone && c.phone.includes(q as string)) {
+                    matchedCustomers.push(c);
+                }
+            }
+            total = matchedCustomers.length;
+            customers = matchedCustomers.slice(0, Number(limit));
+        } else {
+            // Standard DB query
+            const [dbCustomers, dbTotal] = await Promise.all([
+                Customer.find(filter)
+                    .sort({ _id: -1 }) // Sort exactly by ID for cursor approach
+                    .limit(Number(limit))
+                    .select('-otp -otpExpiresAt'),
+                Customer.countDocuments(filter),
+            ]);
+            customers = dbCustomers;
+            total = dbTotal;
+        }
 
         const customersData = customers.map((c: any) => {
             if (c.decryptFieldsSync) c.decryptFieldsSync();
-            const obj = c.toJSON();
+            const obj = c.toJSON ? c.toJSON() : c;
             return {
                 _id: obj._id,
                 name: obj.name,
