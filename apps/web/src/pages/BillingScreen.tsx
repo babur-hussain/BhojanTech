@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   GSTSlabBreakup, InvoiceLineItem, PaymentMode, PaymentSplit,
 } from '@restaurant/types';
@@ -36,6 +36,7 @@ const formatDateToDisplay = (dateString?: string | Date) => {
 export default function BillingScreen() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const receiptRef = React.useRef<HTMLDivElement>(null);
 
   const [preview, setPreview] = useState<BillPreview | null>(null);
@@ -76,7 +77,7 @@ export default function BillingScreen() {
 
   // Retail items
   const [retailCatalog, setRetailCatalog] = useState<any[]>([]);
-  const [retailCart, setRetailCart] = useState<{ _id: string; name: string; priceINR: number; gstSlab: number; unit: string; quantity: number }[]>([]);
+  const [retailCart, setRetailCart] = useState<{ _id: string; name: string; priceINR: number; gstSlab: number; unit: string; quantity: number }[]>(location.state?.retailItems || []);
   const [showRetail, setShowRetail] = useState(false);
   const [retailSearch, setRetailSearch] = useState('');
   const [showCamera, setShowCamera] = useState(false);

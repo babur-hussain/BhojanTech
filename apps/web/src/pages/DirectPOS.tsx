@@ -168,7 +168,17 @@ export default function DirectPOS() {
           })),
           retailItems: retailCartItems.map(c => ({ _id: c.id, quantity: c.quantity })),
         });
-        navigate(`/bill/${res.data._id}`);
+        navigate(`/bill/${res.data._id}`, {
+          state: {
+            retailItems: retailCartItems.map(c => ({
+              _id: c.id,
+              name: c.name,
+              quantity: c.quantity,
+              priceINR: c.price,
+              gstSlab: c.gstSlab,
+            }))
+          }
+        });
       }
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
