@@ -48,6 +48,7 @@ export const Checkout = () => {
         setAuthError('');
         if (customerPhone.length !== 10) return setAuthError('Enter a valid 10-digit number');
         if (!customerName.trim()) return setAuthError('Please enter your name');
+        if (!dob) return setAuthError('Please enter your Date of Birth');
 
         setIsVerifying(true);
         try {
@@ -257,7 +258,7 @@ export const Checkout = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Date of Birth (Optional)</label>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 block">Date of Birth *</label>
                                     <input
                                         type="date"
                                         value={dob}

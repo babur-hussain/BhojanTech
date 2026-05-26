@@ -85,13 +85,20 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
             }
         }
 
-        if (tableId) {
-            const existingOrder = await Order.findOne({ tableId, status: 'OPEN' });
+        if (tableId && customerPhone) {
+            // Find existing order for the SAME phone number
+            const existingOrder = await Order.findOne({ tableId, status: 'OPEN', customerPhone });
             if (existingOrder) {
                 const newOrderItemsCount = sanitizedItems.length;
                 existingOrder.items.push(...sanitizedItems);
                 existingOrder.totalAmountINR += totalAmountINR;
                 await existingOrder.save();
+
+                // Increment totalSpent without incrementing totalOrders since it's the same visit
+                await Customer.findOneAndUpdate(
+                    { restaurantId, phone: customerPhone },
+                    { $inc: { totalSpent: totalAmountINR } }
+                );
 
                 const newlyAddedItems = existingOrder.items.slice(-newOrderItemsCount);
                 await createKOTForOnlineOrder(existingOrder, newlyAddedItems);
@@ -117,6 +124,25 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
         });
 
         await newOrder.save();
+
+        // Save/Update Customer Data
+        if (customerPhone) {
+            await Customer.findOneAndUpdate(
+                { restaurantId, phone: customerPhone },
+                {
+                    $setOnInsert: { branchId: branchId || undefined },
+                    $set: {
+                        name: customerName || 'Guest',
+                        lastVisit: new Date(),
+                    },
+                    $inc: {
+                        totalOrders: 1,
+                        totalSpent: totalAmountINR
+                    }
+                },
+                { upsert: true, new: true }
+            );
+        }
 
         if (paymentMode === 'RAZORPAY' && razorpay) {
             // Create Razorpay order
