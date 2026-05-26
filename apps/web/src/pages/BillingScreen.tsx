@@ -25,6 +25,14 @@ interface BillPreview {
   roundOff: number;
 }
 
+// --- Helpers ---
+const formatDateToDisplay = (dateString?: string | Date) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+};
+
 export default function BillingScreen() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -109,6 +117,9 @@ export default function BillingScreen() {
       if (res.data.found) {
         setCustomer(res.data.customer);
         setCustomerName(res.data.customer.name);
+        if (res.data.customer.dob) {
+          setCustomerDob(formatDateToDisplay(res.data.customer.dob));
+        }
         setPointValue(res.data.pointsPerRupeeRedemption || 1);
         setTierDiscountPct(res.data.tierDiscountPercent || 0);
       } else {
@@ -192,7 +203,7 @@ export default function BillingScreen() {
     setCustomerPhone(s.phone || '');
     setCustomerName(s.name || '');
     if (s.dob) {
-      setCustomerDob(new Date(s.dob).toISOString().split('T')[0]);
+      setCustomerDob(formatDateToDisplay(s.dob));
     } else {
       setCustomerDob('');
     }
@@ -343,7 +354,12 @@ export default function BillingScreen() {
       if (customerPhone) {
         body.customerPhone = customerPhone;
         body.customerName = customer?.name || customerName;
-        if (customerDob) body.customerDob = customerDob;
+        if (customerDob) {
+          const parts = customerDob.split('/');
+          if (parts.length === 3 && parts[2].length === 4) {
+            body.customerDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+        }
       }
       if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
       if (whatsapp) body.whatsappNumber = whatsapp;
@@ -437,9 +453,18 @@ export default function BillingScreen() {
                   <label className="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Date of Birth</label>
                   <div className="relative">
                     <input
-                      type="date"
-                      value={customer?.dob ? new Date(customer.dob).toISOString().split('T')[0] : customerDob}
-                      onChange={e => { if (!customer) { setCustomerDob(e.target.value); } }}
+                      type="text"
+                      maxLength={10}
+                      placeholder="DD/MM/YYYY"
+                      value={customer?.dob ? formatDateToDisplay(customer.dob) : customerDob}
+                      onChange={e => {
+                        if (!customer) {
+                          let val = e.target.value.replace(/\D/g, '');
+                          if (val.length > 2) val = val.substring(0, 2) + '/' + val.substring(2);
+                          if (val.length > 5) val = val.substring(0, 5) + '/' + val.substring(5, 9);
+                          setCustomerDob(val);
+                        }
+                      }}
                       readOnly={!!customer?.dob}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
                         customer?.dob
