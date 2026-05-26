@@ -108,14 +108,12 @@ export const listCustomers = async (req: AuthRequest, res: Response) => {
         const customersData = customers.map((c: any) => {
             if (c.decryptFieldsSync) c.decryptFieldsSync();
             const obj = c.toJSON ? c.toJSON() : c;
-            return {
-                _id: obj._id,
-                name: obj.name,
-                phone: obj.phone,
-                totalVisits: obj.totalVisits,
-                totalSpend: obj.totalSpend,
-                segment: obj.segment
-            };
+            // Remove sensitive fields but return everything else
+            delete obj.otp;
+            delete obj.otpExpiresAt;
+            delete obj.__enc_phone;
+            delete obj.__enc_phone_d;
+            return obj;
         });
 
         console.log(`[listCustomers] Returning ${customersData.length} customers`);

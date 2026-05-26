@@ -342,7 +342,7 @@ export default function BillingScreen() {
         {/* Left: Order & GST */}
         <div className="flex-1 space-y-4">
           {/* Customer Section - Beautiful Live Search */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-maroon bg-opacity-10 flex items-center justify-center">
                 <UserPlus size={16} className="text-maroon" />
