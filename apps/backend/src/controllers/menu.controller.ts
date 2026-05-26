@@ -12,6 +12,8 @@ const clearMenuCache = async (restaurantId?: string, branchId?: string | null) =
   if (!restaurantId) return;
   const bId = branchId || 'all';
   // Clear branch-specific keys
+  await redis.del(`menu_categories_v3:${restaurantId}:${bId}`);
+  await redis.del(`menu_items_v3:${restaurantId}:${bId}`);
   await redis.del(`menu_categories_v2:${restaurantId}:${bId}`);
   await redis.del(`menu_items_v2:${restaurantId}:${bId}`);
   await redis.del(`menu_categories:${restaurantId}:${bId}`);
@@ -19,6 +21,8 @@ const clearMenuCache = async (restaurantId?: string, branchId?: string | null) =
   await redis.del(`menu_public:${restaurantId}:${bId}`);
   // Always also clear the 'all' public key — the customer menu uses this
   await redis.del(`menu_public:${restaurantId}:all`);
+  await redis.del(`menu_categories_v3:${restaurantId}:all`);
+  await redis.del(`menu_items_v3:${restaurantId}:all`);
   await redis.del(`menu_categories_v2:${restaurantId}:all`);
   await redis.del(`menu_items_v2:${restaurantId}:all`);
   await redis.del(`menu_categories:${restaurantId}:all`);
@@ -73,7 +77,7 @@ export const uploadImages = async (req: AuthRequest, res: Response) => {
 export const getCategories = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = req.user!.branchId || 'all';
-    const cacheKey = `menu_categories_v2:${req.user!.restaurantId}:${branchId}`;
+    const cacheKey = `menu_categories_v3:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
@@ -211,7 +215,7 @@ export const updateCategoryAvailability = async (req: AuthRequest, res: Response
 export const getMenuItems = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = req.user!.branchId || 'all';
-    const cacheKey = `menu_items_v2:${req.user!.restaurantId}:${branchId}`;
+    const cacheKey = `menu_items_v3:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
 
