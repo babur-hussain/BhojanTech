@@ -27,6 +27,8 @@ export interface ICustomer extends Document {
     notes: string;
     otp?: string;
     otpExpiresAt?: Date;
+    decryptFieldsSync?: () => void;
+    encryptFieldsSync?: () => void;
 }
 
 const CustomerSchema: Schema = new Schema(
