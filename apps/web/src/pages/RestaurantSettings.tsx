@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
-import { Save, Store, CreditCard, FileText, MapPin, Loader2, CheckCircle, AlertCircle, QrCode, Printer, Wifi, WifiOff, RefreshCw, Settings, BookOpen, Plus, X } from 'lucide-react';
+import { Save, Store, CreditCard, FileText, MapPin, Loader2, CheckCircle, AlertCircle, QrCode, Printer, Wifi, WifiOff, RefreshCw, Settings, BookOpen, Plus, X, Award } from 'lucide-react';
 import { useQZTray } from '../hooks/useQZTray';
 import { printTestReceipt } from '../utils/thermalPrint';
 
@@ -22,12 +22,33 @@ const INITIAL: RestaurantForm = {
   businessType: 'Bakery', bookingCategories: ['Cake Pre-order', 'Sweets Box'], defaultBookingCategory: 'Cake Pre-order'
 };
 
+interface LoyaltyForm {
+  pointsPerRupee: number;
+  pointsPerRupeeRedemption: number;
+  minimumRedemptionPoints: number;
+  firstVisitBonusPoints: number;
+  referralBonusPoints: number;
+  birthdayMultiplier: number;
+  expiryMonths: number;
+}
+
+const INITIAL_LOYALTY: LoyaltyForm = {
+  pointsPerRupee: 0.1,
+  pointsPerRupeeRedemption: 10,
+  minimumRedemptionPoints: 500,
+  firstVisitBonusPoints: 500,
+  referralBonusPoints: 200,
+  birthdayMultiplier: 3,
+  expiryMonths: 12
+};
+
 export default function RestaurantSettings() {
   const [form, setForm] = useState<RestaurantForm>(INITIAL);
+  const [loyaltyForm, setLoyaltyForm] = useState<LoyaltyForm>(INITIAL_LOYALTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<'general' | 'compliance' | 'payments' | 'bookings'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'compliance' | 'payments' | 'bookings' | 'loyalty'>('general');
   const [newCategory, setNewCategory] = useState('');
 
   const [qzStatus, setQzStatus] = useState<'checking' | 'connected' | 'disconnected'>('disconnected');
@@ -50,7 +71,12 @@ export default function RestaurantSettings() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get('/restaurant/info');
+        const [resInfo, resLoyalty] = await Promise.all([
+          api.get('/restaurant/info'),
+          api.get('/loyalty/settings')
+        ]);
+        
+        const data = resInfo.data;
         setForm({
           name: data.name || '',
           address: data.address || '',
@@ -63,6 +89,18 @@ export default function RestaurantSettings() {
           bookingCategories: data.bookingCategories?.length ? data.bookingCategories : ['Cake Pre-order', 'Sweets Box'],
           defaultBookingCategory: data.defaultBookingCategory || 'Cake Pre-order',
         });
+
+        if (resLoyalty.data) {
+          setLoyaltyForm({
+            pointsPerRupee: resLoyalty.data.pointsPerRupee ?? 0.1,
+            pointsPerRupeeRedemption: resLoyalty.data.pointsPerRupeeRedemption ?? 10,
+            minimumRedemptionPoints: resLoyalty.data.minimumRedemptionPoints ?? 500,
+            firstVisitBonusPoints: resLoyalty.data.firstVisitBonusPoints ?? 500,
+            referralBonusPoints: resLoyalty.data.referralBonusPoints ?? 200,
+            birthdayMultiplier: resLoyalty.data.birthdayMultiplier ?? 3,
+            expiryMonths: resLoyalty.data.expiryMonths ?? 12
+          });
+        }
       } catch {
         showToast('error', 'Failed to load restaurant info');
       } finally {
@@ -98,7 +136,10 @@ export default function RestaurantSettings() {
     if (e) e.preventDefault();
     try {
       setSaving(true);
-      await api.patch('/restaurant/info', form);
+      await Promise.all([
+        api.patch('/restaurant/info', form),
+        api.put('/loyalty/settings', loyaltyForm)
+      ]);
       showToast('success', 'Settings saved successfully!');
     } catch (err: any) {
       showToast('error', err?.response?.data?.error || 'Failed to save settings');
@@ -143,6 +184,7 @@ export default function RestaurantSettings() {
     { id: 'compliance', label: 'Compliance', icon: <FileText size={18} /> },
     { id: 'payments', label: 'Payments & Printing', icon: <CreditCard size={18} /> },
     { id: 'bookings', label: 'Bookings & Modules', icon: <BookOpen size={18} /> },
+    { id: 'loyalty', label: 'Loyalty & CRM', icon: <Award size={18} /> },
   ] as const;
 
   return (
@@ -426,6 +468,108 @@ export default function RestaurantSettings() {
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Loyalty & CRM Tab */}
+          <div className={activeTab === 'loyalty' ? 'block' : 'hidden'}>
+            <div className="space-y-6">
+              {/* Earning Rules */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b bg-gray-50">
+                  <h2 className="font-bold text-gray-800 text-lg">Points Earning Rules</h2>
+                  <p className="text-xs text-gray-500">Configure how customers earn loyalty points on their bills.</p>
+                </div>
+                <div className="p-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Earning Rate (Points per ₹1 Spent)</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number" step="0.01" value={loyaltyForm.pointsPerRupee}
+                        onChange={e => setLoyaltyForm(f => ({ ...f, pointsPerRupee: +e.target.value }))}
+                        className="w-48 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono focus:ring-2 focus:ring-maroon transition"
+                      />
+                      <span className="text-sm font-medium text-gray-600">
+                        = 1 point for every ₹{1 / (loyaltyForm.pointsPerRupee || 1)} spent
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Example: 0.1 means customer gets 10 points on a ₹100 bill.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Redemption Rules */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b bg-gray-50">
+                  <h2 className="font-bold text-gray-800 text-lg">Points Redemption & Value</h2>
+                  <p className="text-xs text-gray-500">Configure how much points are worth and when they can be used.</p>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Redemption Value (Points = ₹1)</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number" step="1" value={loyaltyForm.pointsPerRupeeRedemption}
+                        onChange={e => setLoyaltyForm(f => ({ ...f, pointsPerRupeeRedemption: +e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Example: 10 means 10 points gives ₹1 discount.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Minimum Points to Redeem</label>
+                    <input
+                      type="number" step="1" value={loyaltyForm.minimumRedemptionPoints}
+                      onChange={e => setLoyaltyForm(f => ({ ...f, minimumRedemptionPoints: +e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                    />
+                    <p className="text-xs text-gray-400 mt-2">Customers must have at least this many points to use them.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Points Expiry (Months)</label>
+                    <input
+                      type="number" step="1" value={loyaltyForm.expiryMonths}
+                      onChange={e => setLoyaltyForm(f => ({ ...f, expiryMonths: +e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Bonus Rules */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b bg-gray-50">
+                  <h2 className="font-bold text-gray-800 text-lg">Bonus Features</h2>
+                  <p className="text-xs text-gray-500">Reward customers for special events.</p>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">First Visit Bonus Points</label>
+                    <input
+                      type="number" step="1" value={loyaltyForm.firstVisitBonusPoints}
+                      onChange={e => setLoyaltyForm(f => ({ ...f, firstVisitBonusPoints: +e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Referral Bonus Points</label>
+                    <input
+                      type="number" step="1" value={loyaltyForm.referralBonusPoints}
+                      onChange={e => setLoyaltyForm(f => ({ ...f, referralBonusPoints: +e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Birthday Multiplier</label>
+                    <input
+                      type="number" step="0.1" value={loyaltyForm.birthdayMultiplier}
+                      onChange={e => setLoyaltyForm(f => ({ ...f, birthdayMultiplier: +e.target.value }))}
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon transition"
+                    />
+                    <p className="text-xs text-gray-400 mt-2">Example: 2.0 = Double points.</p>
+                  </div>
                 </div>
               </div>
             </div>
