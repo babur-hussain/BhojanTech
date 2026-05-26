@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 import { razorpay } from '../config/razorpay';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { Order } from '../models/Order';
@@ -150,11 +151,43 @@ export const billingCustomerLookup = async (req: AuthRequest, res: Response) => 
 export const generateBill = async (req: AuthRequest, res: Response) => {
   try {
     const { orderId } = req.params;
+    const { customerPhone, customerName, customerDob } = req.body;
     const restaurantId = req.user!.restaurantId;
 
     const order = await Order.findOne({ _id: orderId, restaurantId });
     if (!order) return res.status(404).json({ error: 'Order not found' });
     if (order.status !== 'OPEN') return res.status(400).json({ error: 'Order is not open' });
+
+    if (customerPhone) {
+      order.customerPhone = customerPhone;
+      
+      // Upsert basic customer info without affecting loyalty points
+      let customer = await Customer.findOne({ restaurantId, phone: customerPhone });
+      if (!customer) {
+        let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        while (await Customer.findOne({ referralCode })) {
+            referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+        }
+        customer = await Customer.create({
+          restaurantId,
+          phone: customerPhone,
+          name: customerName || 'Guest',
+          firstVisitDate: new Date(),
+          lastVisitDate: new Date(),
+          referralCode,
+          tier: 'BRONZE',
+        });
+      } else if (customerName) {
+        customer.name = customerName;
+      }
+      
+      if (customerDob) {
+         customer.dob = new Date(customerDob);
+         customer.birthdayMonth = customer.dob.getMonth() + 1;
+      }
+      
+      await customer.save();
+    }
 
     order.status = 'BILLED';
     await order.save();

@@ -284,7 +284,20 @@ export default function BillingScreen() {
   const handleGenerateBill = async () => {
     try {
       setGeneratingBill(true);
-      await api.post(`/billing/generate/${orderId}`);
+      
+      const generatePayload: any = {};
+      if (customerPhone) {
+        generatePayload.customerPhone = customerPhone;
+        generatePayload.customerName = customer?.name || customerName;
+        if (customerDob) {
+          const parts = customerDob.split('/');
+          if (parts.length === 3 && parts[2].length === 4) {
+            generatePayload.customerDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+        }
+      }
+      
+      await api.post(`/billing/generate/${orderId}`, generatePayload);
       
       const now = new Date();
       const printerName = restaurant?.printerName || localStorage.getItem('qz_receipt_printer') || '';
