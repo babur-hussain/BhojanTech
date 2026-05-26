@@ -157,7 +157,6 @@ export default function KDS() {
       await api.post(`/kots/${kot._id || kot.id}/notify`);
       // Optimistically remove it from UI
       setKots(prev => prev.filter(k => (k._id || k.id) !== (kot._id || kot.id)));
-      alert(`🔔 Waiter ${kot.waiterName || 'Staff'} notified — Table ${kot.tableNumber} ready!`);
     } catch (e) {
       console.error('Failed to notify waiter', e);
     }
