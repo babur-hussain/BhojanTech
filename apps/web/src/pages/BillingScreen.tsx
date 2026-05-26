@@ -169,6 +169,23 @@ export default function BillingScreen() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Global keyboard shortcut: Backspace/Delete to go back
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable;
+      
+      if (!isTyping && (e.key === 'Backspace' || e.key === 'Delete')) {
+        e.preventDefault();
+        navigate(-1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [navigate]);
+
   // Select a suggestion → autofill both fields + trigger CRM lookup
   const selectSuggestion = (s: any) => {
     justSelectedRef.current = true;
