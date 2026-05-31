@@ -16,14 +16,24 @@ export default function ItemModal({ item, onClose, onSave }: Props) {
     name:         item?.name        ?? '',
     category:     item?.category    ?? 'Other',
     unit:         item?.unit        ?? 'kg',
-    currentQty:   item?.currentQty  ?? 0,
-    minThreshold: item?.minThreshold?? 0,
-    reorderQty:   item?.reorderQty  ?? 0,
-    costPerUnit:  item?.costPerUnit  ?? 0,
+    currentQty:   item?.currentQty?.toString()  ?? '0',
+    minThreshold: item?.minThreshold?.toString()?? '0',
+    reorderQty:   item?.reorderQty?.toString()  ?? '0',
+    costPerUnit:  item?.costPerUnit?.toString() ?? '0',
   });
 
   const f = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [field]: e.target.type === 'number' ? +e.target.value : e.target.value }));
+    setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const handleSave = () => {
+    onSave({
+      ...form,
+      currentQty: Number(form.currentQty) || 0,
+      minThreshold: Number(form.minThreshold) || 0,
+      reorderQty: Number(form.reorderQty) || 0,
+      costPerUnit: Number(form.costPerUnit) || 0,
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -68,9 +78,9 @@ export default function ItemModal({ item, onClose, onSave }: Props) {
             </div>
           </div>
         </div>
-        <div className="px-5 py-4 border-t bg-gray-50 flex justify-end gap-3 rounded-b-xl">
-          <button onClick={onClose} className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
-          <button onClick={() => onSave(form)} disabled={!form.name} className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 disabled:opacity-50">Save</button>
+        <div className="px-5 py-4 border-t bg-cream rounded-b-xl flex justify-end gap-3">
+          <button onClick={onClose} className="px-6 py-2 border rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all">Cancel</button>
+          <button onClick={handleSave} className="px-6 py-2 bg-maroon text-white font-bold rounded-xl shadow-md hover:bg-opacity-90 transition-all">{item ? 'Save' : 'Add'}</button>
         </div>
       </div>
     </div>

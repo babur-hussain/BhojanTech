@@ -117,20 +117,21 @@ export const createRetailItem = async (req: AuthRequest, res: Response) => {
       taxInclusive: taxInclusive !== undefined ? taxInclusive : true,
       gstSlab: gstSlab ?? 18,
       unit: unit || 'pcs',
-      stock: stock ?? 0,
-      lowStockAlert: lowStockAlert ?? 5,
+      stock: stock !== undefined ? Number(stock) : 0,
+      lowStockAlert: lowStockAlert !== undefined ? Number(lowStockAlert) : 5,
       sku: sku || undefined,
       barcode: barcode?.trim() || undefined,
       hsnCode: hsnCode || undefined,
     });
 
+    const parsedStock = stock !== undefined ? Number(stock) : 0;
     // Log initial stock if stock > 0
-    if ((stock ?? 0) > 0) {
+    if (parsedStock > 0) {
       await writeStockLog({
         req, item,
         action: 'INITIAL',
         quantityBefore: 0,
-        quantityChanged: stock,
+        quantityChanged: parsedStock,
         note: 'Initial stock on item creation',
       });
     }

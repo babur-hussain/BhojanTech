@@ -150,11 +150,11 @@ export default function RetailItems() {
       setSaving(true);
       const payload = {
         ...form,
-        priceINR: +form.priceINR,
-        stock: +form.stock || 0,
-        costPriceINR: form.costPriceINR ? +form.costPriceINR : undefined,
-        mrp: form.mrp ? +form.mrp : undefined,
-        lowStockAlert: +form.lowStockAlert || 5,
+        priceINR: Number(form.priceINR) || 0,
+        stock: form.stock !== '' ? Number(form.stock) : 0,
+        costPriceINR: form.costPriceINR ? Number(form.costPriceINR) : undefined,
+        mrp: form.mrp ? Number(form.mrp) : undefined,
+        lowStockAlert: form.lowStockAlert !== '' ? Number(form.lowStockAlert) : 5,
       };
       if (editItem) {
         await api.patch(`/retail-items/${editItem._id}`, payload);
