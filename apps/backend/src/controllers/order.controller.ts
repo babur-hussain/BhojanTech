@@ -181,7 +181,7 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
     const restaurantId = req.user!.restaurantId;
     const branchId = getCreateBranchId(req); // undefined is OK for OWNER role
 
-    if (!items || items.length === 0) {
+    if ((!items || items.length === 0) && (!req.body.retailItems || req.body.retailItems.length === 0)) {
       return res.status(400).json({ error: 'At least one item is required' });
     }
 

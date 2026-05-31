@@ -38,9 +38,13 @@ export const createOrderSchema = z.object({
 
 export const createTakeawaySchema = z.object({
   body: z.object({
-    items: z.array(orderItemSchema).min(1, 'At least one item required'),
+    items: z.array(orderItemSchema).optional().default([]),
+    retailItems: z.array(z.any()).optional().default([]),
     customerName: z.string().max(100).optional(),
     customerPhone: z.string().regex(/^[6-9]\d{9}$/).optional(),
+  }).refine(data => data.items.length > 0 || data.retailItems.length > 0, {
+    message: "At least one item required",
+    path: ["items"]
   }),
 });
 
