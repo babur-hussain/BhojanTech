@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, Loader2, Trash2 } from 'lucide-react';
-import { api } from '../../utils/api';
+import { api, getMediaUrl } from '../../utils/api';
 
 interface Props {
   category?: any;
@@ -76,7 +76,7 @@ export default function CategoryModal({ category, onClose, onSave, onDelete }: P
             
             {imageUrl && (
               <div className="relative group mt-2 w-full flex justify-center">
-                <img src={imageUrl} alt="Preview" className="h-24 w-24 object-cover rounded border border-gray-200" />
+                <img src={getMediaUrl(imageUrl)} alt="Preview" className="h-24 w-24 object-cover rounded border border-gray-200" />
                 <button
                   type="button"
                   onClick={() => setImageUrl('')}

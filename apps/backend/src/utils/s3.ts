@@ -1,5 +1,6 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Readable } from 'stream';
 
 const s3Region = process.env.S3_REGION || process.env.AWS_REGION || 'ap-south-1';
 
@@ -13,6 +14,55 @@ const s3Client = new S3Client({
 
 const getBucketName = () => process.env.S3_BUCKET_NAME || 'restaurant-os-assets';
 
+/**
+ * Extract the S3 key from a full S3/CloudFront URL or a proxy URL.
+ * Returns the key portion (e.g. "menu-items/1234-image.webp").
+ */
+export const extractS3Key = (url: string): string | null => {
+  // Handle proxy URLs: /api/media/menu-items/...
+  const proxyMatch = url.match(/\/api\/media\/(.+)$/);
+  if (proxyMatch) return decodeURIComponent(proxyMatch[1]);
+
+  // Handle direct S3 URLs
+  const bucketName = getBucketName();
+  const s3Pattern = new RegExp(`${bucketName}\\.s3[^/]*\\.amazonaws\\.com/(.+)$`);
+  const s3Match = url.match(s3Pattern);
+  if (s3Match) return decodeURIComponent(s3Match[1]);
+
+  // Handle CloudFront URLs
+  if (process.env.CLOUDFRONT_DOMAIN) {
+    const cfPattern = new RegExp(`${process.env.CLOUDFRONT_DOMAIN}/(.+)$`);
+    const cfMatch = url.match(cfPattern);
+    if (cfMatch) return decodeURIComponent(cfMatch[1]);
+  }
+
+  return null;
+};
+
+/**
+ * Fetch an object from S3 and return its stream, content type, and content length.
+ */
+export const getS3Object = async (key: string): Promise<{
+  body: Readable;
+  contentType: string;
+  contentLength: number | undefined;
+  cacheControl: string | undefined;
+}> => {
+  const bucketName = getBucketName();
+  const command = new GetObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  return {
+    body: response.Body as Readable,
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength,
+    cacheControl: response.CacheControl,
+  };
+};
+
 export const generatePresignedUrl = async (fileName: string, fileType: string) => {
   const bucketName = getBucketName();
   const key = `menu-items/${Date.now()}-${fileName}`;
@@ -25,7 +75,8 @@ export const generatePresignedUrl = async (fileName: string, fileType: string) =
   });
 
   const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-  const publicUrl = `https://${process.env.CLOUDFRONT_DOMAIN || `${bucketName}.s3.${s3Region}.amazonaws.com`}/${key}`;
+  // Return proxy URL so images are always accessible
+  const publicUrl = getProxyUrl(key);
 
   return { signedUrl, publicUrl, key };
 };
@@ -33,9 +84,19 @@ export const generatePresignedUrl = async (fileName: string, fileType: string) =
 import sharp from 'sharp';
 
 /**
+ * Build the proxy URL for a given S3 key.
+ * Uses the API_BASE_URL env var if set, otherwise falls back to a relative path.
+ */
+const getProxyUrl = (key: string): string => {
+  const base = process.env.API_BASE_URL || '';
+  return `${base}/api/media/${key}`;
+};
+
+/**
  * Upload a file buffer directly to S3 from the server.
  * This avoids CORS issues since the upload happens server-to-server.
  * Automatically optimizes the image and converts it to WebP.
+ * Returns a proxy URL (/api/media/...) so images are served through the backend.
  */
 export const uploadToS3 = async (
   fileBuffer: Buffer,
@@ -76,6 +137,6 @@ export const uploadToS3 = async (
     })
   );
 
-  const publicUrl = `https://${process.env.CLOUDFRONT_DOMAIN || `${bucketName}.s3.${s3Region}.amazonaws.com`}/${key}`;
+  const publicUrl = getProxyUrl(key);
   return { publicUrl, key };
 };

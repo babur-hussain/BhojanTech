@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../utils/api';
+import { api, getMediaUrl } from '../utils/api';
 import { Save, Store, CreditCard, FileText, MapPin, Loader2, CheckCircle, AlertCircle, QrCode, Printer, Wifi, WifiOff, RefreshCw, Settings, BookOpen, Plus, X, Award } from 'lucide-react';
 import { useQZTray } from '../hooks/useQZTray';
 import { printTestReceipt } from '../utils/thermalPrint';
@@ -285,7 +285,7 @@ export default function RestaurantSettings() {
                   />
                   {form.logoUrl && (
                     <div className="mt-3 flex items-center gap-3">
-                      <img src={form.logoUrl} alt="Logo preview" className="h-16 w-16 object-contain border rounded-xl p-1 bg-gray-50" />
+                      <img src={getMediaUrl(form.logoUrl)} alt="Logo preview" className="h-16 w-16 object-contain border rounded-xl p-1 bg-gray-50" />
                       <span className="text-xs text-gray-500 font-medium">Active logo preview</span>
                     </div>
                   )}

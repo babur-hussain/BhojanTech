@@ -398,3 +398,97 @@ export const getPublicMenu = async (req: Request, res: Response) => {
     return res.status(500).json({ error: 'Server error' });
   }
 };
+
+/**
+ * One-time migration: Convert all direct S3 URLs to proxy URLs (/api/media/...).
+ * This fixes existing images that are inaccessible because the S3 bucket is private.
+ */
+export const migrateImageUrls = async (req: AuthRequest, res: Response) => {
+  try {
+    const { extractS3Key } = require('../utils/s3');
+    
+    // Pattern to match direct S3 URLs for the bhojan-tech bucket
+    const s3UrlPattern = /https?:\/\/[^/]*\.s3[^/]*\.amazonaws\.com\//;
+
+    let migratedItems = 0;
+    let migratedCategories = 0;
+
+    // Migrate MenuItem imageUrl and imageUrls
+    const items = await MenuItem.find({
+      $or: [
+        { imageUrl: { $regex: s3UrlPattern } },
+        { imageUrls: { $elemMatch: { $regex: s3UrlPattern } } },
+        { thumbnailUrl: { $regex: s3UrlPattern } },
+      ]
+    });
+
+    for (const item of items) {
+      let changed = false;
+
+      if (item.imageUrl && s3UrlPattern.test(item.imageUrl)) {
+        const key = extractS3Key(item.imageUrl);
+        if (key) {
+          item.imageUrl = `/api/media/${key}`;
+          changed = true;
+        }
+      }
+
+      if (item.imageUrls && item.imageUrls.length > 0) {
+        item.imageUrls = item.imageUrls.map((url: string) => {
+          if (s3UrlPattern.test(url)) {
+            const key = extractS3Key(url);
+            if (key) {
+              changed = true;
+              return `/api/media/${key}`;
+            }
+          }
+          return url;
+        });
+      }
+
+      if (item.thumbnailUrl && s3UrlPattern.test(item.thumbnailUrl)) {
+        const key = extractS3Key(item.thumbnailUrl);
+        if (key) {
+          item.thumbnailUrl = `/api/media/${key}`;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await item.save();
+        migratedItems++;
+      }
+    }
+
+    // Migrate MenuCategory imageUrl
+    const categories = await MenuCategory.find({
+      imageUrl: { $regex: s3UrlPattern }
+    });
+
+    for (const cat of categories) {
+      if (cat.imageUrl && s3UrlPattern.test(cat.imageUrl)) {
+        const key = extractS3Key(cat.imageUrl);
+        if (key) {
+          cat.imageUrl = `/api/media/${key}`;
+          await cat.save();
+          migratedCategories++;
+        }
+      }
+    }
+
+    // Clear all menu caches so the new URLs take effect
+    const keys = await redis.keys('menu_*');
+    if (keys.length) await redis.del(...keys);
+
+    return res.json({
+      success: true,
+      migratedItems,
+      migratedCategories,
+      message: `Migrated ${migratedItems} items and ${migratedCategories} categories to proxy URLs.`
+    });
+  } catch (error) {
+    console.error('migrateImageUrls error:', error);
+    return res.status(500).json({ error: 'Migration failed' });
+  }
+};
+

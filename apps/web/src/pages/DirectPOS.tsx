@@ -4,7 +4,7 @@ import {
   Search, Plus, Minus, ShoppingCart, Loader2, X, Image as ImageIcon,
   ScanLine, Camera, Package, ShoppingBag
 } from 'lucide-react';
-import { api } from '../utils/api';
+import { api, getMediaUrl } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
 import { useNavigate } from 'react-router-dom';
@@ -279,7 +279,7 @@ export default function DirectPOS() {
                   className="bg-white border border-gray-100 rounded-xl p-3 cursor-pointer hover:border-saffron hover:shadow-md transition-all flex flex-col"
                 >
                   {item.imageUrls?.[0] || item.imageUrl ? (
-                    <img src={item.imageUrls?.[0] || item.imageUrl} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3 border border-gray-50" />
+                    <img src={getMediaUrl(item.imageUrls?.[0] || item.imageUrl)} alt={item.name} className="w-full h-28 object-cover rounded-lg mb-3 border border-gray-50" />
                   ) : (
                     <div className="w-full h-28 bg-gray-50 border border-dashed border-gray-200 rounded-lg mb-3 flex items-center justify-center text-gray-300">
                       <ImageIcon size={28} />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MenuCategory, MenuItem, ItemVariant } from '@restaurant/types';
 import { Plus, GripVertical, Image as ImageIcon, X, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../utils/api';
+import { api, getMediaUrl } from '../utils/api';
 import ItemModal from '../components/Menu/ItemModal';
 import CategoryModal from '../components/Menu/CategoryModal';
 import MenuIntelligenceModal from '../components/AI/MenuIntelligence';
@@ -150,7 +150,7 @@ export default function MenuManagement() {
                 {item.hindiName && <p className="text-sm text-gray-500 mb-2">{item.hindiName}</p>}
 
                 {item.imageUrls?.[0] || item.imageUrl ? (
-                  <img src={item.imageUrls?.[0] || item.imageUrl} alt={item.name} className="w-full h-32 object-cover rounded mb-2" />
+                  <img src={getMediaUrl(item.imageUrls?.[0] || item.imageUrl)} alt={item.name} className="w-full h-32 object-cover rounded mb-2" />
                 ) : (
                   <div className="w-full h-32 bg-gray-100 rounded mb-2 flex items-center justify-center text-gray-400">
                     <ImageIcon size={32} />

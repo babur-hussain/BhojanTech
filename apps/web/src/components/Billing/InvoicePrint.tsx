@@ -1,5 +1,6 @@
 import React from 'react';
 import { GSTSlabBreakup, InvoiceLineItem, PaymentMode } from '@restaurant/types';
+import { getMediaUrl } from '../../utils/api';
 
 interface RestaurantInfo {
   name: string;
@@ -76,7 +77,7 @@ export default function InvoicePrint({
         {/* ── Header ──────────────────────────────────────────────────── */}
         <div className="text-center mb-4">
           {restaurant.logoUrl && (
-            <img src={restaurant.logoUrl} alt="logo" className="mx-auto object-contain mb-2" style={{ height: '48px' }} />
+            <img src={getMediaUrl(restaurant.logoUrl)} alt="logo" className="mx-auto object-contain mb-2" style={{ height: '48px' }} />
           )}
           <div className="text-xl font-bold uppercase tracking-wider mb-1 leading-tight">{restaurant.name}</div>
           <div className="text-xs text-gray-700 leading-snug max-w-[250px] mx-auto">{restaurant.address}</div>

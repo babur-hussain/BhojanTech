@@ -34,4 +34,7 @@ router.put('/items/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]),
 router.delete('/items/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.deleteMenuItem);
 router.patch('/items/:id/availability', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.updateItemAvailability);
 
+// Migration — one-time fix for existing S3 URLs
+router.post('/migrate-images', requireRole([UserRole.OWNER]), menuCtrl.migrateImageUrls);
+
 export default router;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MenuItem, MenuCategory, ItemVariant } from '@restaurant/types';
 import { X, Plus, Trash2, Upload, Loader2 } from 'lucide-react';
-import { api } from '../../utils/api';
+import { api, getMediaUrl } from '../../utils/api';
 
 interface Props {
   item: MenuItem | null;
@@ -184,7 +184,7 @@ export default function ItemModal({ item, categories, initialCategoryId, onClose
                     <div className="flex gap-2 mt-2 overflow-x-auto pb-2">
                       {formData.imageUrls.map((url, idx) => (
                         <div key={idx} className="relative group shrink-0">
-                          <img src={url} alt="Upload preview" className="h-16 w-16 object-cover rounded border border-gray-200" />
+                          <img src={getMediaUrl(url)} alt="Upload preview" className="h-16 w-16 object-cover rounded border border-gray-200" />
                           <button
                             type="button"
                             onClick={() => setFormData(prev => ({ ...prev, imageUrls: prev.imageUrls?.filter((_, i) => i !== idx) }))}

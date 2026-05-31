@@ -239,6 +239,7 @@ import customerRoutes from './routes/customer.routes';
 import branchRoutes from './routes/branch.routes';
 import retailItemRoutes from './routes/retailItem.routes';
 import bookingRoutes from './routes/bookingRoutes';
+import mediaRoutes from './routes/media.routes';
 
 app.use('/api/restaurant', restaurantRoutes);
 import { initCronJobs } from './utils/cronJobs';
@@ -247,6 +248,7 @@ import './workers/menuSync.worker'; // Start Bull Queue Worker for full menu syn
 // Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/menu', menuRoutes);
+app.use('/api/media', mediaRoutes); // Image proxy — serves S3 images without public bucket access
 app.use('/api/tables', tableRoutes);
 app.use('/api/orders', orderLimiter, orderRoutes);
 app.use('/api/kots', kotRoutes);

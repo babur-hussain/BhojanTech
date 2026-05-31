@@ -12,6 +12,33 @@ export const api = axios.create({
     },
 });
 
+/**
+ * Resolve an image URL for display. Handles:
+ * 1. Relative proxy URLs (/api/media/...) → prepends the API server origin
+ * 2. Legacy direct S3 URLs (*.s3.*.amazonaws.com) → converts to proxy URL
+ * 3. Other absolute URLs (https://...) → passed through unchanged
+ */
+export const getMediaUrl = (url: string | undefined | null): string => {
+    if (!url) return '';
+    
+    // If it's a relative proxy URL, prepend the API server origin
+    if (url.startsWith('/api/media/')) {
+        const origin = API_URL.replace(/\/api\/?$/, '');
+        return `${origin}${url}`;
+    }
+
+    // If it's a direct S3 URL, convert to proxy URL
+    const s3Match = url.match(/https?:\/\/[^/]*\.s3[^/]*\.amazonaws\.com\/(.+)$/);
+    if (s3Match) {
+        const key = s3Match[1];
+        const origin = API_URL.replace(/\/api\/?$/, '');
+        return `${origin}/api/media/${key}`;
+    }
+
+    // Otherwise return as-is
+    return url;
+};
+
 api.interceptors.request.use((config) => {
     const token = useAuthStore.getState().getToken();
     if (token) {

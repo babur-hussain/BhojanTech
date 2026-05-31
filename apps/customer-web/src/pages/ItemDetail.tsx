@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react';
 import { useCartStore } from '../store/cartStore';
+import { getMediaUrl } from '../services/api';
 
 const SpiceLabel: Record<string, string> = {
     MILD: '🌿 Mild',
@@ -68,7 +69,7 @@ export const ItemDetail = () => {
                 {images.length > 0 ? (
                     <>
                         <img
-                            src={images[currentImage]}
+                            src={getMediaUrl(images[currentImage])}
                             alt={item.name}
                             className="w-full h-full object-cover"
                         />
@@ -106,7 +107,7 @@ export const ItemDetail = () => {
                                 {images.map((img, i) => (
                                     <button key={i} onClick={() => setCurrentImage(i)}>
                                         <img
-                                            src={img}
+                                            src={getMediaUrl(img)}
                                             alt=""
                                             className={`w-12 h-12 object-cover rounded-lg border-2 transition-all ${i === currentImage ? 'border-white opacity-100' : 'border-transparent opacity-60'}`}
                                         />

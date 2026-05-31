@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCartStore } from '../store/cartStore';
 import { useNavigate } from 'react-router-dom';
+import { getMediaUrl } from '../services/api';
 
 export const MenuItemCard = ({ item }: { item: any }) => {
     const [showVariants, setShowVariants] = useState(false);
@@ -55,9 +56,9 @@ export const MenuItemCard = ({ item }: { item: any }) => {
 
                 <div className="relative flex-shrink-0">
                     {item.imageUrls && item.imageUrls.length > 0 ? (
-                        <img src={item.imageUrls[0]} alt={item.name} className="w-28 h-28 object-cover rounded-xl shadow-sm" />
+                        <img src={getMediaUrl(item.imageUrls[0])} alt={item.name} className="w-28 h-28 object-cover rounded-xl shadow-sm" />
                     ) : item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-28 h-28 object-cover rounded-xl shadow-sm" />
+                        <img src={getMediaUrl(item.imageUrl)} alt={item.name} className="w-28 h-28 object-cover rounded-xl shadow-sm" />
                     ) : (
                         <div className="w-28 h-28 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-xs text-center font-medium">No Image</div>
                     )}

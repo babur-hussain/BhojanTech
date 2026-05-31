@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useBranchStore } from '../store/branchStore';
-import { api } from '../utils/api';
+import { api, getMediaUrl } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import { Calendar, Clock, Users, Phone, Plus, Search, CheckCircle, XCircle, ChevronRight, User, Table as TableIcon, Eye, X, Printer } from 'lucide-react';
 import { inrFormat } from '../utils/format';
@@ -1018,7 +1018,7 @@ export default function Bookings() {
                     className="flex flex-col items-center text-center p-4 bg-white rounded-2xl border border-gray-200 hover:border-maroon hover:shadow-lg transition-all group"
                   >
                     {img ? (
-                      <img src={img} alt={item.name} className="w-20 h-20 object-cover rounded-xl mb-3 shadow-sm" />
+                      <img src={getMediaUrl(img)} alt={item.name} className="w-20 h-20 object-cover rounded-xl mb-3 shadow-sm" />
                     ) : (
                       <div className="w-20 h-20 bg-gray-50 border border-gray-100 rounded-xl mb-3 flex items-center justify-center">
                         <span className="text-gray-300 text-3xl font-black">{item.name.charAt(0)}</span>

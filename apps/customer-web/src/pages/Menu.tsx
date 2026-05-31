@@ -4,7 +4,7 @@ import { MenuItemCard } from '../components/MenuItemCard';
 import { CartBottomSheet } from '../components/CartBottomSheet';
 import { useNavigate } from 'react-router-dom';
 import { UserCircle } from 'lucide-react';
-import { getTableInfo, getLiveTableOrder, fetchMenu } from '../services/api';
+import { getTableInfo, getLiveTableOrder, fetchMenu, getMediaUrl } from '../services/api';
 
 export const Menu = () => {
     const { tableNumber, restaurantId, items } = useCartStore();
@@ -175,7 +175,7 @@ export const Menu = () => {
                                     {/* Image or letter placeholder */}
                                     <div className="w-full h-[68px] overflow-hidden bg-gray-100">
                                         {cat.imageUrl ? (
-                                            <img src={cat.imageUrl} alt={cat.name} className="w-full h-full object-cover" />
+                                            <img src={getMediaUrl(cat.imageUrl)} alt={cat.name} className="w-full h-full object-cover" />
                                         ) : (
                                             <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-200 flex items-center justify-center">
                                                 <span className="text-3xl font-black text-gray-300 uppercase select-none">
