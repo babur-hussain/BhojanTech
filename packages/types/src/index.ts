@@ -220,7 +220,7 @@ export interface KOT {
 export type PaymentMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT';
 
 export interface GSTSlabBreakup {
-  slab: 5 | 12 | 18;
+  slab: 0 | 5 | 12 | 18;
   taxableAmount: number;
   cgst: number;    // taxableAmount × slab/2
   sgst: number;    // taxableAmount × slab/2

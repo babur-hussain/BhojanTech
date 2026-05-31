@@ -7,7 +7,7 @@ const HSN_RESTAURANT = '9963';
  * The GST slab per item is fetched from the MenuItem model (passed in).
  */
 export function buildLineItems(
-  orderItems: Array<OrderItem & { gstSlab: 5 | 12 | 18; hindiName?: string }>
+  orderItems: Array<OrderItem & { gstSlab: 0 | 5 | 12 | 18; hindiName?: string }>
 ): InvoiceLineItem[] {
   return orderItems.map(i => ({
     name: i.name,
@@ -42,7 +42,7 @@ export function computeGSTBreakup(
 
   for (const item of lineItems) {
     const effectiveLine = item.lineTotal * (1 - discountRatio);
-    const rate = item.gstSlab / 100;
+    const rate = (item.gstSlab ?? 0) / 100;
     const taxable = +(effectiveLine / (1 + rate)).toFixed(2);
     const half = +(taxable * rate / 2).toFixed(2);
 
@@ -55,7 +55,7 @@ export function computeGSTBreakup(
   }
 
   return Array.from(slabMap.entries()).map(([slab, v]) => ({
-    slab: slab as 5 | 12 | 18,
+    slab: slab as 0 | 5 | 12 | 18,
     taxableAmount: v.taxable,
     cgst: v.cgst,
     sgst: v.sgst,

@@ -72,6 +72,7 @@ export default function BillingScreen() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggLoading, setSuggLoading] = useState(false);
   const [showSugg, setShowSugg] = useState(false);
+  const [suggSelectedIndex, setSuggSelectedIndex] = useState(0);
   const [activeInput, setActiveInput] = useState<'phone' | 'name' | null>(null);
   const suggRef = React.useRef<HTMLDivElement>(null);
   const justSelectedRef = React.useRef(false);
@@ -136,14 +137,16 @@ export default function BillingScreen() {
 
   // Live suggestions search (partial phone or name)
   const searchSuggestions = useCallback(async (query: string) => {
-    if (!query || query.length < 2) { setSuggestions([]); setShowSugg(false); return; }
+    if (!query || query.length < 2) { setSuggestions([]); setShowSugg(false); setSuggSelectedIndex(0); return; }
     try {
       setSuggLoading(true);
       const res = await api.get(`/customers?q=${encodeURIComponent(query)}&limit=6`);
       setSuggestions(res.data?.customers || res.data || []);
+      setSuggSelectedIndex(0);
       setShowSugg(true);
     } catch {
       setSuggestions([]);
+      setSuggSelectedIndex(0);
     } finally {
       setSuggLoading(false);
     }
@@ -404,7 +407,7 @@ export default function BillingScreen() {
       const res = await api.post('/billing/pay', body);
       const invoiceId = res.data?.invoice?._id;
       if (!invoiceId) throw new Error('No invoice ID in response');
-      navigate(`/invoice/${invoiceId}`);
+      navigate(`/invoice/${invoiceId}`, { replace: true });
     } catch (e: any) {
       alert(e?.response?.data?.error || e?.message || 'Payment failed');
     } finally {
@@ -450,6 +453,19 @@ export default function BillingScreen() {
                       placeholder="10-digit number"
                       value={customerPhone}
                       onFocus={() => setActiveInput('phone')}
+                      onKeyDown={(e) => {
+                        if (!showSugg || suggestions.length === 0) return;
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSuggSelectedIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSuggSelectedIndex(prev => Math.max(prev - 1, 0));
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          selectSuggestion(suggestions[suggSelectedIndex]);
+                        }
+                      }}
                       onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
                       className="w-full pl-10 pr-10 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all"
                     />
@@ -471,6 +487,19 @@ export default function BillingScreen() {
                       placeholder="Enter name..."
                       value={customerName}
                       onFocus={() => setActiveInput('name')}
+                      onKeyDown={(e) => {
+                        if (!showSugg || suggestions.length === 0) return;
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSuggSelectedIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSuggSelectedIndex(prev => Math.max(prev - 1, 0));
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          selectSuggestion(suggestions[suggSelectedIndex]);
+                        }
+                      }}
                       onChange={e => setCustomerName(e.target.value)}
                       className={`w-full px-3 py-2.5 border rounded-lg text-sm transition-all ${
                         customer
@@ -524,11 +553,13 @@ export default function BillingScreen() {
                     <Search size={12} className="text-maroon" />
                     <span className="text-[11px] font-bold text-maroon uppercase tracking-wide">Matching Customers</span>
                   </div>
-                  {suggestions.map((s: any) => (
+                  {suggestions.map((s: any, idx: number) => (
                     <button
                       key={s._id}
                       onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-red-50 transition-colors text-left border-b border-gray-100 last:border-0"
+                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left border-b border-gray-100 last:border-0 ${
+                        idx === suggSelectedIndex ? 'bg-red-50' : 'hover:bg-red-50'
+                      }`}
                     >
                       <div className="w-8 h-8 rounded-full bg-maroon text-white flex items-center justify-center font-black text-sm shrink-0">
                         {s.name?.charAt(0).toUpperCase()}

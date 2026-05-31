@@ -87,8 +87,8 @@ export default function InvoiceScreen() {
           >
             <Printer size={20} /> Print Receipt
           </button>
-          <button onClick={() => navigate('/tables')} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
-            Back to Tables
+          <button onClick={() => navigate(-1)} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
+            Close
           </button>
         </div>
       </div>

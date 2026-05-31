@@ -98,7 +98,7 @@ export default function DirectPOS() {
       return [...prev, {
         id: key, type: 'menu', name: item.name, variantName,
         price: variant.specialPriceINR || variant.priceINR,
-        quantity: 1, gstSlab: item.gstSlab || 5,
+        quantity: 1, gstSlab: item.gstSlab ?? 0,
       }];
     });
   };
@@ -110,7 +110,7 @@ export default function DirectPOS() {
       return [...prev, {
         id: item._id, type: 'retail', name: item.name,
         price: item.priceINR, quantity: 1,
-        gstSlab: item.gstSlab ?? 5,   // ← use product's actual GST slab, not hardcoded 18
+        gstSlab: item.gstSlab ?? 0,   // ← use product's actual GST slab, not hardcoded 18
         unit: item.unit, barcode: item.barcode,
       }];
     });

@@ -56,7 +56,7 @@ const OrderSchema: Schema = new Schema(
         variantName: { type: String },
         quantity: { type: Number, required: true, min: 1 },
         priceAtOrderTime: { type: Number, required: true },
-        gstSlab: { type: Number, default: 5 },  // persisted GST % per item
+        gstSlab: { type: Number, default: 0 },  // persisted GST % per item
         notes: { type: String },
         sentToKitchen: { type: Boolean, default: false },
       },

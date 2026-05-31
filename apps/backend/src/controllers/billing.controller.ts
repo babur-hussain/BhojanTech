@@ -59,7 +59,7 @@ export const previewBill = async (req: AuthRequest, res: Response) => {
       const mi = menuItems.find(m => m._id.toString() === i.menuItemId?.toString());
       return {
         ...(i as any).toObject(),
-        gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 5,  // stored gstSlab wins
+        gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 0,  // stored gstSlab wins
         hindiName: mi?.hindiName,
       };
     });
@@ -267,7 +267,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
 
     const enrichedItems = order.items.map(i => {
       const mi = menuItemDocs.find(m => m._id.toString() === i.menuItemId?.toString());
-      return { ...(i as any).toObject(), gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 5, hindiName: mi?.hindiName };
+      return { ...(i as any).toObject(), gstSlab: (i as any).gstSlab ?? mi?.gstSlab ?? 0, hindiName: mi?.hindiName };
     });
 
     const lineItems = buildLineItems(enrichedItems as any);
@@ -606,7 +606,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       menuItemId: i.menuItemId ? new mongoose.Types.ObjectId(i.menuItemId) : RETAIL_PLACEHOLDER_ID,
       sentToKitchen: true,
       priceAtOrderTime: Number(i.priceAtOrderTime || 0),
-      gstSlab: Number(i.gstSlab ?? 5),   // ← persist actual product GST into the order
+      gstSlab: Number(i.gstSlab ?? 0),   // ← persist actual product GST into the order
     }));
 
     const branchId = req.user!.branchId;
@@ -630,7 +630,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     // 2. Compute Invoice Data — use gstSlab stored on each order item
     const enrichedItems = order.items.map((i: any) => ({
       ...(i as any).toObject(),
-      gstSlab: (i as any).gstSlab ?? 5,  // comes from DB (persisted from request)
+      gstSlab: (i as any).gstSlab ?? 0,  // comes from DB (persisted from request)
     }));
 
     const lineItems = buildLineItems(enrichedItems as any);

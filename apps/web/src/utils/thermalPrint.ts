@@ -217,7 +217,7 @@ const CUT         = GS  + 'V\x41\x00'; // Full cut
 
 function line(txt = ''): string { return txt + LF; }
 
-function dashes(char = '─', len = 32): string {
+function dashes(char = '-', len = 32): string {
   return line(char.repeat(len));
 }
 
@@ -299,7 +299,7 @@ export function buildESCPOS(r: ReceiptData): string {
       : item.name;
 
     // Truncate to 24 chars for the name column
-    const nameTrunc = name.length > 24 ? name.substring(0, 23) + '…' : name.padEnd(24);
+    const nameTrunc = name.length > 24 ? name.substring(0, 22) + '..' : name.padEnd(24);
     const qty  = String(item.quantity).padStart(3);
     const rate = String(item.unitPrice).padStart(5);
     const amt  = String(item.lineTotal.toFixed(2)).padStart(7);
@@ -383,7 +383,7 @@ export function buildESCPOS(r: ReceiptData): string {
   // ── Footer ────────────────────────────────────────────────────────────────
   s += ALIGN_C;
   s += BOLD_ON + line('THANK YOU!') + BOLD_OFF;
-  s += line('Dhanyavaad, Phir Padharen! 🙏');
+  s += line('Dhanyavaad, Phir Padharen!');
   s += line('~ Powered by RestoOS ~');
 
   s += FEED3;
@@ -425,7 +425,7 @@ export function buildKOTSlip(k: KOTData): string {
   // ── Meta ──────────────────────────────────────────────────────────────────
   s += ALIGN_L;
   const table = k.isOnlineOrder
-    ? `${k.deliveryPlatform || 'ONLINE'} — ${k.customerName || 'Customer'}`
+    ? `${k.deliveryPlatform || 'ONLINE'} - ${k.customerName || 'Customer'}`
     : `Table: ${k.tableNumber}`;
   s += BOLD_ON + line(table) + BOLD_OFF;
   if (!k.isOnlineOrder && k.waiterName) s += line(`Waiter: ${k.waiterName}`);
@@ -445,7 +445,7 @@ export function buildKOTSlip(k: KOTData): string {
       : item.name;
     s += line(`${qty}  ${name}`);
     if (item.notes) {
-      s += line(`     ⚠ ${item.notes}`);
+      s += line(`     * ${item.notes}`);
     }
     if (item.station && item.station !== 'General') {
       s += line(`     [${item.station}]`);
@@ -453,7 +453,7 @@ export function buildKOTSlip(k: KOTData): string {
   }
 
   s += dashes();
-  s += ALIGN_C + line('— Chef Copy —');
+  s += ALIGN_C + line('-- Chef Copy --');
 
   s += FEED3;
   s += CUT;
@@ -466,8 +466,8 @@ export function buildKOTSlip(k: KOTData): string {
 // More comprehensive than the short booking receipt.
 
 export function buildFinalBillESCPOS(r: ReceiptData): string {
-  const DB  = '═';   // double-line separator char
-  const SB  = '─';   // single-line separator char
+  const DB  = '=';   // double-line separator char
+  const SB  = '-';   // single-line separator char
 
   function dbl(len = 32)   { return line(DB.repeat(len)); }
   function sgl(len = 32)   { return line(SB.repeat(len)); }
@@ -519,7 +519,7 @@ export function buildFinalBillESCPOS(r: ReceiptData): string {
     const name = item.variantName && item.variantName !== 'Regular'
       ? `${item.name} (${item.variantName})`
       : item.name;
-    const nameTrunc = name.length > 24 ? name.substring(0, 23) + '…' : name.padEnd(24);
+    const nameTrunc = name.length > 24 ? name.substring(0, 22) + '..' : name.padEnd(24);
     const qty  = String(item.quantity).padStart(3);
     const rate = String(item.unitPrice.toFixed(0)).padStart(6);
     const amt  = String(item.lineTotal.toFixed(2)).padStart(8);
@@ -606,7 +606,7 @@ export function buildFinalBillESCPOS(r: ReceiptData): string {
   // ── Footer ────────────────────────────────────────────────────────────────
   s += ALIGN_C;
   s += BOLD_ON + DSIZE_ON + line('THANK YOU!') + DSIZE_OFF + BOLD_OFF;
-  s += line('Dhanyavaad! Phir Padharen 🙏');
+  s += line('Dhanyavaad! Phir Padharen');
   s += LF;
   s += line('~ Powered by RestoOS ~');
 
