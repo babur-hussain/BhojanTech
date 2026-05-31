@@ -43,10 +43,10 @@ export const createItem = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
     if (!branchId) return res.status(400).json({ error: 'Branch ID is required' });
-    const { name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName } = req.body;
+    const { name, category, unit, currentQty, minThreshold, reorderQty, costPerUnit, supplierId, supplierName } = req.body;
 
     const item = await InventoryItem.create({
-      name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName,
+      name, category, unit, currentQty, minThreshold, reorderQty, costPerUnit, supplierId, supplierName,
       restaurantId: req.user!.restaurantId,
       branchId,
     });
@@ -59,13 +59,14 @@ export const updateItem = async (req: AuthRequest, res: Response) => {
     const query = getBaseQuery(req);
     query._id = req.params.id;
     // Whitelist updatable fields — prevent overwriting restaurantId/branchId/_id
-    const { name, category, unit, currentQty, minThreshold, costPerUnit, supplierId, supplierName, isActive } = req.body;
+    const { name, category, unit, currentQty, minThreshold, reorderQty, costPerUnit, supplierId, supplierName, isActive } = req.body;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) updateData.category = category;
     if (unit !== undefined) updateData.unit = unit;
     if (currentQty !== undefined) updateData.currentQty = currentQty;
     if (minThreshold !== undefined) updateData.minThreshold = minThreshold;
+    if (reorderQty !== undefined) updateData.reorderQty = reorderQty;
     if (costPerUnit !== undefined) updateData.costPerUnit = costPerUnit;
     if (supplierId !== undefined) updateData.supplierId = supplierId;
     if (supplierName !== undefined) updateData.supplierName = supplierName;
@@ -181,8 +182,8 @@ export const getSuppliers = async (req: AuthRequest, res: Response) => {
 export const createSupplier = async (req: AuthRequest, res: Response) => {
   try {
     const branchId = getCreateBranchId(req);
-    const { name, contactPerson, phone, email, address, gstNumber } = req.body;
-    const supplier = await Supplier.create({ name, contactPerson, phone, email, address, gstNumber, restaurantId: req.user!.restaurantId, branchId });
+    const { name, contactName, phone, email, address, notes } = req.body;
+    const supplier = await Supplier.create({ name, contactName, phone, email, address, notes, restaurantId: req.user!.restaurantId, branchId });
     return res.status(201).json(supplier);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -192,14 +193,14 @@ export const updateSupplier = async (req: AuthRequest, res: Response) => {
     const query = getBaseQuery(req);
     query._id = req.params.id;
     // Whitelist updatable fields
-    const { name, contactPerson, phone, email, address, gstNumber } = req.body;
+    const { name, contactName, phone, email, address, notes } = req.body;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
-    if (contactPerson !== undefined) updateData.contactPerson = contactPerson;
+    if (contactName !== undefined) updateData.contactName = contactName;
     if (phone !== undefined) updateData.phone = phone;
     if (email !== undefined) updateData.email = email;
     if (address !== undefined) updateData.address = address;
-    if (gstNumber !== undefined) updateData.gstNumber = gstNumber;
+    if (notes !== undefined) updateData.notes = notes;
 
     const supplier = await Supplier.findOneAndUpdate(
       query,
