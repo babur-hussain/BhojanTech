@@ -34,7 +34,7 @@ export default function Sidebar() {
     { name: 'Expenses & TDS', icon: PieChart, to: '/ca/expenses', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.ACCOUNTANT] },
   ];
 
-  const filteredNavItems = navItems.filter(item => user && item.roles.includes(user.role));
+  const filteredNavItems = navItems.filter(item => user && (item.roles as UserRole[]).includes(user.role));
 
   return (
     <div className="flex flex-col w-64 bg-maroon h-full">
@@ -65,7 +65,7 @@ export default function Sidebar() {
             <p className="text-xs font-medium text-gray-300">{user?.role}</p>
           </div>
         </div>
-        {user && [UserRole.SUPER_OWNER, UserRole.OWNER].includes(user.role) && (
+        {user && ([UserRole.SUPER_OWNER, UserRole.OWNER] as UserRole[]).includes(user.role) && (
           <NavLink
             to="/settings"
             className={({ isActive }) =>

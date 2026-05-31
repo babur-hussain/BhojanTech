@@ -25,7 +25,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
   const [targetBranchId, setTargetBranchId] = useState('');
   
-  const [form, setForm] = useState({ name: '', phone: '', role: UserRole.WAITER, salaryType: 'MONTHLY', salaryAmount: '' });
+  const [form, setForm] = useState({ name: '', phone: '', role: UserRole.WAITER as UserRole, salaryType: 'MONTHLY', salaryAmount: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = staff.filter(s =>
@@ -34,7 +34,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
   );
 
   const openAddModal = () => {
-    setForm({ name: '', phone: '', role: UserRole.WAITER, salaryType: 'MONTHLY', salaryAmount: '' });
+    setForm({ name: '', phone: '', role: UserRole.WAITER as UserRole, salaryType: 'MONTHLY', salaryAmount: '' });
     setEditingStaffId(null);
     setShowAdd(true);
   };

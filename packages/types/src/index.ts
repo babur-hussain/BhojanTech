@@ -1,12 +1,13 @@
-export enum UserRole {
-  SUPER_OWNER = 'SUPER_OWNER',
-  OWNER = 'OWNER',
-  BRANCH_MANAGER = 'BRANCH_MANAGER',
-  MANAGER = 'MANAGER',
-  WAITER = 'WAITER',
-  KITCHEN_STAFF = 'KITCHEN_STAFF',
-  ACCOUNTANT = 'ACCOUNTANT',
-}
+export const UserRole = {
+  SUPER_OWNER: 'SUPER_OWNER',
+  OWNER: 'OWNER',
+  BRANCH_MANAGER: 'BRANCH_MANAGER',
+  MANAGER: 'MANAGER',
+  WAITER: 'WAITER',
+  KITCHEN_STAFF: 'KITCHEN_STAFF',
+  ACCOUNTANT: 'ACCOUNTANT',
+} as const;
+export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 export type IntegrationPlatform = 'ZOMATO' | 'SWIGGY' | 'ONDC' | 'MANUAL';
 export type IntegrationStatus = 'ACTIVE' | 'PAUSED' | 'ERROR';
