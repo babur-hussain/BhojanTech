@@ -553,10 +553,6 @@ export default function RetailItems() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Low Stock Alert Level</label>
-                    <input type="number" value={form.lowStockAlert} onChange={e => setForm({ ...form, lowStockAlert: +e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all" />
-                  </div>
-                  <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">
                       {editItem ? 'Stock (Current Level)' : 'Initial Stock Level'}
                       {editItem && <span className="ml-2 text-[10px] text-amber-600 font-normal normal-case">⚠ changing this logs a stock correction</span>}
@@ -568,6 +564,10 @@ export default function RetailItems() {
                       placeholder="0"
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all bg-gray-50"
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Low Stock Alert Level</label>
+                    <input type="number" value={form.lowStockAlert} onChange={e => setForm({ ...form, lowStockAlert: e.target.value })} className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition-all" />
                   </div>
                 </div>
               </div>
