@@ -418,7 +418,9 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
           customerName || order.customerName || 'Guest',
           grandTotal,
           (order._id as any).toString(),
-          order.items.map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity })),
+          order.items
+            .filter((i) => i.menuItemId && i.menuItemId.toString() !== '000000000000000000000000')
+            .map((i) => ({ name: i.name, menuItemId: i.menuItemId!.toString(), quantity: i.quantity })),
           undefined, // referredByCode
           customerDob === null ? null : (customerDob ? new Date(customerDob) : undefined)
         );
@@ -730,7 +732,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
           (order._id as any).toString(),
           order.items
             .filter((i: any) => i.menuItemId && i.menuItemId.toString() !== '000000000000000000000000')
-            .map((i) => ({ name: i.name, menuItemId: i.menuItemId.toString(), quantity: i.quantity })),
+            .map((i) => ({ name: i.name, menuItemId: i.menuItemId!.toString(), quantity: i.quantity })),
           undefined, // referredByCode
           customerDob ? new Date(customerDob) : undefined
         );

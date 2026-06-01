@@ -289,8 +289,8 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
     
     if (!order) return res.status(404).json({ error: 'Order not found' });
 
-    const itemsToSend = order.items.filter(i => itemIds.includes(i._id.toString()) && !i.sentToKitchen);
-    if (itemsToSend.length === 0) return res.status(400).json({ error: 'No valid items to send' });
+    const itemsToSend = order.items.filter(i => itemIds.includes(i._id.toString()) && !i.sentToKitchen && !(i as any).isRetailItem);
+    if (itemsToSend.length === 0) return res.status(400).json({ error: 'No valid items to send to kitchen (retail items are excluded)' });
 
     // Mark items as sent
     order.items.forEach(i => {
@@ -301,7 +301,7 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
     await order.save();
 
     // Fetch menu items to get category/station
-    const menuItemIds = itemsToSend.map(i => i.menuItemId);
+    const menuItemIds = itemsToSend.map(i => i.menuItemId!);
     
     const menuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
     const categoryIds = menuItems.map(m => m.categoryId);
@@ -314,7 +314,7 @@ export const generateKOT = async (req: AuthRequest, res: Response) => {
       tableNumber: order.tableNumber,
       waiterName: order.waiterName,
       items: itemsToSend.map(i => {
-        const menuItem = menuItems.find(m => m._id.toString() === i.menuItemId.toString());
+        const menuItem = menuItems.find(m => m._id.toString() === i.menuItemId!.toString());
         const category = categories.find(c => c._id.toString() === menuItem?.categoryId.toString());
         return {
           orderItemId: i._id,
