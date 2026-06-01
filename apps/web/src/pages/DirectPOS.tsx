@@ -51,7 +51,7 @@ export default function DirectPOS() {
   const [showCustomItemForm, setShowCustomItemForm] = useState(false);
   const [customItemName, setCustomItemName] = useState('');
   const [customItemPrice, setCustomItemPrice] = useState('');
-  const [customItemGst, setCustomItemGst] = useState('5');
+  const [customItemGst, setCustomItemGst] = useState('0');
 
   const [paying, setPaying] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
