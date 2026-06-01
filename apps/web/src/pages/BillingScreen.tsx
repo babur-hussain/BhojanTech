@@ -77,11 +77,11 @@ export default function BillingScreen() {
   const suggRef = React.useRef<HTMLDivElement>(null);
   const justSelectedRef = React.useRef(false);
 
-  // Retail items
-  const [retailCatalog, setRetailCatalog] = useState<any[]>([]);
-  const [retailCart, setRetailCart] = useState<{ _id: string; name: string; priceINR: number; gstSlab: number; unit: string; quantity: number }[]>(location.state?.retailItems || []);
-  const [showRetail, setShowRetail] = useState(false);
-  const [retailSearch, setRetailSearch] = useState('');
+  // Additional Items (Menu + Retail) added during checkout
+  const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [additionalCart, setAdditionalCart] = useState<{ catalogId: string; name: string; priceINR: number; gstSlab: number; unit?: string; quantity: number; isMenu?: boolean; isRetail?: boolean; menuItemId?: string; retailItemId?: string; variantName?: string }[]>([]);
+  const [showAdditional, setShowAdditional] = useState(false);
+  const [additionalSearch, setAdditionalSearch] = useState('');
   const [showCamera, setShowCamera] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -98,10 +98,40 @@ export default function BillingScreen() {
         setPreview(prevRes.data);
         setRestaurant(restRes.data);
 
-        // Load retail catalog
+        // Load full catalog (menu + retail)
         try {
-          const retailRes = await api.get('/retail-items');
-          setRetailCatalog(retailRes.data.filter((i: any) => i.isActive));
+          const [menuRes, retailRes] = await Promise.all([
+            api.get('/menu/items'),
+            api.get('/retail-items')
+          ]);
+          
+          const combined: any[] = [];
+          menuRes.data.filter((i: any) => i.isAvailable).forEach((item: any) => {
+            item.variants.forEach((v: any, vIdx: number) => {
+              combined.push({
+                catalogId: `menu-${item._id}-${vIdx}`,
+                isMenu: true,
+                menuItemId: item._id,
+                name: v.name !== 'Regular' ? `${item.name} (${v.name})` : item.name,
+                variantName: v.name !== 'Regular' ? v.name : undefined,
+                priceINR: v.specialPriceINR || v.priceINR,
+                gstSlab: item.gstSlab ?? 0,
+                barcode: item.barcode // just in case some menu items have barcodes
+              });
+            });
+          });
+          retailRes.data.filter((i: any) => i.isActive).forEach((r: any) => {
+            combined.push({
+              ...r,
+              catalogId: `retail-${r._id}`,
+              isRetail: true,
+              retailItemId: r._id,
+              name: r.name,
+              priceINR: r.priceINR,
+              gstSlab: r.gstSlab ?? 0,
+            });
+          });
+          setCatalogItems(combined);
         } catch {}
       } catch (e: any) {
         setError(e?.response?.data?.error || 'Failed to load bill');
@@ -220,26 +250,38 @@ export default function BillingScreen() {
     setTimeout(() => { justSelectedRef.current = false; }, 500);
   };
 
-  // ── Retail cart helpers ── MUST be before any early returns (Rules of Hooks) ──
-  const addRetailItem = useCallback((item: any) => {
-    setRetailCart(cart => {
-      const ex = cart.find(c => c._id === item._id);
-      if (ex) return cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1 } : c);
-      return [...cart, { _id: item._id, name: item.name, priceINR: item.priceINR, gstSlab: item.gstSlab, unit: item.unit, quantity: 1 }];
+  // ── Additional cart helpers ── MUST be before any early returns (Rules of Hooks) ──
+  const addAdditionalItem = useCallback((item: any) => {
+    setAdditionalCart(cart => {
+      const ex = cart.find(c => c.catalogId === item.catalogId);
+      if (ex) return cart.map(c => c.catalogId === item.catalogId ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...cart, { 
+        catalogId: item.catalogId, 
+        name: item.name, 
+        priceINR: item.priceINR, 
+        gstSlab: item.gstSlab, 
+        unit: item.unit, 
+        quantity: 1,
+        isMenu: item.isMenu,
+        isRetail: item.isRetail,
+        menuItemId: item.menuItemId,
+        retailItemId: item.retailItemId,
+        variantName: item.variantName
+      }];
     });
   }, []);
 
   const handleBarcodeScan = useCallback((barcode: string) => {
-    const item = retailCatalog.find(i => i.barcode === barcode);
+    const item = catalogItems.find(i => i.barcode === barcode);
     if (item) {
-      addRetailItem(item);
+      addAdditionalItem(item);
       setScanFeedback({ text: `Scanned: ${item.name}`, ok: true });
-      setShowRetail(true);
+      setShowAdditional(true);
     } else {
       setScanFeedback({ text: `Barcode ${barcode} not found`, ok: false });
     }
     setTimeout(() => setScanFeedback(null), 3000);
-  }, [retailCatalog, addRetailItem]);
+  }, [catalogItems, addAdditionalItem]);
 
   // ── Hardware barcode scanner (MUST be before early returns) ──
   useBarcodeScanner(handleBarcodeScan);
@@ -258,13 +300,13 @@ export default function BillingScreen() {
   }
 
   // Non-hook helpers (safe after early returns — these are not hooks)
-  const updateRetailQty = (id: string, delta: number) => {
-    setRetailCart(cart => cart.map(c => c._id === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
+  const updateAdditionalQty = (id: string, delta: number) => {
+    setAdditionalCart(cart => cart.map(c => c.catalogId === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
   };
-  const retailSubtotal = retailCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
+  const additionalSubtotal = additionalCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
 
-  // Discount computation — now includes retail subtotal
-  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR + retailSubtotal) : 0;
+  // Discount computation — now includes additional subtotal
+  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR + additionalSubtotal) : 0;
   const discountFlat = (() => {
     let dc = 0;
     if (discountVal) {
@@ -273,7 +315,7 @@ export default function BillingScreen() {
     return dc + pointsDiscount;
   })();
   const needsApproval = discountType === 'PERCENT' ? +discountVal > 10 : (discountFlat - pointsDiscount) / preview.subtotalINR > 0.10;
-  const afterDiscount = +(preview.grandTotalINR + retailSubtotal - discountFlat).toFixed(2);
+  const afterDiscount = +(preview.grandTotalINR + additionalSubtotal - discountFlat).toFixed(2);
   const finalTotal = Math.max(0, Math.round(afterDiscount));
   const roundOff = +(finalTotal - afterDiscount).toFixed(2);
   const change = paymentMode === 'CASH' && cashReceived ? Math.max(0, +cashReceived - finalTotal) : 0;
@@ -384,7 +426,15 @@ export default function BillingScreen() {
         paymentMode,
         amountPaidINR: finalTotal,
         payments: paymentMode === 'SPLIT' ? splits : [{ mode: paymentMode, amountINR: finalTotal }],
-        retailItems: retailCart.map(c => ({ _id: c._id, quantity: c.quantity })),
+        retailItems: additionalCart.filter(c => c.isRetail).map(c => ({ _id: c.retailItemId, quantity: c.quantity })),
+        additionalMenuItems: additionalCart.filter(c => c.isMenu).map(c => ({
+          menuItemId: c.menuItemId,
+          name: c.name,
+          variantName: c.variantName,
+          quantity: c.quantity,
+          priceAtOrderTime: c.priceINR,
+          gstSlab: c.gstSlab
+        })),
       };
       if (discountFlat > pointsDiscount && discountVal) {
         body.discount = { type: discountType, value: +discountVal, approvedBy: approver || undefined };
@@ -669,33 +719,33 @@ export default function BillingScreen() {
             </table>
           </div>
 
-          {/* Retail Items Section */}
+          {/* Additional Items Section (Menu + Retail) */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <button
-              onClick={() => setShowRetail(r => !r)}
+              onClick={() => setShowAdditional(r => !r)}
               className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 border-b hover:bg-gray-100 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <ShoppingCart size={16} className="text-maroon" />
-                <span className="font-bold text-gray-700">Add Retail Items</span>
-                {retailCart.length > 0 && (
+                <span className="font-bold text-gray-700">Add More Items</span>
+                {additionalCart.length > 0 && (
                   <span className="bg-maroon text-white text-xs font-black px-2 py-0.5 rounded-full">
-                    {retailCart.reduce((s, c) => s + c.quantity, 0)} items · +₹{retailSubtotal.toFixed(0)}
+                    {additionalCart.reduce((s, c) => s + c.quantity, 0)} items · +₹{additionalSubtotal.toFixed(0)}
                   </span>
                 )}
               </div>
-              <span className="text-gray-400 text-sm">{showRetail ? '▲' : '▼'}</span>
+              <span className="text-gray-400 text-sm">{showAdditional ? '▲' : '▼'}</span>
             </button>
 
-            {showRetail && (
+            {showAdditional && (
               <div className="p-4 space-y-3">
                 {/* Search & Scan Actions */}
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
-                      value={retailSearch} onChange={e => setRetailSearch(e.target.value)}
-                      placeholder="Search retail items..."
+                      value={additionalSearch} onChange={e => setAdditionalSearch(e.target.value)}
+                      placeholder="Search items..."
                       className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-maroon focus:border-transparent"
                     />
                   </div>
@@ -717,13 +767,13 @@ export default function BillingScreen() {
 
                 {/* Catalog grid */}
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {retailCatalog
-                    .filter(i => i.name.toLowerCase().includes(retailSearch.toLowerCase()))
+                  {catalogItems
+                    .filter(i => i.name.toLowerCase().includes(additionalSearch.toLowerCase()))
                     .map(item => {
-                      const inCart = retailCart.find(c => c._id === item._id);
+                      const inCart = additionalCart.find(c => c.catalogId === item.catalogId);
                       return (
                         <div
-                          key={item._id}
+                          key={item.catalogId}
                           className={`flex items-center justify-between p-2.5 rounded-lg border text-sm cursor-pointer transition-all ${inCart ? 'border-maroon bg-red-50' : 'border-gray-100 hover:border-maroon hover:bg-gray-50'}`}
                         >
                           <div className="flex-1 min-w-0">
@@ -732,12 +782,12 @@ export default function BillingScreen() {
                           </div>
                           {inCart ? (
                             <div className="flex items-center gap-1 ml-2">
-                              <button onClick={() => updateRetailQty(item._id, -1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Minus size={10} /></button>
+                              <button onClick={() => updateAdditionalQty(item.catalogId, -1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Minus size={10} /></button>
                               <span className="w-5 text-center text-xs font-black">{inCart.quantity}</span>
-                              <button onClick={() => updateRetailQty(item._id, 1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Plus size={10} /></button>
+                              <button onClick={() => updateAdditionalQty(item.catalogId, 1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Plus size={10} /></button>
                             </div>
                           ) : (
-                            <button onClick={() => addRetailItem(item)} className="ml-2 w-6 h-6 bg-maroon text-white rounded-full flex items-center justify-center hover:bg-opacity-90 transition">
+                            <button onClick={() => addAdditionalItem(item)} className="ml-2 w-6 h-6 bg-maroon text-white rounded-full flex items-center justify-center hover:bg-opacity-90 transition">
                               <Plus size={12} />
                             </button>
                           )}
@@ -746,19 +796,19 @@ export default function BillingScreen() {
                     })}
                 </div>
 
-                {/* Retail cart summary */}
-                {retailCart.length > 0 && (
+                {/* Additional cart summary */}
+                {additionalCart.length > 0 && (
                   <div className="border-t pt-3 space-y-1">
-                    {retailCart.map(c => (
-                      <div key={c._id} className="flex items-center justify-between text-sm">
+                    {additionalCart.map(c => (
+                      <div key={c.catalogId} className="flex items-center justify-between text-sm">
                         <span className="text-gray-700 flex-1">{c.name} × {c.quantity}</span>
                         <span className="font-semibold text-gray-800">₹{(c.priceINR * c.quantity).toFixed(2)}</span>
-                        <button onClick={() => updateRetailQty(c._id, -c.quantity)} className="ml-2 text-red-400 hover:text-red-600"><X size={14} /></button>
+                        <button onClick={() => updateAdditionalQty(c.catalogId, -c.quantity)} className="ml-2 text-red-400 hover:text-red-600"><X size={14} /></button>
                       </div>
                     ))}
                     <div className="flex justify-between font-black text-maroon pt-1 border-t text-sm">
-                      <span>Retail Subtotal</span>
-                      <span>₹{retailSubtotal.toFixed(2)}</span>
+                      <span>Additional Subtotal</span>
+                      <span>₹{additionalSubtotal.toFixed(2)}</span>
                     </div>
                   </div>
                 )}

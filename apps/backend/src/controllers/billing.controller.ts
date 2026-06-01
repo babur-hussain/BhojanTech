@@ -230,6 +230,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       razorpayOrderId,
       razorpayPaymentId,
       retailItems = [],    // [{ _id, quantity }]
+      additionalMenuItems = [], // [{ menuItemId, name, variantName, quantity, priceAtOrderTime, gstSlab }]
     } = req.body;
 
     const restaurantId = req.user!.restaurantId;
@@ -311,8 +312,37 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const allLineItems = [...lineItems, ...retailLineItems];
-    const subtotal = +lineItems.reduce((s, l) => s + l.lineTotal, 0).toFixed(2);
+    // ─ Additional Menu items (added at billing) ──────────────────────────────
+    let additionalMenuLineItems: any[] = [];
+    if (additionalMenuItems && additionalMenuItems.length > 0) {
+      additionalMenuLineItems = additionalMenuItems.map((m: any) => {
+        const lineTotal = +(m.priceAtOrderTime * m.quantity).toFixed(2);
+        return {
+          name: m.name,
+          variantName: m.variantName,
+          quantity: m.quantity,
+          unitPrice: m.priceAtOrderTime,
+          gstSlab: m.gstSlab,
+          lineTotal,
+          hsnCode: '',
+        };
+      });
+
+      // Append to the Order so it's tracked in history
+      const formattedItems = additionalMenuItems.map((i: any) => ({
+        ...i,
+        _id: new mongoose.Types.ObjectId(),
+        menuItemId: i.menuItemId ? new mongoose.Types.ObjectId(i.menuItemId) : null,
+        sentToKitchen: false, // Added at checkout, no KOT
+        priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+        gstSlab: Number(i.gstSlab ?? 0),
+      }));
+      order.items.push(...formattedItems);
+      order.totalAmountINR += additionalMenuItems.reduce((sum: number, i: any) => sum + (i.priceAtOrderTime * i.quantity), 0);
+    }
+
+    const allLineItems = [...lineItems, ...retailLineItems, ...additionalMenuLineItems];
+    const subtotal = +allLineItems.reduce((s: number, l: any) => s + l.lineTotal, 0).toFixed(2);
 
     // ─ Loyalty settings & customer ─────────────────────────────────────────
     const loyaltySettings = await getOrInitSettings(restaurantId as string);
