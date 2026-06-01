@@ -195,7 +195,7 @@ export default function InvoicePrint({
               <>
                 <div className="inline-block p-1 bg-white border-2 border-black rounded-lg">
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${restaurant.upiId}&pn=${restaurant.name.replace(/ /g, '+')}&am=${finalTotal}&cu=INR`)}`}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${restaurant.upiId}&pn=${restaurant.name.replace(/ /g, '+')}&am=${Number(finalTotal).toFixed(2)}&cu=INR`)}`}
                     alt="UPI QR"
                     className="w-24 h-24"
                   />

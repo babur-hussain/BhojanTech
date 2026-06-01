@@ -356,7 +356,7 @@ export function buildESCPOS(r: ReceiptData): string {
     const qrAmount = (r.depositPaid && r.depositPaid > 0)
       ? Math.max(0, r.grandTotal - r.depositPaid)
       : r.grandTotal;
-    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${qrAmount}&cu=INR`;
+    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${Number(qrAmount).toFixed(2)}&cu=INR`;
     const upiLen = upiString.length;
     const pL = upiLen & 0xFF;
     const pH = (upiLen >> 8) & 0xFF;
@@ -584,7 +584,7 @@ export function buildFinalBillESCPOS(r: ReceiptData): string {
     const qrAmount = (r.depositPaid && r.depositPaid > 0)
       ? Math.max(0, r.grandTotal - r.depositPaid)
       : r.grandTotal;
-    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${qrAmount}&cu=INR`;
+    const upiString = `upi://pay?pa=${r.upiId}&pn=${encodeURIComponent(r.restaurantName)}&am=${Number(qrAmount).toFixed(2)}&cu=INR`;
     const upiLen = upiString.length;
     const pL = upiLen & 0xFF;
     const pH = (upiLen >> 8) & 0xFF;
