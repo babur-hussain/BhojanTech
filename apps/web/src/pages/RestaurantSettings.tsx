@@ -392,6 +392,18 @@ export default function RestaurantSettings() {
                     </div>
                   </div>
 
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-blue-900 mb-1">New Setup? Install the Security Certificate</h3>
+                      <p className="text-xs text-blue-800 leading-relaxed max-w-lg">
+                        To enable silent printing and prevent the "Untrusted website" popup, download this certificate and place it in your QZ Tray <strong>Resources</strong> folder, replacing the default <code className="bg-blue-100 px-1 py-0.5 rounded">override.crt</code>.
+                      </p>
+                    </div>
+                    <a href="/override.crt" download="override.crt" className="flex-shrink-0 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-xs hover:bg-blue-700 transition shadow-sm flex items-center gap-2">
+                      <FileText size={16} /> Download override.crt
+                    </a>
+                  </div>
+
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-sm font-semibold text-gray-700">Target Printer Name</label>
