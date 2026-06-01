@@ -323,7 +323,7 @@ export default function Bookings() {
       // Label the "for" field as delivery/booking date + time
       const forLabel = `${isDiningCategory(booking.category)
         ? (booking.tableId ? `Table ${booking.tableId.number}` : 'Dine-in')
-        : booking.category} — ${bookingDateStr} ${booking.time}`;
+        : booking.category} - ${bookingDateStr} ${booking.time}`;
 
       // ── Amount in words ────────────────────────────────────────────────────
       const { toWordsEN } = await import('../utils/thermalPrint');
@@ -392,7 +392,7 @@ export default function Bookings() {
     const bookingDateStr = new Date(booking.date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const forLabel = `${isDiningCategory(booking.category)
       ? (booking.tableId ? `Table ${booking.tableId.number}` : 'Dine-in')
-      : booking.category} — ${bookingDateStr} ${booking.time}`;
+      : booking.category} - ${bookingDateStr} ${booking.time}`;
     const { toWordsEN } = await import('../utils/thermalPrint');
     return {
       restaurantName: restaurantInfo.name || 'Restaurant',
