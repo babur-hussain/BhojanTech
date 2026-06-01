@@ -292,11 +292,21 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
         };
       }).filter(Boolean);
 
-      // Deduct stock for each retail item sold
+      // Deduct stock for each retail item sold at checkout
       for (const r of retailItems) {
         await RetailItem.findOneAndUpdate(
           { _id: r._id, restaurantId },
           { $inc: { stock: -r.quantity } }
+        );
+      }
+    }
+
+    // Deduct stock for retail items that were already in the order
+    for (const item of order.items) {
+      if ((item as any).isRetailItem && (item as any).retailItemId) {
+        await RetailItem.findOneAndUpdate(
+          { _id: (item as any).retailItemId, restaurantId },
+          { $inc: { stock: -item.quantity } }
         );
       }
     }

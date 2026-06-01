@@ -159,17 +159,7 @@ export default function DirectPOS() {
           gstSlab: c.gstSlab,
         })),
       });
-      navigate(`/bill/${res.data._id}`, {
-        state: {
-          retailItems: retailCartItems.map(c => ({
-            _id: c.id,
-            name: c.name,
-            quantity: c.quantity,
-            priceINR: c.price,
-            gstSlab: c.gstSlab,
-          }))
-        }
-      });
+      navigate(`/bill/${res.data._id}`);
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
       alert(e?.response?.data?.error || 'Failed to create order. Please try again.');

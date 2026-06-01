@@ -2,7 +2,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IOrderItem {
   _id: string;
-  menuItemId: mongoose.Types.ObjectId;
+  menuItemId?: mongoose.Types.ObjectId;
+  retailItemId?: mongoose.Types.ObjectId;
+  isRetailItem?: boolean;
   name: string;
   variantName?: string;
   quantity: number;
@@ -51,7 +53,9 @@ const OrderSchema: Schema = new Schema(
     paymentStatus: { type: String, enum: ['PENDING', 'PAID', 'FAILED'] },
     items: [
       {
-        menuItemId: { type: Schema.Types.ObjectId, ref: 'MenuItem', required: true },
+        menuItemId: { type: Schema.Types.ObjectId, ref: 'MenuItem' },
+        retailItemId: { type: Schema.Types.ObjectId, ref: 'RetailItem' },
+        isRetailItem: { type: Boolean, default: false },
         name: { type: String, required: true },
         variantName: { type: String },
         quantity: { type: Number, required: true, min: 1 },

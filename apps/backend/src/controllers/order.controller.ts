@@ -185,17 +185,30 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'At least one item is required' });
     }
 
-    const totalAmountINR = items.reduce(
+    const menuItemsInput = items || [];
+    const retailItemsInput = req.body.retailItems || [];
+
+    const totalAmountINR = [...menuItemsInput, ...retailItemsInput].reduce(
       (sum: number, item: any) => sum + (Number(item.priceAtOrderTime || 0) * Number(item.quantity || 1)),
       0
     );
 
-    const formattedItems = items.map((i: any) => ({
-      ...i,
-      _id: new mongoose.Types.ObjectId(),
-      sentToKitchen: true,
-      priceAtOrderTime: Number(i.priceAtOrderTime || 0),
-    }));
+    const formattedItems = [
+      ...menuItemsInput.map((i: any) => ({
+        ...i,
+        _id: new mongoose.Types.ObjectId(),
+        sentToKitchen: true,
+        priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+      })),
+      ...retailItemsInput.map((i: any) => ({
+        ...i,
+        _id: new mongoose.Types.ObjectId(),
+        retailItemId: i._id,
+        isRetailItem: true,
+        sentToKitchen: true,
+        priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+      }))
+    ];
 
     const order = await Order.create({
       restaurantId,
