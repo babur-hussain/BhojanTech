@@ -297,7 +297,7 @@ export default function BillingScreen() {
       hindiName: li.hindiName,
       quantity: li.quantity,
       unitPrice: li.unitPrice,
-      gstSlab: li.gstSlab,
+      gstSlab: li.gstSlab as 0 | 5 | 12 | 18,
       lineTotal: li.lineTotal,
       hsnCode: li.hsnCode,
     }));
@@ -308,7 +308,7 @@ export default function BillingScreen() {
       variantName: c.variantName,
       quantity: c.quantity,
       unitPrice: c.priceINR,
-      gstSlab: c.gstSlab,
+      gstSlab: c.gstSlab as 0 | 5 | 12 | 18,
       lineTotal: +(c.priceINR * c.quantity).toFixed(2),
       hsnCode: '',
     }));
@@ -351,7 +351,7 @@ export default function BillingScreen() {
     }
     
     return Array.from(slabMap.entries()).map(([slab, v]) => ({
-      slab,
+      slab: slab as 0 | 5 | 12 | 18,
       taxableAmount: v.taxable,
       cgst: v.cgst,
       sgst: v.sgst,
@@ -361,6 +361,7 @@ export default function BillingScreen() {
 
   const combinedTotalGST = combinedGstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0);
 
+  const needsApproval = preview ? (discountType === 'PERCENT' ? +discountVal > 10 : (discountFlat - pointsDiscount) / combinedSubtotal > 0.10) : false;
   const afterDiscount = preview ? +(preview.grandTotalINR + additionalSubtotal - discountFlat).toFixed(2) : 0;
   const finalTotal = Math.max(0, Math.round(afterDiscount));
   const roundOff = +(finalTotal - afterDiscount).toFixed(2);
