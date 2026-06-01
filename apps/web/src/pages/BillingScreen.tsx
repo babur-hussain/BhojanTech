@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   GSTSlabBreakup, InvoiceLineItem, PaymentMode, PaymentSplit,
@@ -286,6 +286,85 @@ export default function BillingScreen() {
   // ── Hardware barcode scanner (MUST be before early returns) ──
   useBarcodeScanner(handleBarcodeScan);
 
+  // ── Merge additional items into a combined preview for InvoicePrint and Proforma Bill
+  const combinedLineItems = useMemo(() => {
+    if (!preview) return [];
+    
+    // Original items
+    const baseItems = preview.lineItems.map((li: any) => ({
+      name: li.name,
+      variantName: li.variantName,
+      hindiName: li.hindiName,
+      quantity: li.quantity,
+      unitPrice: li.unitPrice,
+      gstSlab: li.gstSlab,
+      lineTotal: li.lineTotal,
+      hsnCode: li.hsnCode,
+    }));
+    
+    // Added items
+    const addedItems = additionalCart.map(c => ({
+      name: c.name,
+      variantName: c.variantName,
+      quantity: c.quantity,
+      unitPrice: c.priceINR,
+      gstSlab: c.gstSlab,
+      lineTotal: +(c.priceINR * c.quantity).toFixed(2),
+      hsnCode: '',
+    }));
+    
+    return [...baseItems, ...addedItems];
+  }, [preview, additionalCart]);
+
+  const additionalSubtotal = additionalCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
+  const combinedSubtotal = (preview?.subtotalINR || 0) + additionalSubtotal;
+  
+  // Discount computation — now includes additional subtotal
+  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview ? (preview.subtotalINR + additionalSubtotal) : 0) : 0;
+  const discountFlat = (() => {
+    if (!preview) return 0;
+    let dc = 0;
+    if (discountVal) {
+      dc = discountType === 'FLAT' ? Math.min(+discountVal, combinedSubtotal) : +(combinedSubtotal * Math.min(+discountVal, 100) / 100).toFixed(2);
+    }
+    return dc + pointsDiscount;
+  })();
+
+  const combinedGstBreakup = useMemo(() => {
+    if (!preview) return [];
+    const slabMap = new Map<number, { taxable: number; cgst: number; sgst: number }>();
+    
+    const discountRatio = combinedSubtotal > 0 ? discountFlat / combinedSubtotal : 0;
+    
+    for (const item of combinedLineItems) {
+      const effectiveLine = item.lineTotal * (1 - discountRatio);
+      const rate = (item.gstSlab ?? 0) / 100;
+      const taxable = +(effectiveLine / (1 + rate)).toFixed(2);
+      const half = +(taxable * rate / 2).toFixed(2);
+      
+      const existing = slabMap.get(item.gstSlab) ?? { taxable: 0, cgst: 0, sgst: 0 };
+      slabMap.set(item.gstSlab, {
+        taxable: +(existing.taxable + taxable).toFixed(2),
+        cgst: +(existing.cgst + half).toFixed(2),
+        sgst: +(existing.sgst + half).toFixed(2),
+      });
+    }
+    
+    return Array.from(slabMap.entries()).map(([slab, v]) => ({
+      slab,
+      taxableAmount: v.taxable,
+      cgst: v.cgst,
+      sgst: v.sgst,
+      total: +(v.taxable + v.cgst + v.sgst).toFixed(2),
+    }));
+  }, [combinedLineItems, combinedSubtotal, discountFlat, preview]);
+
+  const combinedTotalGST = combinedGstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0);
+
+  const afterDiscount = preview ? +(preview.grandTotalINR + additionalSubtotal - discountFlat).toFixed(2) : 0;
+  const finalTotal = Math.max(0, Math.round(afterDiscount));
+  const roundOff = +(finalTotal - afterDiscount).toFixed(2);
+
   if (loading) {
     return <PageLoader message="Loading bill…" />;
   }
@@ -298,27 +377,6 @@ export default function BillingScreen() {
       </div>
     );
   }
-
-  // Non-hook helpers (safe after early returns — these are not hooks)
-  const updateAdditionalQty = (id: string, delta: number) => {
-    setAdditionalCart(cart => cart.map(c => c.catalogId === id ? { ...c, quantity: Math.max(0, c.quantity + delta) } : c).filter(c => c.quantity > 0));
-  };
-  const additionalSubtotal = additionalCart.reduce((s, c) => s + c.priceINR * c.quantity, 0);
-
-  // Discount computation — now includes additional subtotal
-  const pointsDiscount = customer && redeemPoints ? Math.min(Number(redeemPoints) / (pointValue || 1), preview.subtotalINR + additionalSubtotal) : 0;
-  const discountFlat = (() => {
-    let dc = 0;
-    if (discountVal) {
-      dc = discountType === 'FLAT' ? Math.min(+discountVal, preview.subtotalINR) : +(preview.subtotalINR * Math.min(+discountVal, 100) / 100).toFixed(2);
-    }
-    return dc + pointsDiscount;
-  })();
-  const needsApproval = discountType === 'PERCENT' ? +discountVal > 10 : (discountFlat - pointsDiscount) / preview.subtotalINR > 0.10;
-  const afterDiscount = +(preview.grandTotalINR + additionalSubtotal - discountFlat).toFixed(2);
-  const finalTotal = Math.max(0, Math.round(afterDiscount));
-  const roundOff = +(finalTotal - afterDiscount).toFixed(2);
-  const change = paymentMode === 'CASH' && cashReceived ? Math.max(0, +cashReceived - finalTotal) : 0;
 
   // Split helpers
   const addSplit = () => setSplits(s => [...s, { mode: 'CASH', amountINR: 0 }]);
@@ -371,7 +429,7 @@ export default function BillingScreen() {
         paymentMode: paymentMode,
         date: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
         time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-        items: (preview?.lineItems || []).map((li: any) => ({
+        items: combinedLineItems.map((li: any) => ({
           name: li.name,
           variantName: li.variantName,
           quantity: li.quantity,
@@ -379,14 +437,12 @@ export default function BillingScreen() {
           lineTotal: li.lineTotal,
           gstSlab: li.gstSlab,
         })),
-        subtotal: preview?.subtotalINR ?? 0,
+        subtotal: combinedSubtotal,
         discountFlat: discountFlat,
         roundOff: roundOff,
         grandTotal: finalTotal,
-        gstBreakup: preview?.gstBreakup ?? [],
-        totalGST: (preview?.gstBreakup ?? []).reduce(
-          (s: number, g: any) => s + (g.cgst ?? 0) + (g.sgst ?? 0), 0
-        ),
+        gstBreakup: combinedGstBreakup,
+        totalGST: combinedTotalGST,
         amountInWords: toWordsEN(finalTotal),
       };
       
@@ -782,9 +838,11 @@ export default function BillingScreen() {
                           </div>
                           {inCart ? (
                             <div className="flex items-center gap-1 ml-2">
-                              <button onClick={() => updateAdditionalQty(item.catalogId, -1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Minus size={10} /></button>
+                              <button onClick={() => {
+                                setAdditionalCart(cart => cart.map(c => c.catalogId === item.catalogId ? { ...c, quantity: Math.max(0, c.quantity - 1) } : c).filter(c => c.quantity > 0));
+                              }} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Minus size={10} /></button>
                               <span className="w-5 text-center text-xs font-black">{inCart.quantity}</span>
-                              <button onClick={() => updateAdditionalQty(item.catalogId, 1)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Plus size={10} /></button>
+                              <button onClick={() => addAdditionalItem(item)} className="w-5 h-5 bg-maroon text-white rounded flex items-center justify-center text-xs font-bold"><Plus size={10} /></button>
                             </div>
                           ) : (
                             <button onClick={() => addAdditionalItem(item)} className="ml-2 w-6 h-6 bg-maroon text-white rounded-full flex items-center justify-center hover:bg-opacity-90 transition">
@@ -803,7 +861,7 @@ export default function BillingScreen() {
                       <div key={c.catalogId} className="flex items-center justify-between text-sm">
                         <span className="text-gray-700 flex-1">{c.name} × {c.quantity}</span>
                         <span className="font-semibold text-gray-800">₹{(c.priceINR * c.quantity).toFixed(2)}</span>
-                        <button onClick={() => updateAdditionalQty(c.catalogId, -c.quantity)} className="ml-2 text-red-400 hover:text-red-600"><X size={14} /></button>
+                        <button onClick={() => setAdditionalCart(cart => cart.filter(item => item.catalogId !== c.catalogId))} className="ml-2 text-red-400 hover:text-red-600"><X size={14} /></button>
                       </div>
                     ))}
                     <div className="flex justify-between font-black text-maroon pt-1 border-t text-sm">
@@ -824,7 +882,7 @@ export default function BillingScreen() {
                 <tr><th className="px-4 py-2 text-left">Slab</th><th className="px-4 py-2 text-right">Taxable Amt</th><th className="px-4 py-2 text-right">CGST (½)</th><th className="px-4 py-2 text-right">SGST (½)</th><th className="px-4 py-2 text-right">Total GST</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {preview.gstBreakup.map((g, i) => (
+                {combinedGstBreakup.map((g, i) => (
                   <tr key={i}>
                     <td className="px-4 py-3 font-medium">@{g.slab}%</td>
                     <td className="px-4 py-3 text-right">₹{g.taxableAmount.toFixed(2)}</td>
@@ -835,7 +893,7 @@ export default function BillingScreen() {
                 ))}
               </tbody>
               <tfoot className="bg-gray-50 border-t">
-                <tr><td className="px-4 py-2 font-bold" colSpan={4}>Total GST</td><td className="px-4 py-2 text-right font-bold text-maroon">₹{preview.totalGSTINR.toFixed(2)}</td></tr>
+                <tr><td className="px-4 py-2 font-bold" colSpan={4}>Total GST</td><td className="px-4 py-2 text-right font-bold text-maroon">₹{combinedTotalGST.toFixed(2)}</td></tr>
               </tfoot>
             </table>
           </div>
@@ -873,13 +931,13 @@ export default function BillingScreen() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="bg-maroon text-white px-4 py-3"><h2 className="font-bold">Bill Summary</h2></div>
             <div className="p-4 space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Sub-total (incl. GST)</span><span>₹{preview.subtotalINR.toFixed(2)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>Sub-total (incl. GST)</span><span>₹{combinedSubtotal.toFixed(2)}</span></div>
               {discountFlat > 0 && <div className="flex justify-between text-green-600"><span>Discount</span><span>−₹{discountFlat.toFixed(2)}</span></div>}
               <div className="flex justify-between text-gray-400 text-xs"><span>Round-off</span><span>{roundOff >= 0 ? '+' : ''}₹{roundOff.toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-xl text-maroon border-t pt-3 mt-2"><span>Total</span><span>₹{finalTotal}</span></div>
               <p className="text-xs text-gray-400 italic">
                 ({discountFlat > 0 ? `After ₹${discountFlat} discount · ` : ''}
-                CGST ₹{preview.gstBreakup.reduce((s, g) => s + g.cgst, 0).toFixed(2)} + SGST ₹{preview.gstBreakup.reduce((s, g) => s + g.sgst, 0).toFixed(2)})
+                CGST ₹{combinedGstBreakup.reduce((s, g) => s + g.cgst, 0).toFixed(2)} + SGST ₹{combinedGstBreakup.reduce((s, g) => s + g.sgst, 0).toFixed(2)})
               </p>
             </div>
           </div>
@@ -972,16 +1030,26 @@ export default function BillingScreen() {
                 {paying ? <Loader2 size={22} className="animate-spin" /> : null}
                 {paying ? 'Processing…' : `GENERATE INVOICE`}
               </button>
+              <button onClick={handleGenerateBill} className="px-4 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition flex items-center justify-center">
+                <Printer size={24} />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Thermal Print Preview Container */}
       <div style={{ display: 'none' }}>
         <div ref={receiptRef}>
           <InvoicePrint
-            preview={preview}
-            finalTotal={invoiceData?.grandTotalINR || finalTotal}
+            preview={{
+              ...preview,
+              lineItems: combinedLineItems,
+              subtotalINR: combinedSubtotal,
+              gstBreakup: combinedGstBreakup,
+              totalGSTINR: combinedTotalGST,
+            }}
+            finalTotal={finalTotal}
             discountFlat={discountFlat}
             roundOff={roundOff}
             paymentMode={paymentMode}
