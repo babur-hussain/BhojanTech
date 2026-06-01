@@ -135,6 +135,13 @@ export default function RestaurantSettings() {
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    
+    if (!form.name.trim()) {
+      showToast('error', 'Business Name is required.');
+      setActiveTab('general');
+      return;
+    }
+
     try {
       setSaving(true);
       await Promise.all([
@@ -244,7 +251,7 @@ export default function RestaurantSettings() {
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Business Name <span className="text-red-500">*</span></label>
                     <input
-                      required type="text" value={form.name}
+                      type="text" value={form.name}
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                       placeholder="e.g., Saffron Palace"
                       className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition"
