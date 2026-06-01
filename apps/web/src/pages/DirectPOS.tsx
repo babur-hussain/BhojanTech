@@ -47,6 +47,12 @@ export default function DirectPOS() {
   const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
   const [showCamera, setShowCamera] = useState(false);
 
+  // Custom Items
+  const [showCustomItemForm, setShowCustomItemForm] = useState(false);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [customItemGst, setCustomItemGst] = useState('5');
+
   const [paying, setPaying] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const { selectedBranchId } = useBranchStore();
@@ -114,6 +120,21 @@ export default function DirectPOS() {
         unit: item.unit, barcode: item.barcode,
       }];
     });
+  };
+
+  const handleAddCustomItem = () => {
+    if (!customItemName.trim() || !customItemPrice || isNaN(+customItemPrice)) return;
+    setCart(prev => [...prev, {
+      id: `custom-${Date.now()}`,
+      type: 'menu',
+      name: customItemName.trim(),
+      price: +customItemPrice,
+      quantity: 1,
+      gstSlab: +customItemGst,
+    }]);
+    setCustomItemName('');
+    setCustomItemPrice('');
+    setShowCustomItemForm(false);
   };
 
   const updateQty = (id: string, type: 'menu' | 'retail', delta: number) => {
@@ -206,7 +227,41 @@ export default function DirectPOS() {
             >
               <Camera size={18} />
             </button>
+            <button 
+              onClick={() => setShowCustomItemForm(!showCustomItemForm)}
+              className={`px-3 py-2 border rounded-lg text-sm font-semibold transition whitespace-nowrap shadow-sm ${showCustomItemForm ? 'bg-maroon text-white border-maroon' : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-600'}`}
+            >
+              + Custom
+            </button>
           </div>
+
+          {/* Custom Item Form */}
+          {showCustomItemForm && (
+            <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input 
+                  type="text" placeholder="Item name" value={customItemName} onChange={e => setCustomItemName(e.target.value)}
+                  className="flex-[2] min-w-0 px-2 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon"
+                />
+                <input 
+                  type="number" placeholder="₹ Price" value={customItemPrice} onChange={e => setCustomItemPrice(e.target.value)}
+                  className="flex-1 min-w-0 px-2 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon"
+                />
+                <select 
+                  value={customItemGst} onChange={e => setCustomItemGst(e.target.value)}
+                  className="w-16 px-1 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon bg-white"
+                >
+                  <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option>
+                </select>
+              </div>
+              <button 
+                onClick={handleAddCustomItem}
+                className="w-full bg-maroon text-white text-sm font-bold py-1.5 rounded hover:bg-opacity-90 transition"
+              >
+                Add Custom Item
+              </button>
+            </div>
+          )}
 
           {/* Scan feedback toast */}
           {scanFeedback && (
