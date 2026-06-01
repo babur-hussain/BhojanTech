@@ -86,7 +86,7 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     if (!table) return res.status(404).json({ error: 'Table not found' });
 
     // Server-side price validation: look up actual prices from DB
-    const menuItemIds = items.map((i: any) => i.menuItemId).filter(Boolean);
+    const menuItemIds = items.map((i: any) => i.menuItemId).filter((id: any) => id && mongoose.Types.ObjectId.isValid(id));
     const menuItemDocs = menuItemIds.length > 0
       ? await MenuItem.find({ _id: { $in: menuItemIds }, restaurantId })
       : [];
@@ -199,6 +199,7 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
         _id: new mongoose.Types.ObjectId(),
         sentToKitchen: true,
         priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+        menuItemId: mongoose.Types.ObjectId.isValid(i.menuItemId) ? new mongoose.Types.ObjectId(i.menuItemId) : undefined,
       })),
       ...retailItemsInput.map((i: any) => ({
         ...i,
@@ -228,7 +229,7 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
     // Create KOT only for real menu items (not retail/placeholder items)
     const menuItems = formattedItems.filter((item: any) => !!item.menuItemId);
     if (menuItems.length > 0) {
-      const menuItemIds = menuItems.map((i: any) => i.menuItemId);
+      const menuItemIds = menuItems.map((i: any) => i.menuItemId).filter((id: any) => id && mongoose.Types.ObjectId.isValid(id));
       
       const dbMenuItems = await MenuItem.find({ _id: { $in: menuItemIds } });
       const categoryIds = dbMenuItems.map(m => m.categoryId);
@@ -239,7 +240,7 @@ export const createTakeawayOrder = async (req: AuthRequest, res: Response) => {
         const category = categories.find(c => c._id.toString() === menuItem?.categoryId.toString());
         return {
           orderItemId: item._id,
-          menuItemId: item.menuItemId,
+          menuItemId: mongoose.Types.ObjectId.isValid(item.menuItemId) ? item.menuItemId : new mongoose.Types.ObjectId(),
           categoryId: menuItem?.categoryId || new mongoose.Types.ObjectId(),
           station: category?.station || 'General',
           name: item.name,

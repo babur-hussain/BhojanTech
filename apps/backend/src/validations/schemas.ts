@@ -20,7 +20,7 @@ export const inviteStaffSchema = z.object({
 // ─── Order Schemas ────────────────────────────────────────────────────────────
 
 const orderItemSchema = z.object({
-  menuItemId: z.string().min(1),
+  menuItemId: z.string().min(1).optional(),
   name: z.string().min(1),
   variantName: z.string().optional(),
   quantity: z.number().int().min(1).max(100),

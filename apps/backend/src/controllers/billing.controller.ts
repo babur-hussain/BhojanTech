@@ -332,7 +332,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       const formattedItems = additionalMenuItems.map((i: any) => ({
         ...i,
         _id: new mongoose.Types.ObjectId(),
-        menuItemId: i.menuItemId ? new mongoose.Types.ObjectId(i.menuItemId) : null,
+        menuItemId: mongoose.Types.ObjectId.isValid(i.menuItemId) ? new mongoose.Types.ObjectId(i.menuItemId) : undefined,
         sentToKitchen: false, // Added at checkout, no KOT
         priceAtOrderTime: Number(i.priceAtOrderTime || 0),
         gstSlab: Number(i.gstSlab ?? 0),
