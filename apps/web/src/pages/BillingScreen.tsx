@@ -85,6 +85,12 @@ export default function BillingScreen() {
   const [showCamera, setShowCamera] = useState(false);
   const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // Custom Items
+  const [showCustomItemForm, setShowCustomItemForm] = useState(false);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [customItemGst, setCustomItemGst] = useState('5');
+
   // Fetch bill preview from backend
   useEffect(() => {
     if (!orderId) return;
@@ -285,6 +291,23 @@ export default function BillingScreen() {
 
   // ── Hardware barcode scanner (MUST be before early returns) ──
   useBarcodeScanner(handleBarcodeScan);
+
+  const handleAddCustomItem = () => {
+    if (!customItemName.trim() || !customItemPrice || isNaN(+customItemPrice)) return;
+    const item = {
+      catalogId: `custom-${Date.now()}`,
+      name: customItemName.trim(),
+      priceINR: +customItemPrice,
+      gstSlab: +customItemGst,
+      quantity: 1,
+      isMenu: true,
+      menuItemId: undefined,
+    };
+    setAdditionalCart(cart => [...cart, item]);
+    setCustomItemName('');
+    setCustomItemPrice('');
+    setShowCustomItemForm(false);
+  };
 
   // ── Merge additional items into a combined preview for InvoicePrint and Proforma Bill
   const combinedLineItems = useMemo(() => {
@@ -813,7 +836,41 @@ export default function BillingScreen() {
                   >
                     <Camera size={18} />
                   </button>
+                  <button 
+                    onClick={() => setShowCustomItemForm(!showCustomItemForm)}
+                    className={`px-3 py-2 border rounded-lg text-sm font-semibold transition whitespace-nowrap ${showCustomItemForm ? 'bg-maroon text-white border-maroon' : 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-600'}`}
+                  >
+                    + Custom
+                  </button>
                 </div>
+
+                {/* Custom Item Form */}
+                {showCustomItemForm && (
+                  <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" placeholder="Item name" value={customItemName} onChange={e => setCustomItemName(e.target.value)}
+                        className="flex-[2] min-w-0 px-2 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon"
+                      />
+                      <input 
+                        type="number" placeholder="₹ Price" value={customItemPrice} onChange={e => setCustomItemPrice(e.target.value)}
+                        className="flex-1 min-w-0 px-2 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon"
+                      />
+                      <select 
+                        value={customItemGst} onChange={e => setCustomItemGst(e.target.value)}
+                        className="w-16 px-1 py-1.5 border border-orange-200 rounded text-sm focus:outline-none focus:border-maroon bg-white"
+                      >
+                        <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option>
+                      </select>
+                    </div>
+                    <button 
+                      onClick={handleAddCustomItem}
+                      className="w-full bg-maroon text-white text-sm font-bold py-1.5 rounded hover:bg-opacity-90 transition"
+                    >
+                      Add Custom Item
+                    </button>
+                  </div>
+                )}
 
                 {/* Feedback Toast */}
                 {scanFeedback && (
