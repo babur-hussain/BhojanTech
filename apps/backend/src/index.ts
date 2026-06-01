@@ -240,6 +240,7 @@ import branchRoutes from './routes/branch.routes';
 import retailItemRoutes from './routes/retailItem.routes';
 import bookingRoutes from './routes/bookingRoutes';
 import mediaRoutes from './routes/media.routes';
+import loyaltyRoutes from './routes/loyalty.routes';
 
 app.use('/api/restaurant', restaurantRoutes);
 import { initCronJobs } from './utils/cronJobs';
@@ -267,6 +268,7 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/retail-items', retailItemRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/loyalty', loyaltyRoutes);
 import whatsappWebhookRoutes from './routes/whatsapp.routes';
 app.use('/api/whatsapp', whatsappWebhookRoutes);
 

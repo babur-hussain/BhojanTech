@@ -90,15 +90,16 @@ export default function RestaurantSettings() {
           defaultBookingCategory: data.defaultBookingCategory || 'Cake Pre-order',
         });
 
-        if (resLoyalty.data) {
+        const lData = resLoyalty.data?.settings;
+        if (lData) {
           setLoyaltyForm({
-            pointsPerRupee: resLoyalty.data.pointsPerRupee ?? 0.1,
-            pointsPerRupeeRedemption: resLoyalty.data.pointsPerRupeeRedemption ?? 10,
-            minimumRedemptionPoints: resLoyalty.data.minimumRedemptionPoints ?? 500,
-            firstVisitBonusPoints: resLoyalty.data.firstVisitBonusPoints ?? 500,
-            referralBonusPoints: resLoyalty.data.referralBonusPoints ?? 200,
-            birthdayMultiplier: resLoyalty.data.birthdayMultiplier ?? 3,
-            expiryMonths: resLoyalty.data.expiryMonths ?? 12
+            pointsPerRupee: lData.pointsPerRupee ?? 0.1,
+            pointsPerRupeeRedemption: lData.pointsPerRupeeRedemption ?? 10,
+            minimumRedemptionPoints: lData.minimumRedemptionPoints ?? 500,
+            firstVisitBonusPoints: lData.firstVisitBonusPoints ?? 500,
+            referralBonusPoints: lData.referralBonusPoints ?? 200,
+            birthdayMultiplier: lData.birthdayMultiplier ?? 3,
+            expiryMonths: lData.expiryMonths ?? 12
           });
         }
       } catch {
