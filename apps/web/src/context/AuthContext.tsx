@@ -33,11 +33,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (firebaseToken: string) => {
     // Call the real backend to exchange Firebase ID token for a JWT
     const response = await axios.post(`${API_BASE}/api/auth/login`, { firebaseToken });
-    const { user: backendUser, accessToken: jwt } = response.data;
+    const { user: backendUser, accessToken: jwt, refreshToken } = response.data;
 
     setUser(backendUser);
     setAccessToken(jwt);
     localStorage.setItem('accessToken', jwt);
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
 
     // Hydrate branch store from server — this syncs the branch across devices
     if (backendUser.selectedBranchId) {
@@ -62,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setAccessToken(null);
     localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   };
 
   useEffect(() => {
@@ -72,10 +76,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const freshToken = await firebaseUser.getIdToken();
           const response = await axios.post(`${API_BASE}/api/auth/login`, { firebaseToken: freshToken });
-          const { user: backendUser, accessToken: jwt } = response.data;
+          const { user: backendUser, accessToken: jwt, refreshToken } = response.data;
           setUser(backendUser);
           setAccessToken(jwt);
           localStorage.setItem('accessToken', jwt);
+          if (refreshToken) {
+            localStorage.setItem('refreshToken', refreshToken);
+          }
 
           // Hydrate branch store from server — this syncs the branch across devices
           if (backendUser.selectedBranchId) {
@@ -87,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Genuine auth failure — clear session
             console.warn('Session restore: auth rejected, clearing session');
             localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
             setAccessToken(null);
             setUser(null);
           } else {
@@ -104,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setAccessToken(null);
         localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
       }
       setLoading(false);
     });
