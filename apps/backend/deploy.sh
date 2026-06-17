@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Configuration
-SERVER_IP="65.0.20.12"
+SERVER_IP="3.110.159.12"
 USER="ec2-user"
-PEM_KEY="BhojanTech.pem"
+PEM_KEY="RestaurantOS.pem"
 REMOTE_DIR="~/restaurant-app-deployment"
 
 echo "====================================="
