@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, getRedirectResult, signInWithRedirect } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -48,15 +48,31 @@ export default function Login() {
     return verifier;
   };
 
+  // Add this inside the Login component, just above handleGoogleSignIn
+  React.useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result && result.user) {
+          const token = await result.user.getIdToken();
+          await login(token);
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('Google sign in redirect error', error);
+        setError('Failed to sign in with Google');
+      }
+    };
+    checkRedirectResult();
+  }, [login, navigate]);
+
   const handleGoogleSignIn = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const token = await result.user.getIdToken();
-      await login(token);
-      navigate('/');
+      // Use redirect instead of popup to avoid COOP / popup-blocker issues entirely
+      await signInWithRedirect(auth, googleProvider);
     } catch (error) {
       console.error('Google sign in error', error);
-      setError('Failed to sign in with Google');
+      setError('Failed to initiate Google sign in');
     }
   };
 
