@@ -48,31 +48,15 @@ export default function Login() {
     return verifier;
   };
 
-  // Add this inside the Login component, just above handleGoogleSignIn
-  React.useEffect(() => {
-    const checkRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && result.user) {
-          const token = await result.user.getIdToken();
-          await login(token);
-          navigate('/');
-        }
-      } catch (error) {
-        console.error('Google sign in redirect error', error);
-        setError('Failed to sign in with Google');
-      }
-    };
-    checkRedirectResult();
-  }, [login, navigate]);
-
   const handleGoogleSignIn = async () => {
     try {
-      // Use redirect instead of popup to avoid COOP / popup-blocker issues entirely
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const token = await result.user.getIdToken();
+      await login(token);
+      navigate('/');
     } catch (error) {
       console.error('Google sign in error', error);
-      setError('Failed to initiate Google sign in');
+      setError('Failed to sign in with Google');
     }
   };
 
