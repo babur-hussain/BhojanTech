@@ -65,6 +65,14 @@ export const listRetailItems = async (req: AuthRequest, res: Response) => {
     }
 
     const items = await RetailItem.find(query).sort({ category: 1, name: 1 }).lean();
+
+    // Disable caching — this is a mutable list. Express ETags were causing 304
+    // responses that served stale data after items were added/deleted.
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    res.removeHeader('ETag');
+
     return res.json(items);
   } catch (err: any) {
     console.error('[listRetailItems] Failed:', {
