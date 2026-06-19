@@ -7,6 +7,7 @@ import { printTestReceipt } from '../utils/thermalPrint';
 interface RestaurantForm {
   name: string;
   address: string;
+  contactNumber: string;
   gstin: string;
   fssaiNumber: string;
   logoUrl: string;
@@ -18,7 +19,7 @@ interface RestaurantForm {
 }
 
 const INITIAL: RestaurantForm = { 
-  name: '', address: '', gstin: '', fssaiNumber: '', logoUrl: '', upiId: '', printerName: '',
+  name: '', address: '', contactNumber: '', gstin: '', fssaiNumber: '', logoUrl: '', upiId: '', printerName: '',
   businessType: 'Bakery', bookingCategories: ['Cake Pre-order', 'Sweets Box'], defaultBookingCategory: 'Cake Pre-order'
 };
 
@@ -80,6 +81,7 @@ export default function RestaurantSettings() {
         setForm({
           name: data.name || '',
           address: data.address || '',
+          contactNumber: data.contactNumber || '',
           gstin: data.gstin || '',
           fssaiNumber: data.fssaiNumber || '',
           logoUrl: data.logoUrl || '',
@@ -273,14 +275,25 @@ export default function RestaurantSettings() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5"><MapPin size={14} /> Address</label>
-                  <textarea
-                    rows={2} value={form.address}
-                    onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                    placeholder="Full business address"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition resize-none"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5"><MapPin size={14} /> Address</label>
+                    <textarea
+                      rows={2} value={form.address}
+                      onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                      placeholder="Full business address"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Contact Number</label>
+                    <input
+                      type="text" value={form.contactNumber}
+                      onChange={e => setForm(f => ({ ...f, contactNumber: e.target.value }))}
+                      placeholder="e.g. +91 9876543210"
+                      className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition"
+                    />
+                  </div>
                 </div>
 
                 <div>

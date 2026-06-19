@@ -24,22 +24,22 @@ async function writeStockLog(params: {
     'unknown';
 
   await StockLog.create({
-    restaurantId:    item.restaurantId,
-    branchId:        item.branchId,
-    retailItemId:    item._id,
-    itemName:        item.name,
-    barcode:         item.barcode,
-    sku:             item.sku,
+    restaurantId: item.restaurantId,
+    branchId: item.branchId,
+    retailItemId: item._id,
+    itemName: item.name,
+    barcode: item.barcode,
+    sku: item.sku,
     action,
     quantityBefore,
     quantityChanged,
-    quantityAfter:   quantityBefore + quantityChanged,
-    userId:          new mongoose.Types.ObjectId(user.userId),
-    userName:        user.name || 'Unknown',
-    userRole:        user.role || 'STAFF',
+    quantityAfter: quantityBefore + quantityChanged,
+    userId: new mongoose.Types.ObjectId(user.userId),
+    userName: user.name || 'Unknown',
+    userRole: user.role || 'STAFF',
     note,
     deviceIp,
-    userAgent:       req.headers['user-agent'] || '',
+    userAgent: req.headers['user-agent'] || '',
   });
 }
 
@@ -208,7 +208,7 @@ export const updateRetailItem = async (req: AuthRequest, res: Response) => {
 
     // Write CORRECTION log if stock changed
     const stockBefore = itemBefore.stock;
-    const stockAfter  = item.stock;
+    const stockAfter = item.stock;
     if (stockAfter !== stockBefore) {
       await writeStockLog({
         req, item,

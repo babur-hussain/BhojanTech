@@ -5,6 +5,7 @@ import { getMediaUrl } from '../../utils/api';
 interface RestaurantInfo {
   name: string;
   address: string;
+  contactNumber?: string;
   gstin: string;
   fssai: string;
   logoUrl?: string;
@@ -81,6 +82,9 @@ export default function InvoicePrint({
           )}
           <div className="text-xl font-bold uppercase tracking-wider mb-1 leading-tight">{restaurant.name}</div>
           <div className="text-xs text-gray-700 leading-snug max-w-[250px] mx-auto">{restaurant.address}</div>
+          {restaurant.contactNumber && (
+            <div className="text-xs text-gray-700 font-semibold mt-0.5">Ph: {restaurant.contactNumber}</div>
+          )}
           <div className="text-xs text-gray-700 mt-1">GSTIN: {restaurant.gstin}</div>
           <div className="text-xs text-gray-700">FSSAI: {restaurant.fssai}</div>
         </div>
