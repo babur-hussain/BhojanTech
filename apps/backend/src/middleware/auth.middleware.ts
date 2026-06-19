@@ -16,9 +16,16 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
     const token = authHeader.split(' ')[1];
 
     // Check if token is blacklisted in Redis
-    const isBlacklisted = await redis.get(`bl_${token}`);
-    if (isBlacklisted) {
-      return res.status(401).json({ error: 'Unauthorized: Token is invalidated' });
+    // FAIL-OPEN: if Redis is unreachable, proceed with JWT verification.
+    // The JWT is still cryptographically valid — better to allow a recently-revoked
+    // token for a few minutes than to lock out ALL users when Redis hiccups.
+    try {
+      const isBlacklisted = await redis.get(`bl_${token}`);
+      if (isBlacklisted) {
+        return res.status(401).json({ error: 'Unauthorized: Token is invalidated' });
+      }
+    } catch (redisErr) {
+      console.warn('[requireAuth] Redis blacklist check failed (proceeding with JWT verification):', (redisErr as Error)?.message);
     }
 
     const decoded = verifyToken(token);

@@ -11,7 +11,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://server.bhojantech.lfvs
  */
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -88,7 +88,21 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Guard against proxy-rewritten responses that return 200 with an error body.
+    // This can happen if nginx/CDN intercepts an upstream 5xx and wraps it.
+    if (
+      response.config.method?.toLowerCase() === 'get' &&
+      response.data &&
+      typeof response.data === 'object' &&
+      !Array.isArray(response.data) &&
+      response.data.error &&
+      !response.config.url?.includes('/auth/')
+    ) {
+      console.warn('[api] GET response contained error body:', response.config.url, response.data.error);
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
 
@@ -138,12 +152,18 @@ api.interceptors.response.use(
         // Retry the original request with the new token
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         processQueue(refreshError, null);
-        // Refresh failed — clear tokens and let user re-login
-        console.warn('[api] Token refresh failed — session expired.');
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+        const refreshStatus = refreshError?.response?.status;
+        // Only clear tokens on definitive auth rejection (401/403)
+        // Transient errors (network, 500, 502, etc.) should NOT kill the session
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          console.warn('[api] Token refresh rejected — session expired. Clearing tokens.');
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+        } else {
+          console.warn('[api] Token refresh failed with transient error:', refreshStatus || refreshError?.message);
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

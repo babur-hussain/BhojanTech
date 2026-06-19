@@ -48,6 +48,7 @@ const EMPTY_FORM = {
 export default function RetailItems() {
   const [items, setItems] = useState<RetailItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('all');
   const [showForm, setShowForm] = useState(false);
@@ -106,18 +107,53 @@ export default function RetailItems() {
 
   useBarcodeScanner(handleGlobalScan, { interceptAll: showForm });
 
-  const fetchItems = React.useCallback(async () => {
+  const fetchItems = React.useCallback(async (isBackgroundRefresh = false) => {
     try {
+      if (!isBackgroundRefresh) setLoading(true);
+      setFetchError(false);
       const res = await api.get('/retail-items');
+
+      // Validate response is an array — protects against proxy-rewritten errors
+      if (!Array.isArray(res.data)) {
+        console.warn('[RetailItems] API returned non-array data:', typeof res.data, res.data?.error);
+        if (!isBackgroundRefresh) setFetchError(true);
+        return;
+      }
+
       setItems(res.data);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('[RetailItems] fetch failed:', err?.response?.status, err?.message);
+      // Only show error UI if this is NOT a background refresh — preserve stale data
+      // so the user still sees something while the auth layer recovers
+      if (!isBackgroundRefresh) {
+        setFetchError(true);
+      }
     } finally {
       setLoading(false);
     }
   }, [selectedBranchId]);
 
+  // Fetch on mount and when branch changes
   useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  // Re-fetch when tab regains focus (handles token refresh that happened in background)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchItems(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchItems]);
+
+  // Periodic background poll every 5 minutes as a safety net
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchItems(true);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [fetchItems]);
 
   const openCreate = () => {
     const autoSku = generateNextSKU('Beverages');
@@ -244,9 +280,24 @@ export default function RetailItems() {
   const lowStock = items.filter(i => i.isActive && i.stock <= i.lowStockAlert);
   const categories = [...new Set(items.map(i => i.category))];
 
-  if (loading) return (
+  if (loading && items.length === 0) return (
     <div className="flex items-center justify-center h-64">
       <Loader2 size={32} className="animate-spin text-maroon" />
+    </div>
+  );
+
+  if (fetchError && items.length === 0) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4">
+      <AlertTriangle size={40} className="text-amber-500" />
+      <p className="text-gray-600 font-semibold">Failed to load retail items</p>
+      <p className="text-gray-400 text-sm">Please check your connection and try again</p>
+      <button
+        onClick={() => fetchItems()}
+        className="flex items-center gap-2 px-5 py-2.5 bg-maroon text-white rounded-xl font-bold shadow hover:bg-opacity-90 transition active:scale-95"
+      >
+        <Loader2 size={16} className={loading ? 'animate-spin' : 'hidden'} />
+        Retry
+      </button>
     </div>
   );
 

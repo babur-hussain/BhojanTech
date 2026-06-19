@@ -46,11 +46,22 @@ async function writeStockLog(params: {
 // ─── List all retail items ───────────────────────────────────────────────────
 export const listRetailItems = async (req: AuthRequest, res: Response) => {
   try {
+    // If Mongoose is not connected, return 503 so frontend knows to retry
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('[listRetailItems] MongoDB not connected (readyState:', mongoose.connection.readyState, ')');
+      return res.status(503).json({ error: 'Database temporarily unavailable' });
+    }
+
     const query = getBaseQuery(req);
     const items = await RetailItem.find(query).sort({ category: 1, name: 1 }).lean();
     return res.json(items);
-  } catch (err) {
-    return res.status(500).json({ error: 'Server error' });
+  } catch (err: any) {
+    console.error('[listRetailItems] Failed:', {
+      error: err?.message,
+      restaurantId: req.user?.restaurantId,
+      branchId: req.user?.branchId,
+    });
+    return res.status(500).json({ error: 'Server error fetching retail items' });
   }
 };
 

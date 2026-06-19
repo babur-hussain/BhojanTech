@@ -240,25 +240,52 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
     }
 
     // Check if refresh token is blacklisted
-    const isBlacklisted = await redis.get(`bl_${refreshToken}`);
-    if (isBlacklisted) {
-      return res.status(401).json({ error: 'Refresh token has been revoked' });
+    // If Redis is down, fail-open (allow the refresh) rather than locking out users
+    try {
+      const isBlacklisted = await redis.get(`bl_${refreshToken}`);
+      if (isBlacklisted) {
+        return res.status(401).json({ error: 'Refresh token has been revoked' });
+      }
+    } catch (redisErr) {
+      console.warn('[refreshAccessToken] Redis blacklist check failed (proceeding):', (redisErr as Error)?.message);
     }
 
-    // Verify the refresh token
-    const decoded = verifyRefreshToken(refreshToken);
+    // Verify the refresh token — this IS an auth check, so 401 on failure is correct
+    let decoded: { userId: string; type: string };
+    try {
+      decoded = verifyRefreshToken(refreshToken);
+    } catch (jwtErr: any) {
+      if (jwtErr.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Refresh token expired. Please log in again.' });
+      }
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
     if (decoded.type !== 'refresh') {
       return res.status(401).json({ error: 'Invalid token type' });
     }
 
     // Look up the user to get fresh role/branch data
-    const user = await User.findById(decoded.userId);
+    // MongoDB failure here is a server error (500), NOT an auth failure
+    let user;
+    try {
+      user = await User.findById(decoded.userId);
+    } catch (dbErr) {
+      console.error('[refreshAccessToken] MongoDB lookup failed:', (dbErr as Error)?.message);
+      return res.status(500).json({ error: 'Server error during token refresh' });
+    }
+
     if (!user || !user.isActive) {
       return res.status(401).json({ error: 'User not found or deactivated' });
     }
 
     // Blacklist the old refresh token (one-time use / rotation)
-    await redis.setex(`bl_${refreshToken}`, 7 * 24 * 3600, 'true'); // 7 days TTL
+    // If Redis is down, skip blacklisting — the token will naturally expire
+    try {
+      await redis.setex(`bl_${refreshToken}`, 7 * 24 * 3600, 'true'); // 7 days TTL
+    } catch (redisErr) {
+      console.warn('[refreshAccessToken] Redis blacklist write failed (continuing):', (redisErr as Error)?.message);
+    }
 
     // Generate new token pair
     const payload = {
@@ -283,10 +310,8 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Refresh token expired. Please log in again.' });
-    }
-    console.error('Refresh token error:', error);
-    return res.status(401).json({ error: 'Invalid refresh token' });
+    // Unexpected errors are server errors, not auth failures
+    console.error('[refreshAccessToken] Unexpected error:', error?.message || error);
+    return res.status(500).json({ error: 'Server error during token refresh' });
   }
 };
