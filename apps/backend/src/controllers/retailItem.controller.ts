@@ -52,7 +52,18 @@ export const listRetailItems = async (req: AuthRequest, res: Response) => {
       return res.status(503).json({ error: 'Database temporarily unavailable' });
     }
 
-    const query = getBaseQuery(req);
+    const query: any = { restaurantId: req.user!.restaurantId };
+
+    // Branch scoping: include items for the selected branch AND items with no branch
+    // (legacy items created before branch support, or global items)
+    if (req.user!.branchId) {
+      query.$or = [
+        { branchId: req.user!.branchId },
+        { branchId: { $exists: false } },
+        { branchId: null },
+      ];
+    }
+
     const items = await RetailItem.find(query).sort({ category: 1, name: 1 }).lean();
     return res.json(items);
   } catch (err: any) {
