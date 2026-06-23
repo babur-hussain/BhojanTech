@@ -163,16 +163,33 @@ export default function MenuManagement() {
                     {item.swiggyItemId && <span className="bg-orange-100 text-orange-800 text-[10px] font-bold px-1.5 py-0.5 rounded tracking-widest">SWIGGY</span>}
                     {item.ondcItemId && <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 py-0.5 rounded tracking-widest">ONDC</span>}
                   </div>
-                  <div className="text-sm font-medium text-maroon mb-2 flex items-center gap-1">
+                  <div className="text-sm font-medium text-maroon mb-2">
                     {item.variants.length === 1 ? (
-                      <>
+                      <div className="flex items-center gap-1">
                         {item.variants[0].specialPriceINR && (
                           <span className="text-xs text-gray-400 line-through">₹{item.variants[0].priceINR}</span>
                         )}
                         <span>₹{item.variants[0].specialPriceINR || item.variants[0].priceINR}</span>
-                      </>
+                        {item.variants[0].name !== 'Regular' && (
+                          <span className="text-xs text-gray-500 font-normal">({item.variants[0].name})</span>
+                        )}
+                      </div>
                     ) : (
-                      `₹${Math.min(...item.variants.map(v => v.specialPriceINR || v.priceINR))} - ₹${Math.max(...item.variants.map(v => v.specialPriceINR || v.priceINR))}`
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        {item.variants.map((v, idx) => (
+                          <span key={idx} className="text-xs">
+                            <span className="text-gray-500 font-normal">{v.name}:</span>{' '}
+                            {v.specialPriceINR ? (
+                              <>
+                                <span className="text-gray-400 line-through mr-0.5">₹{v.priceINR}</span>
+                                <span className="text-maroon font-semibold">₹{v.specialPriceINR}</span>
+                              </>
+                            ) : (
+                              <span className="text-maroon font-semibold">₹{v.priceINR}</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <button
