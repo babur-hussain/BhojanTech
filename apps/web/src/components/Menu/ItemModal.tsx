@@ -271,7 +271,7 @@ export default function ItemModal({ item, categories, initialCategoryId, onClose
                       placeholder="Offer"
                       className="w-full pl-7 border-gray-300 rounded-md text-sm focus:border-saffron focus:ring-saffron bg-white"
                       value={variant.specialPriceINR || ''}
-                      onChange={e => updateVariant(index, 'specialPriceINR', Number(e.target.value) || undefined)}
+                      onChange={e => updateVariant(index, 'specialPriceINR', Number(e.target.value) || 0)}
                     />
                   </div>
                   {formData.variants!.length > 1 ? (
