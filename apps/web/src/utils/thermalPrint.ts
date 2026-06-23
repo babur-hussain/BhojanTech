@@ -233,6 +233,7 @@ export interface ReceiptData {
   address: string;
   gstin: string;
   fssai: string;
+  contactNumber?: string;
   upiId?: string;
   invoiceNumber: string;
   tableNumber: string;
@@ -267,6 +268,7 @@ export function buildESCPOS(r: ReceiptData): string {
   s += line(r.restaurantName.toUpperCase());
   s += DSIZE_OFF + BOLD_OFF;
   if (r.address)  s += line(r.address);
+  if (r.contactNumber) s += line(`Ph: ${r.contactNumber}`);
   if (r.gstin)    s += line(`GSTIN: ${r.gstin}`);
   if (r.fssai)    s += line(`FSSAI: ${r.fssai}`);
 
@@ -479,6 +481,7 @@ export function buildFinalBillESCPOS(r: ReceiptData): string {
   s += ALIGN_C;
   s += BOLD_ON + DSIZE_ON + line(r.restaurantName.toUpperCase()) + DSIZE_OFF + BOLD_OFF;
   if (r.address) s += line(r.address);
+  if (r.contactNumber) s += line(`Ph: ${r.contactNumber}`);
   if (r.gstin)   s += line(`GSTIN: ${r.gstin}`);
   if (r.fssai)   s += line(`FSSAI: ${r.fssai}`);
   s += LF;

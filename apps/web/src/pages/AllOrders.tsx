@@ -103,6 +103,7 @@ export default function AllOrders() {
       const receiptData: ReceiptData = {
         restaurantName: restaurant?.name || '',
         address: restaurant?.address || '',
+        contactNumber: restaurant?.contactNumber || '',
         gstin: restaurant?.gstin || '',
         fssai: restaurant?.fssaiNumber || '',
         upiId: restaurant?.upiId || '',
@@ -442,6 +443,7 @@ export default function AllOrders() {
               restaurant={{
                 name: restaurant?.name || '',
                 address: restaurant?.address || '',
+                contactNumber: restaurant?.contactNumber || '',
                 gstin: restaurant?.gstin || '',
                 fssai: restaurant?.fssaiNumber || '',
                 upiId: restaurant?.upiId || '',
