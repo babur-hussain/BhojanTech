@@ -57,6 +57,11 @@ export default function DirectPOS() {
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customer, setCustomer] = useState<any>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggLoading, setSuggLoading] = useState(false);
+  const [showSugg, setShowSugg] = useState(false);
+  const suggRef = useRef<HTMLDivElement>(null);
   const { selectedBranchId } = useBranchStore();
 
   // ─── Fetch Data ────────────────────────────────────────────────────────────
@@ -79,6 +84,41 @@ export default function DirectPOS() {
       }
     })();
   }, [selectedBranchId]);
+
+  // ─── Live Customer Search ──────────────────────────────────────────────────
+  const searchSuggestions = useCallback(async (query: string) => {
+    if (!query || query.length < 2) { setSuggestions([]); setShowSugg(false); return; }
+    try {
+      setSuggLoading(true);
+      const res = await api.get(`/customers?q=${encodeURIComponent(query)}&limit=6`);
+      setSuggestions(res.data?.customers || res.data || []);
+      setShowSugg(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (customer) return;
+    const t = setTimeout(() => searchSuggestions(customerPhone), 300);
+    return () => clearTimeout(t);
+  }, [customerPhone, customer, searchSuggestions]);
+
+  useEffect(() => {
+    if (customer) return;
+    const t = setTimeout(() => searchSuggestions(customerName), 300);
+    return () => clearTimeout(t);
+  }, [customerName, customer, searchSuggestions]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggRef.current && !suggRef.current.contains(e.target as Node)) setShowSugg(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // ─── Barcode Scanner (hardware) ────────────────────────────────────────────
   const handleBarcodeScan = useCallback((barcode: string) => {
@@ -501,6 +541,44 @@ export default function DirectPOS() {
 
         {/* Checkout Panel */}
         <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
+          {/* Customer */}
+          <div className="flex gap-2 relative" ref={suggRef}>
+            <input
+              type="tel" maxLength={10} placeholder="Customer Phone" value={customerPhone}
+              onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
+              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none ${customer ? 'border-green-300 font-semibold text-gray-800' : 'border-gray-200'}`}
+            />
+            <input
+              type="text" placeholder="Name" value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
+            />
+            
+            {/* Live suggestions dropdown */}
+            {showSugg && suggestions.length > 0 && !customer && (
+              <div className="absolute z-50 left-0 right-0 bg-white border shadow-lg rounded-lg overflow-hidden" style={{ top: 'calc(100% + 4px)' }}>
+                {suggestions.map((s: any) => (
+                  <button
+                    key={s._id}
+                    onMouseDown={(e) => { 
+                      e.preventDefault(); 
+                      setCustomer(s); 
+                      setCustomerPhone(s.phone || ''); 
+                      setCustomerName(s.name || ''); 
+                      setShowSugg(false); 
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-800 truncate">{s.name}</p>
+                      <p className="text-xs text-gray-500">{s.phone}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Totals */}
           <div className="pt-2 border-t border-gray-200">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
@@ -515,23 +593,6 @@ export default function DirectPOS() {
                 <span>₹{cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.price * c.quantity, 0).toFixed(2)}</span>
               </div>
             )}
-            {/* Customer Details */}
-            <div className="flex gap-2 mt-2">
-              <input
-                type="text"
-                placeholder="Customer Name"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className="flex-1 text-xs font-semibold p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-maroon focus:border-maroon outline-none"
-              />
-              <input
-                type="tel"
-                placeholder="Mobile Number"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                className="w-32 text-xs font-semibold p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-maroon focus:border-maroon outline-none"
-              />
-            </div>
 
             {/* Payment Mode */}
             <div className="grid grid-cols-3 gap-1.5 mt-3">
