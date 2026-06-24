@@ -273,12 +273,12 @@ export default function DirectPOS() {
             <input
               type="tel" maxLength={10} placeholder="Customer Phone" value={customerPhone}
               onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
-              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none ${customer ? 'border-green-300 font-semibold text-gray-800' : 'border-gray-200'}`}
+              className={`flex-1 bg-white border rounded-lg px-3 py-2.5 text-sm font-medium text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-maroon focus:border-transparent outline-none shadow-sm transition-all ${customer ? 'border-green-400 bg-green-50' : 'border-gray-300'}`}
             />
             <input
               type="text" placeholder="Name" value={customerName}
               onChange={e => setCustomerName(e.target.value)}
-              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
+              className="w-1/3 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-maroon focus:border-transparent outline-none shadow-sm transition-all"
             />
             <input
               type="text" maxLength={10} placeholder="DD/MM/YYYY" value={customerDob}
@@ -290,7 +290,7 @@ export default function DirectPOS() {
                 if (digits.length > 4) formatted += '/' + digits.substring(4, 8);
                 setCustomerDob(formatted);
               }}
-              className="w-1/4 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
+              className="w-1/4 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-maroon focus:border-transparent outline-none shadow-sm transition-all"
             />
             
             {/* Live suggestions dropdown */}
