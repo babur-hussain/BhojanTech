@@ -7,8 +7,11 @@ export interface IStaffMember extends Document {
   userId: string;
   name: string;
   phone: string;
+  email?: string;
   role: string;
+  designation?: string;
   photoUrl?: string;
+  address?: string;
   joiningDate: Date;
   salaryType: 'MONTHLY' | 'DAILY';
   salaryAmount: number;
@@ -16,7 +19,32 @@ export interface IStaffMember extends Document {
   isOnDuty: boolean;
   isActive: boolean;
   fcmToken?: string;
+  totalAdvances: number;
+  emergencyContact?: {
+    name: string;
+    phone: string;
+    relation: string;
+  };
+  bankDetails?: {
+    accountName: string;
+    accountNumber: string;
+    ifscCode: string;
+    bankName: string;
+  };
 }
+
+const EmergencyContactSchema = new Schema({
+  name: { type: String },
+  phone: { type: String },
+  relation: { type: String },
+}, { _id: false });
+
+const BankDetailsSchema = new Schema({
+  accountName: { type: String },
+  accountNumber: { type: String },
+  ifscCode: { type: String },
+  bankName: { type: String },
+}, { _id: false });
 
 const StaffMemberSchema = new Schema<IStaffMember>({
   restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
@@ -24,8 +52,11 @@ const StaffMemberSchema = new Schema<IStaffMember>({
   userId: { type: String, required: true },
   name: { type: String, required: true },
   phone: { type: String, required: true },
+  email: { type: String },
   role: { type: String, enum: ['SUPER_OWNER', 'BRANCH_MANAGER', 'WAITER', 'KITCHEN_STAFF'], required: true },
+  designation: { type: String },
   photoUrl: { type: String },
+  address: { type: String },
   joiningDate: { type: Date, default: Date.now },
   salaryType: { type: String, enum: ['MONTHLY', 'DAILY'], default: 'MONTHLY' },
   salaryAmount: { type: Number, default: 0 },
@@ -33,6 +64,9 @@ const StaffMemberSchema = new Schema<IStaffMember>({
   isOnDuty: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   fcmToken: { type: String },
+  totalAdvances: { type: Number, default: 0 },
+  emergencyContact: { type: EmergencyContactSchema },
+  bankDetails: { type: BankDetailsSchema },
 }, { timestamps: true });
 
 StaffMemberSchema.index({ restaurantId: 1, branchId: 1, createdAt: -1 });

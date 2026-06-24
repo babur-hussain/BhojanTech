@@ -55,6 +55,8 @@ export default function DirectPOS() {
 
   const [paying, setPaying] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const { selectedBranchId } = useBranchStore();
 
   // ─── Fetch Data ────────────────────────────────────────────────────────────
@@ -154,14 +156,25 @@ export default function DirectPOS() {
   // ─── Customer Search removed from POS ─────────────────────────────────────
   // Customer phone/name are collected in BillingScreen after order creation.
 
-  // ─── Proceed to Billing ────────────────────────────────────────────────────
+  // ─── Proceed to Checkout ───────────────────────────────────────────────────
   const handleProceed = async () => {
     if (cart.length === 0) return;
+    
+    if (!customerPhone || customerPhone.length !== 10) {
+      alert('Please provide a valid 10-digit mobile number.');
+      return;
+    }
+    if (!customerName || customerName.trim() === '') {
+      alert('Please provide the customer name.');
+      return;
+    }
+
     try {
       setPaying(true);
       const menuCartItems = cart.filter(c => c.type === 'menu');
       const retailCartItems = cart.filter(c => c.type === 'retail');
 
+      // 1. Create the order
       const res = await api.post('/orders/takeaway', {
         orderType: 'TAKEAWAY',
         items: menuCartItems.map(c => ({
@@ -180,10 +193,22 @@ export default function DirectPOS() {
           gstSlab: c.gstSlab,
         })),
       });
-      navigate(`/bill/${res.data._id}`);
+
+      // 2. Immediately pay and close the order
+      const payRes = await api.post('/billing/pay', {
+        orderId: res.data._id,
+        paymentMode,
+        customerPhone,
+        customerName: customerName.trim(),
+        retailItems: [], // already in order, processPayment handles deduction
+        additionalMenuItems: [],
+      });
+
+      // 3. Navigate to the generated invoice
+      navigate(`/invoice/${payRes.data.invoice._id}`);
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
-      alert(e?.response?.data?.error || 'Failed to create order. Please try again.');
+      alert(e?.response?.data?.error || 'Failed to create invoice. Please try again.');
     } finally {
       setPaying(false);
     }
@@ -490,8 +515,26 @@ export default function DirectPOS() {
                 <span>₹{cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.price * c.quantity, 0).toFixed(2)}</span>
               </div>
             )}
+            {/* Customer Details */}
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                placeholder="Customer Name"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                className="flex-1 text-xs font-semibold p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-maroon focus:border-maroon outline-none"
+              />
+              <input
+                type="tel"
+                placeholder="Mobile Number"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="w-32 text-xs font-semibold p-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-maroon focus:border-maroon outline-none"
+              />
+            </div>
+
             {/* Payment Mode */}
-            <div className="grid grid-cols-3 gap-1.5 mt-2">
+            <div className="grid grid-cols-3 gap-1.5 mt-3">
               {(['CASH', 'UPI', 'CARD'] as const).map(mode => (
                 <button
                   key={mode}
@@ -514,7 +557,7 @@ export default function DirectPOS() {
               className="w-full mt-3 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-base rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               {paying ? <Loader2 size={20} className="animate-spin" /> : null}
-              {paying ? 'Processing...' : `PROCEED TO BILLING · ₹${subtotal.toFixed(0)}`}
+              {paying ? 'Processing...' : `CREATE INVOICE · ₹${subtotal.toFixed(0)}`}
             </button>
           </div>
         </div>

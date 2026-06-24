@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StaffMember, UserRole } from '@restaurant/types';
+import { UserRole } from '@restaurant/types';
 import {
   Users, Clock, Calendar, DollarSign, TrendingUp,
-  UserCheck, UserX,
+  UserCheck, UserX, CreditCard,
 } from 'lucide-react';
 import StaffDirectory from '../components/Staff/StaffDirectory';
 import ShiftPlanner from '../components/Staff/ShiftPlanner';
@@ -57,14 +57,18 @@ export default function StaffManagement() {
   const monthlyBill = staff.reduce((sum, s) => sum + (s.salaryType === 'MONTHLY' ? s.salaryAmount : (s.salaryAmount * 26)), 0);
   const formattedBill = monthlyBill >= 100000 ? `₹${(monthlyBill/100000).toFixed(2)}L` : `₹${monthlyBill.toLocaleString('en-IN')}`;
 
+  // Total outstanding advances
+  const totalAdvances = staff.reduce((sum, s) => sum + (s.totalAdvances || 0), 0);
+
   return (
     <div className="space-y-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <KPI label="Total Staff" value={String(staff.length)} icon={<Users size={20} className="text-maroon"/>} />
         <KPI label="On Duty Now" value={String(onDuty)} icon={<UserCheck size={20} className="text-green-600"/>} color="text-green-700" />
         <KPI label="Off Duty"    value={String(offDuty)} icon={<UserX size={20} className="text-gray-400"/>}    color="text-gray-600" />
         <KPI label="Monthly Bill" value={formattedBill} icon={<DollarSign size={20} className="text-saffron"/>} color="text-saffron" />
+        <KPI label="Advances" value={`₹${totalAdvances.toLocaleString('en-IN')}`} icon={<CreditCard size={20} className="text-orange-500"/>} color="text-orange-600" />
       </div>
 
       {/* Tabs */}

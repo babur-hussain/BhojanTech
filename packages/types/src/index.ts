@@ -376,14 +376,31 @@ export type ShiftType = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'HALF_DAY' | 'HOLIDAY';
 export type SalaryType = 'MONTHLY' | 'DAILY';
 
+export interface StaffEmergencyContact {
+  name: string;
+  phone: string;
+  relation: string;
+}
+
+export interface StaffBankDetails {
+  accountName: string;
+  accountNumber: string;
+  ifscCode: string;
+  bankName: string;
+}
+
 export interface StaffMember {
   id: string;
   restaurantId: string;
+  branchId: string;
   userId: string;            // links to User (Firebase UID)
   name: string;
   phone: string;
+  email?: string;
   role: UserRole;
+  designation?: string;
   photoUrl?: string;
+  address?: string;
   joiningDate: Date;
   salaryType: SalaryType;
   salaryAmount: number;      // monthly fixed OR daily wage
@@ -391,12 +408,16 @@ export interface StaffMember {
   isOnDuty: boolean;
   isActive: boolean;
   fcmToken?: string;
+  totalAdvances: number;
+  emergencyContact?: StaffEmergencyContact;
+  bankDetails?: StaffBankDetails;
   createdAt: Date;
 }
 
 export interface AttendanceRecord {
   id: string;
   restaurantId: string;
+  branchId: string;
   staffId: string;
   staffName: string;
   date: string;              // YYYY-MM-DD
@@ -434,20 +455,32 @@ export interface WeeklySchedule {
   createdBy: string;
 }
 
+export type AdvancePaymentStatus = 'ACTIVE' | 'DEDUCTED' | 'CANCELLED';
+
 export interface AdvancePayment {
   id: string;
   restaurantId: string;
+  branchId: string;
   staffId: string;
   staffName: string;
   amount: number;
   reason?: string;
   date: Date;
+  approvedBy: string;
+  status: AdvancePaymentStatus;
+  deductedInMonth?: string;     // YYYY-MM
+  salaryRecordId?: string;
   recordedBy: string;
+  cancelledAt?: Date;
+  cancelledBy?: string;
+  cancelReason?: string;
+  createdAt: Date;
 }
 
 export interface SalaryRecord {
   id: string;
   restaurantId: string;
+  branchId: string;
   staffId: string;
   staffName: string;
   month: string;             // YYYY-MM
@@ -474,6 +507,10 @@ export interface StaffPerformance {
   avgOrderValue: number;
   tipsReceived: number;
   feedbackScore: number;     // 0-5
+  presentDays: number;
+  lateDays: number;
+  absentDays: number;
+  punctualityScore: number;  // 0-100
 }
 
 // ─── Accounting & CA Portal ──────────────────────────────────────────────────

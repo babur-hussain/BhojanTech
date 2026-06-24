@@ -193,11 +193,33 @@ export const createStaffSchema = z.object({
   body: z.object({
     name: z.string().min(1).max(200),
     phone: z.string().regex(/^[6-9]\d{9}$/),
-    role: z.enum(['WAITER', 'CHEF', 'CASHIER', 'BRANCH_MANAGER', 'ACCOUNTANT']),
+    role: z.enum(['WAITER', 'KITCHEN_STAFF', 'BRANCH_MANAGER', 'ACCOUNTANT']),
     designation: z.string().max(100).optional(),
-    salary: z.number().min(0).optional(),
+    salaryType: z.enum(['MONTHLY', 'DAILY']).optional(),
+    salaryAmount: z.number().min(0).optional(),
     shift: z.string().optional(),
     joiningDate: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.string().email().optional().or(z.literal('')),
+    address: z.string().max(500).optional(),
+    emergencyContact: z.object({
+      name: z.string().max(100),
+      phone: z.string(),
+      relation: z.string().max(50),
+    }).optional(),
+    bankDetails: z.object({
+      accountName: z.string().max(200),
+      accountNumber: z.string().max(30),
+      ifscCode: z.string().max(15),
+      bankName: z.string().max(100),
+    }).optional(),
+  }),
+});
+
+export const giveAdvanceSchema = z.object({
+  body: z.object({
+    staffId: z.string().min(1),
+    amount: z.number().min(1),
+    reason: z.string().max(500).optional(),
+    date: z.string().optional(),
   }),
 });

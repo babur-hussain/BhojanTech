@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { StaffMember, ShiftType } from '@restaurant/types';
-import { ChevronLeft, ChevronRight, Send, AlertCircle, Save } from 'lucide-react';
+import { ShiftType } from '@restaurant/types';
+import { ChevronLeft, ChevronRight, Send, AlertCircle, Save, Plus, X, UserPlus } from 'lucide-react';
 import { api } from '../../utils/api';
 
 const SHIFTS: ShiftType[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'];
@@ -21,6 +21,12 @@ const SHIFT_TEXT: Record<ShiftType, string> = {
   EVENING: 'text-purple-800', NIGHT: 'text-gray-100',
 };
 
+interface ShiftSlot {
+  staffId: string;
+  staffName: string;
+  role: string;
+}
+
 function getMondayOf(date: Date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -35,16 +41,19 @@ function addDays(d: Date, n: number) {
 
 const dateKey = (d: Date) => d.toISOString().slice(0, 10);
 
-type SlotMap = Record<string, Record<ShiftType, string[]>>; // date → shift → [staffId]
+type SlotMap = Record<string, Record<ShiftType, ShiftSlot[]>>;
 
-interface Props { staff: (StaffMember & { id: string })[]; }
+interface Props { staff: any[]; }
 
 export default function ShiftPlanner({ staff }: Props) {
   const [weekStart, setWeekStart] = useState(getMondayOf(new Date()));
   const [slots, setSlots]         = useState<SlotMap>({});
   const [published, setPublished] = useState(false);
-  const [dragging, setDragging]   = useState<string | null>(null);
   const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+
+  // Click-to-assign state
+  const [assignTarget, setAssignTarget] = useState<{ date: string; shift: ShiftType } | null>(null);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekStartStr = dateKey(weekStart);
@@ -60,10 +69,10 @@ export default function ShiftPlanner({ staff }: Props) {
         if (schedule && schedule.days) {
           schedule.days.forEach((day: any) => {
             newSlots[day.date] = {
-              MORNING: day.MORNING || [],
-              AFTERNOON: day.AFTERNOON || [],
-              EVENING: day.EVENING || [],
-              NIGHT: day.NIGHT || []
+              MORNING: normalizeSlots(day.MORNING || []),
+              AFTERNOON: normalizeSlots(day.AFTERNOON || []),
+              EVENING: normalizeSlots(day.EVENING || []),
+              NIGHT: normalizeSlots(day.NIGHT || []),
             };
           });
           setPublished(schedule.isPublished || false);
@@ -80,22 +89,99 @@ export default function ShiftPlanner({ staff }: Props) {
     fetchSchedule();
   }, [weekStartStr]);
 
-  const prevWeek = () => setWeekStart(d => addDays(d, -7));
-  const nextWeek = () => setWeekStart(d => addDays(d, 7));
-
-  const toggleSlot = (date: string, shift: ShiftType, staffId: string) => {
-    setSlots(prev => {
-      const day = prev[date] ?? { MORNING:[], AFTERNOON:[], EVENING:[], NIGHT:[] };
-      const list = day[shift];
-      const updated = list.includes(staffId) ? list.filter(id => id !== staffId) : [...list, staffId];
-      return { ...prev, [date]: { ...day, [shift]: updated } };
+  // Normalize slots: handle both old format (string IDs) and new format (ShiftSlot objects)
+  const normalizeSlots = (arr: any[]): ShiftSlot[] => {
+    return arr.map(item => {
+      if (typeof item === 'string') {
+        const s = staff.find(st => (st.id || st._id) === item);
+        return { staffId: item, staffName: s?.name || 'Unknown', role: s?.role || '' };
+      }
+      return {
+        staffId: item.staffId || item._id,
+        staffName: item.staffName || item.name || 'Unknown',
+        role: item.role || '',
+      };
     });
   };
 
-  const getStaffName = (id: string) => staff.find(s => s.id === id)?.name ?? id;
+  const prevWeek = () => setWeekStart(d => addDays(d, -7));
+  const nextWeek = () => setWeekStart(d => addDays(d, 7));
+
+  const assignStaff = (date: string, shift: ShiftType, staffId: string) => {
+    const s = staff.find(st => (st.id || st._id) === staffId);
+    if (!s) return;
+
+    setSlots(prev => {
+      const day = prev[date] ?? { MORNING:[], AFTERNOON:[], EVENING:[], NIGHT:[] };
+      const list = day[shift];
+      
+      // Check if already assigned
+      if (list.some(slot => slot.staffId === staffId)) return prev;
+
+      const newSlot: ShiftSlot = {
+        staffId,
+        staffName: s.name,
+        role: s.role,
+      };
+
+      return { ...prev, [date]: { ...day, [shift]: [...list, newSlot] } };
+    });
+    setAssignTarget(null);
+  };
+
+  const removeStaff = (date: string, shift: ShiftType, staffId: string) => {
+    setSlots(prev => {
+      const day = prev[date] ?? { MORNING:[], AFTERNOON:[], EVENING:[], NIGHT:[] };
+      return {
+        ...prev,
+        [date]: { ...day, [shift]: day[shift].filter(slot => slot.staffId !== staffId) }
+      };
+    });
+  };
+
+  // Check for conflicts (same staff in overlapping shifts on same day)
+  const getConflicts = (): string[] => {
+    const conflicts: string[] = [];
+    days.forEach(d => {
+      const key = dateKey(d);
+      const daySlots = slots[key];
+      if (!daySlots) return;
+
+      const overlapping: [ShiftType, ShiftType][] = [
+        ['MORNING', 'AFTERNOON'],
+        ['AFTERNOON', 'EVENING'],
+        ['EVENING', 'NIGHT'],
+      ];
+
+      overlapping.forEach(([s1, s2]) => {
+        const staff1 = daySlots[s1] || [];
+        const staff2 = daySlots[s2] || [];
+        staff1.forEach(slot => {
+          if (staff2.some(s => s.staffId === slot.staffId)) {
+            conflicts.push(`${slot.staffName} is in overlapping shifts (${s1} & ${s2}) on ${key}`);
+          }
+        });
+      });
+    });
+    return conflicts;
+  };
+
+  const conflicts = getConflicts();
+
+  // Get staff already assigned on a specific day to help with assignment
+  const getAssignedOnDay = (date: string): Set<string> => {
+    const daySlots = slots[date];
+    if (!daySlots) return new Set();
+    const ids = new Set<string>();
+    SHIFTS.forEach(sh => {
+      (daySlots[sh] || []).forEach(slot => ids.add(slot.staffId));
+    });
+    return ids;
+  };
 
   const handleSave = async () => {
     try {
+      setSaving(true);
       const daysPayload = days.map(d => {
         const k = dateKey(d);
         const daySlots = slots[k] || { MORNING: [], AFTERNOON: [], EVENING: [], NIGHT: [] };
@@ -106,26 +192,28 @@ export default function ShiftPlanner({ staff }: Props) {
     } catch (e) {
       console.error('Failed to save schedule:', e);
       alert('Failed to save schedule');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handlePublish = async () => {
     try {
-      await handleSave(); // Ensure saved before publishing
+      await handleSave();
       await api.post(`/staff/schedule/${weekStartStr}/publish`);
       setPublished(true);
-      alert('Schedule published successfully!');
+      alert('Schedule published! Staff will be notified.');
     } catch (e) {
       console.error('Failed to publish schedule:', e);
       alert('Failed to publish schedule');
     }
   };
 
-  // Check for days with no staff assigned
+  // Days with no staff assigned
   const unassignedDays = days.filter(d => {
     const daySlots = slots[dateKey(d)];
     if (!daySlots) return true;
-    return SHIFTS.every(sh => daySlots[sh].length === 0);
+    return SHIFTS.every(sh => (daySlots[sh] || []).length === 0);
   });
 
   return (
@@ -142,25 +230,34 @@ export default function ShiftPlanner({ staff }: Props) {
         <button onClick={nextWeek} className="p-2 rounded-lg border hover:bg-gray-50"><ChevronRight size={18}/></button>
       </div>
 
+      {/* Warnings */}
       {unassignedDays.length > 0 && !loading && (
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-amber-700 text-sm">
           <AlertCircle size={16}/> {unassignedDays.length} day(s) have no staff assigned yet.
         </div>
       )}
 
-      {/* Staff Roster (drag source) */}
+      {conflicts.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-red-700 text-sm">
+          <p className="font-semibold flex items-center gap-1.5 mb-1"><AlertCircle size={14} /> Shift Conflicts Detected:</p>
+          {conflicts.map((c, i) => (
+            <p key={i} className="text-xs ml-5">• {c}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Staff Pool */}
       <div className="bg-gray-50 rounded-xl border p-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Staff — click a shift cell to toggle</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Staff Pool — Click a cell, then pick a staff member</p>
         <div className="flex flex-wrap gap-2">
           {staff.map(s => (
-            <div key={s.id}
-              className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 text-xs font-medium cursor-pointer hover:border-maroon hover:text-maroon select-none shadow-sm"
-              onMouseDown={() => setDragging(s.id)}
-              onMouseUp={() => setDragging(null)}
+            <div key={s.id || s._id}
+              className="flex items-center gap-1.5 bg-white border rounded-lg px-2 py-1 text-xs font-medium shadow-sm"
             >
               <img src={s.photoUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${s.name}`}
                 className="w-5 h-5 rounded-full" alt={s.name}/>
               {s.name.split(' ')[0]}
+              <span className="text-gray-400 text-[10px]">{s.role.replace('_', ' ')}</span>
             </div>
           ))}
         </div>
@@ -190,23 +287,65 @@ export default function ShiftPlanner({ staff }: Props) {
                 {days.map(d => {
                   const key = dateKey(d);
                   const assigned = slots[key]?.[shift] ?? [];
+                  const isTarget = assignTarget?.date === key && assignTarget?.shift === shift;
+                  const assignedOnDay = getAssignedOnDay(key);
+                  
                   return (
                     <td key={key}
-                      className={`p-1 border-l align-top min-h-[60px] cursor-pointer transition-colors hover:bg-gray-50 ${SHIFT_COLORS[shift]} bg-opacity-20`}
-                      onClick={() => dragging && toggleSlot(key, shift, dragging)}
+                      className={`p-1 border-l align-top min-h-[60px] cursor-pointer transition-colors ${
+                        isTarget ? 'bg-blue-50 ring-2 ring-blue-300 ring-inset' : 'hover:bg-gray-50'
+                      } ${SHIFT_COLORS[shift]} bg-opacity-20`}
+                      onClick={() => {
+                        if (isTarget) {
+                          setAssignTarget(null);
+                        } else {
+                          setAssignTarget({ date: key, shift });
+                        }
+                      }}
                     >
                       <div className="flex flex-wrap gap-1 p-1">
-                        {assigned.map(id => (
-                          <span key={id}
-                            onClick={e => { e.stopPropagation(); toggleSlot(key, shift, id); }}
-                            className="bg-white border border-gray-300 shadow-sm rounded px-1.5 py-0.5 text-xs cursor-pointer hover:bg-red-50 hover:border-red-300">
-                            {getStaffName(id).split(' ')[0]} ✕
+                        {assigned.map(slot => (
+                          <span key={slot.staffId}
+                            onClick={e => { e.stopPropagation(); removeStaff(key, shift, slot.staffId); }}
+                            className="bg-white border border-gray-300 shadow-sm rounded px-1.5 py-0.5 text-xs cursor-pointer hover:bg-red-50 hover:border-red-300 flex items-center gap-0.5 group">
+                            {slot.staffName.split(' ')[0]}
+                            <X size={10} className="text-gray-300 group-hover:text-red-500" />
                           </span>
                         ))}
-                        {assigned.length === 0 && (
-                          <span className="text-gray-300 text-xs p-1">empty</span>
+                        {assigned.length === 0 && !isTarget && (
+                          <span className="text-gray-300 text-xs p-1 flex items-center gap-1">
+                            <Plus size={10} /> assign
+                          </span>
                         )}
                       </div>
+
+                      {/* Inline staff picker when this cell is the target */}
+                      {isTarget && (
+                        <div className="mt-1 p-1 bg-white border border-blue-200 rounded-lg shadow-lg max-h-[120px] overflow-y-auto"
+                          onClick={e => e.stopPropagation()}>
+                          {staff
+                            .filter(s => !assigned.some(a => a.staffId === (s.id || s._id)))
+                            .map(s => {
+                              const sId = s.id || s._id;
+                              const alreadyOnDay = assignedOnDay.has(sId);
+                              return (
+                                <button key={sId}
+                                  onClick={() => assignStaff(key, shift, sId)}
+                                  className={`w-full text-left px-2 py-1 text-xs rounded hover:bg-blue-50 flex items-center gap-1.5 ${
+                                    alreadyOnDay ? 'text-gray-400' : 'text-gray-700'
+                                  }`}
+                                >
+                                  <UserPlus size={10} className="text-blue-400" />
+                                  {s.name.split(' ')[0]}
+                                  {alreadyOnDay && <span className="text-[9px] text-amber-500 ml-auto">already today</span>}
+                                </button>
+                              );
+                            })}
+                          {staff.filter(s => !assigned.some(a => a.staffId === (s.id || s._id))).length === 0 && (
+                            <p className="text-[10px] text-gray-400 px-2 py-1">All staff assigned</p>
+                          )}
+                        </div>
+                      )}
                     </td>
                   );
                 })}
@@ -217,8 +356,9 @@ export default function ShiftPlanner({ staff }: Props) {
       </div>
 
       <div className="flex justify-end gap-3">
-        <button onClick={handleSave} className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">
-          <Save size={15}/> Save Draft
+        <button onClick={handleSave} disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          <Save size={15}/> {saving ? 'Saving...' : 'Save Draft'}
         </button>
         <button
           onClick={handlePublish}
