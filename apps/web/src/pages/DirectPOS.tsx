@@ -200,15 +200,6 @@ export default function DirectPOS() {
   // ─── Proceed to Checkout ───────────────────────────────────────────────────
   const handleProceed = async () => {
     if (cart.length === 0) return;
-    
-    if (!customerPhone || customerPhone.length !== 10) {
-      alert('Please provide a valid 10-digit mobile number.');
-      return;
-    }
-    if (!customerName || customerName.trim() === '') {
-      alert('Please provide the customer name.');
-      return;
-    }
 
     try {
       setPaying(true);
@@ -239,8 +230,8 @@ export default function DirectPOS() {
       const payRes = await api.post('/billing/pay', {
         orderId: res.data._id,
         paymentMode,
-        customerPhone,
-        customerName: customerName.trim(),
+        customerPhone: customerPhone || '0000000000',
+        customerName: customerName.trim() || 'Walk-in Customer',
         customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
         retailItems: [], // already in order, processPayment handles deduction
         additionalMenuItems: [],
