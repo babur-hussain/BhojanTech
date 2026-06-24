@@ -57,6 +57,7 @@ export default function DirectPOS() {
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerDob, setCustomerDob] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggLoading, setSuggLoading] = useState(false);
@@ -240,6 +241,7 @@ export default function DirectPOS() {
         paymentMode,
         customerPhone,
         customerName: customerName.trim(),
+        customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
         retailItems: [], // already in order, processPayment handles deduction
         additionalMenuItems: [],
       });
@@ -275,6 +277,64 @@ export default function DirectPOS() {
 
         {/* Search + Scanner */}
         <div className="p-4 border-b border-gray-100 space-y-3 bg-gray-50">
+          {/* Customer */}
+          <div className="flex gap-2 relative" ref={suggRef}>
+            <input
+              type="tel" maxLength={10} placeholder="Customer Phone" value={customerPhone}
+              onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
+              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none ${customer ? 'border-green-300 font-semibold text-gray-800' : 'border-gray-200'}`}
+            />
+            <input
+              type="text" placeholder="Name" value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
+            />
+            <input
+              type="text" maxLength={10} placeholder="DD/MM/YYYY" value={customerDob}
+              onChange={e => {
+                const digits = e.target.value.replace(/\D/g, '');
+                let formatted = '';
+                if (digits.length > 0) formatted += digits.substring(0, 2);
+                if (digits.length > 2) formatted += '/' + digits.substring(2, 4);
+                if (digits.length > 4) formatted += '/' + digits.substring(4, 8);
+                setCustomerDob(formatted);
+              }}
+              className="w-1/4 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
+            />
+            
+            {/* Live suggestions dropdown */}
+            {showSugg && suggestions.length > 0 && !customer && (
+              <div className="absolute z-50 left-0 right-0 bg-white border shadow-lg rounded-lg overflow-hidden" style={{ top: 'calc(100% + 4px)' }}>
+                {suggestions.map((s: any) => (
+                  <button
+                    key={s._id}
+                    onMouseDown={(e) => { 
+                      e.preventDefault(); 
+                      setCustomer(s); 
+                      setCustomerPhone(s.phone || ''); 
+                      setCustomerName(s.name || ''); 
+                      if (s.dob) {
+                        const d = new Date(s.dob);
+                        const day = String(d.getDate()).padStart(2, '0');
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        setCustomerDob(`${day}/${month}/${d.getFullYear()}`);
+                      } else {
+                        setCustomerDob('');
+                      }
+                      setShowSugg(false); 
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm text-gray-800 truncate">{s.name}</p>
+                      <p className="text-xs text-gray-500">{s.phone}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -541,44 +601,6 @@ export default function DirectPOS() {
 
         {/* Checkout Panel */}
         <div className="border-t border-gray-100 bg-gray-50 p-4 space-y-3">
-          {/* Customer */}
-          <div className="flex gap-2 relative" ref={suggRef}>
-            <input
-              type="tel" maxLength={10} placeholder="Customer Phone" value={customerPhone}
-              onChange={e => { setCustomerPhone(e.target.value.replace(/\D/g, '')); setCustomer(null); }}
-              className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none ${customer ? 'border-green-300 font-semibold text-gray-800' : 'border-gray-200'}`}
-            />
-            <input
-              type="text" placeholder="Name" value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="w-1/3 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-maroon outline-none"
-            />
-            
-            {/* Live suggestions dropdown */}
-            {showSugg && suggestions.length > 0 && !customer && (
-              <div className="absolute z-50 left-0 right-0 bg-white border shadow-lg rounded-lg overflow-hidden" style={{ top: 'calc(100% + 4px)' }}>
-                {suggestions.map((s: any) => (
-                  <button
-                    key={s._id}
-                    onMouseDown={(e) => { 
-                      e.preventDefault(); 
-                      setCustomer(s); 
-                      setCustomerPhone(s.phone || ''); 
-                      setCustomerName(s.name || ''); 
-                      setShowSugg(false); 
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-0"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-gray-800 truncate">{s.name}</p>
-                      <p className="text-xs text-gray-500">{s.phone}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Totals */}
           <div className="pt-2 border-t border-gray-200">
             <div className="flex justify-between text-sm text-gray-600 mb-1">
