@@ -26,10 +26,12 @@ interface Props {
   paymentMode: PaymentMode;
   invoiceNumber: string;
   restaurant: RestaurantInfo;
+  customerName?: string;
+  customerPhone?: string;
 }
 
 export default function InvoicePrint({
-  preview, finalTotal, discountFlat, roundOff, paymentMode, invoiceNumber, restaurant,
+  preview, finalTotal, discountFlat, roundOff, paymentMode, invoiceNumber, restaurant, customerName, customerPhone
 }: Props) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
@@ -101,12 +103,21 @@ export default function InvoicePrint({
           <div className="text-right space-y-0.5">
             <div>{dateStr}</div>
             <div>{timeStr}</div>
-            <div className="inline-block px-1.5 py-0.5 border border-black rounded text-[10px] font-bold mt-1">
-              {paymentMode}
-            </div>
+            <div className="border border-gray-400 px-1 py-0.5 inline-block text-[10px] font-bold rounded mt-0.5">{paymentMode}</div>
           </div>
         </div>
 
+        {/* ── Customer Details ────────────────────────────────────────── */}
+        {(customerName || customerPhone) && (
+          <>
+            <DottedLine />
+            <div className="text-xs my-2 space-y-0.5">
+              {customerName && <div><span className="font-bold text-gray-600">CUST:</span> {customerName}</div>}
+              {customerPhone && <div><span className="font-bold text-gray-600">MOB:</span> {customerPhone}</div>}
+            </div>
+          </>
+        )}
+        
         <DottedLine />
 
         {/* ── Column Headings ─────────────────────────────────────────── */}

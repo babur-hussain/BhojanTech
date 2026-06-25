@@ -50,6 +50,7 @@ export interface IInvoice extends Document {
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   customerPhone?: string;
+  customerName?: string;
   dailySequence: number;
 }
 
@@ -78,6 +79,7 @@ const InvoiceSchema: Schema = new Schema(
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
     customerPhone: { type: String },
+    customerName: { type: String },
     dailySequence: { type: Number, required: true },
   },
   { timestamps: true }

@@ -429,6 +429,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
           razorpayOrderId,
           razorpayPaymentId,
           customerPhone,
+          customerName,
           dailySequence: seq,
         });
 
@@ -774,6 +775,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       totalInWords,
       totalInWordHindi,
       customerPhone,
+      customerName,
       dailySequence: seq,
     });
 
@@ -983,7 +985,10 @@ export const updateInvoice = async (req: AuthRequest, res: Response) => {
     invoice.changeINR = Math.max(0, (amountPaidINR ?? grandTotal) - grandTotal);
     invoice.totalInWords = totalInWords;
     invoice.totalInWordHindi = totalInWordHindi;
-    if (customerPhone) invoice.customerPhone = customerPhone;
+    if (customerPhone) {
+      invoice.customerPhone = customerPhone;
+      if (customerName) invoice.customerName = customerName;
+    }
 
     await invoice.save();
 

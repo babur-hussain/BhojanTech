@@ -67,6 +67,8 @@ export default function InvoiceScreen() {
       gstBreakup: invoice.gstBreakup || [],
       totalGST: invoice.totalGSTINR || 0,
       amountInWords: invoice.totalInWords || toWordsEN(invoice.grandTotalINR),
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
     };
     try {
       await printReceipt({
@@ -129,6 +131,8 @@ export default function InvoiceScreen() {
               fssai: restaurant?.fssaiNumber || '',
               upiId: restaurant?.upiId || '',
             }}
+            customerName={invoice.customerName}
+            customerPhone={invoice.customerPhone}
           />
         </div>
       </div>
