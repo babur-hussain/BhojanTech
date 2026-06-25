@@ -31,7 +31,8 @@ export const getInvoice = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const invoice = await Invoice.findOne({ _id: id, restaurantId: req.user!.restaurantId });
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-    return res.json(invoice);
+    const order = await Order.findOne({ _id: invoice.orderId, restaurantId: req.user!.restaurantId });
+    return res.json({ invoice, order });
   } catch (error) {
     return res.status(500).json({ error: 'Server error' });
   }
@@ -809,5 +810,160 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error('Error creating direct bill:', err);
     return res.status(500).json({ error: 'Server error' });
+  }
+};
+
+export const updateInvoice = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const {
+      paymentMode,
+      payments,
+      amountPaidINR,
+      customerPhone,
+      customerName,
+      customerDob,
+      discount,
+      items = [], // menu items
+      retailItems = [], // retail items
+    } = req.body;
+
+    const restaurantId = req.user!.restaurantId;
+
+    const invoice = await Invoice.findOne({ _id: id, restaurantId });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+    const order = await Order.findOne({ _id: invoice.orderId, restaurantId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    // Restore old inventory
+    for (const oldItem of order.items) {
+      if ((oldItem as any).isRetailItem && (oldItem as any).retailItemId) {
+        await RetailItem.findOneAndUpdate(
+          { _id: (oldItem as any).retailItemId, restaurantId },
+          { $inc: { stock: oldItem.quantity } }
+        );
+      }
+    }
+
+    // Set new order items
+    order.items = [];
+    
+    // Process menu items
+    const menuItemIds = items.map((i: any) => i.menuItemId).filter((id: any) => id && id.toString() !== '000000000000000000000000');
+    const menuItemsDocs = menuItemIds.length > 0 ? await MenuItem.find({ _id: { $in: menuItemIds } }) : [];
+
+    const enrichedItems = items.map((i: any) => {
+      const mi = menuItemsDocs.find(m => m._id.toString() === i.menuItemId?.toString());
+      const itemToSave = {
+        _id: new mongoose.Types.ObjectId(),
+        menuItemId: mongoose.Types.ObjectId.isValid(i.menuItemId) ? new mongoose.Types.ObjectId(i.menuItemId) : undefined,
+        name: i.name,
+        variantName: i.variantName,
+        quantity: i.quantity,
+        priceAtOrderTime: Number(i.priceAtOrderTime || 0),
+        gstSlab: Number(i.gstSlab ?? mi?.gstSlab ?? 0),
+        sentToKitchen: true,
+        hindiName: mi?.hindiName
+      };
+      order.items.push(itemToSave as any);
+      return itemToSave;
+    });
+
+    const menuLineItems = buildLineItems(enrichedItems as any);
+
+    // Process retail items
+    let retailLineItems: any[] = [];
+    if (retailItems && retailItems.length > 0) {
+      const retailIds = retailItems.map((r: any) => r._id || r.retailItemId);
+      const retailDocs = await RetailItem.find({ _id: { $in: retailIds }, restaurantId });
+      retailLineItems = retailItems.map((r: any) => {
+        const doc = retailDocs.find((d: any) => d._id.toString() === (r._id || r.retailItemId));
+        if (!doc) return null;
+        const lineTotal = +(doc.priceINR * r.quantity).toFixed(2);
+        
+        order.items.push({
+          _id: new mongoose.Types.ObjectId(),
+          retailItemId: doc._id,
+          isRetailItem: true,
+          name: doc.name,
+          quantity: r.quantity,
+          priceAtOrderTime: doc.priceINR,
+          gstSlab: doc.gstSlab,
+          sentToKitchen: true
+        } as any);
+
+        return {
+          name: doc.name,
+          quantity: r.quantity,
+          unitPrice: doc.priceINR,
+          gstSlab: doc.gstSlab,
+          lineTotal,
+          hsnCode: '',
+        };
+      }).filter(Boolean);
+
+      // Deduct stock for each retail item
+      for (const r of retailItems) {
+        await RetailItem.findOneAndUpdate(
+          { _id: r._id || r.retailItemId, restaurantId },
+          { $inc: { stock: -r.quantity } }
+        );
+      }
+    }
+
+    const allLineItems = [...menuLineItems, ...retailLineItems];
+    const subtotal = +allLineItems.reduce((s: number, l: any) => s + l.lineTotal, 0).toFixed(2);
+
+    let flatDiscount = 0;
+    if (discount) {
+      flatDiscount = discount.type === 'FLAT'
+        ? discount.value
+        : +(subtotal * discount.value / 100).toFixed(2);
+    }
+
+    const gstBreakup = computeGSTBreakup(allLineItems as any, flatDiscount);
+    const totalGST = +gstBreakup.reduce((s, g) => s + g.cgst + g.sgst, 0).toFixed(2);
+    const raw = subtotal - flatDiscount;
+    const rounded = Math.round(raw);
+    const roundOff = +(rounded - raw).toFixed(2);
+    const grandTotal = rounded;
+
+    const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
+
+    // Update order totals
+    order.totalAmountINR = subtotal; // wait, Order.totalAmountINR is usually sum of priceAtOrderTime * quantity
+    if (customerPhone) {
+      order.customerPhone = customerPhone;
+      if (customerName) order.customerName = customerName;
+    }
+    await order.save();
+
+    // Update invoice fields
+    invoice.lineItems = allLineItems;
+    invoice.subtotalINR = subtotal;
+    invoice.gstBreakup = gstBreakup;
+    invoice.totalGSTINR = totalGST;
+    if (discount) {
+      invoice.discount = { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy };
+    } else {
+      invoice.discount = undefined;
+    }
+    invoice.roundOff = roundOff;
+    invoice.grandTotalINR = grandTotal;
+    invoice.payments = payments ?? [{ mode: paymentMode, amountINR: grandTotal }];
+    invoice.paymentMode = paymentMode;
+    invoice.amountPaidINR = amountPaidINR ?? grandTotal;
+    invoice.changeINR = Math.max(0, (amountPaidINR ?? grandTotal) - grandTotal);
+    invoice.totalInWords = totalInWords;
+    invoice.totalInWordHindi = totalInWordHindi;
+    if (customerPhone) invoice.customerPhone = customerPhone;
+
+    await invoice.save();
+
+    return res.json({ message: 'Invoice updated successfully', invoice });
+  } catch (error: any) {
+    console.error('updateInvoice error:', error);
+    return res.status(500).json({ error: 'Server error while updating invoice' });
   }
 };

@@ -7,7 +7,7 @@ import {
 import { api, getMediaUrl } from '../utils/api';
 import PageLoader from '../components/PageLoader';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import CameraScanner from '../components/CameraScanner';
 import { useBranchStore } from '../store/branchStore';
@@ -27,6 +27,8 @@ interface CartItem {
 
 export default function DirectPOS() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editInvoiceId = searchParams.get('edit');
 
   // Menu
   const [categories, setCategories] = useState<MenuCategory[]>([]);
@@ -87,6 +89,40 @@ export default function DirectPOS() {
       }
     })();
   }, [selectedBranchId]);
+
+  // Load invoice if in edit mode
+  useEffect(() => {
+    if (editInvoiceId && !loading) {
+      api.get(`/billing/invoice/${editInvoiceId}`).then(res => {
+        const { invoice, order } = res.data;
+        if (invoice && order) {
+          const newCart: CartItem[] = order.items.map((i: any) => ({
+            id: i.isRetailItem ? i.retailItemId : i.menuItemId,
+            type: i.isRetailItem ? 'retail' : 'menu',
+            name: i.name,
+            variantName: i.variantName,
+            price: i.priceAtOrderTime,
+            quantity: i.quantity,
+            gstSlab: i.gstSlab || 0,
+          }));
+          setCart(newCart);
+          setPaymentMode(invoice.paymentMode || 'CASH');
+          if (invoice.customerPhone) {
+            setCustomerPhone(invoice.customerPhone);
+            // Trigger customer search to fetch name
+            api.get(`/customers?q=${invoice.customerPhone}`).then(cRes => {
+              const custs = cRes.data?.customers || cRes.data || [];
+              const c = custs.find((x: any) => x.phone === invoice.customerPhone);
+              if (c) {
+                setCustomerName(c.name);
+                setCustomer(c);
+              }
+            }).catch(console.error);
+          }
+        }
+      }).catch(console.error);
+    }
+  }, [editInvoiceId, loading]);
 
   // ─── Live Customer Search ──────────────────────────────────────────────────
   const searchSuggestions = useCallback(async (query: string) => {
@@ -208,39 +244,66 @@ export default function DirectPOS() {
       const menuCartItems = cart.filter(c => c.type === 'menu');
       const retailCartItems = cart.filter(c => c.type === 'retail');
 
-      // 1. Create the order
-      const res = await api.post('/orders/takeaway', {
-        orderType: 'TAKEAWAY',
-        items: menuCartItems.map(c => ({
-          menuItemId: c.id,
-          name: c.name,
-          variantName: c.variantName,
-          quantity: c.quantity,
-          priceAtOrderTime: c.price,
-          gstSlab: c.gstSlab,
-        })),
-        retailItems: retailCartItems.map(c => ({
-          _id: c.id,
-          name: c.name,
-          quantity: c.quantity,
-          priceAtOrderTime: c.price,
-          gstSlab: c.gstSlab,
-        })),
-      });
+      if (editInvoiceId) {
+        // Update existing invoice
+        const payRes = await api.put(`/billing/invoice/${editInvoiceId}`, {
+          paymentMode,
+          customerPhone: customerPhone || '9999999999',
+          customerName: customerName.trim() || 'Walk-in Customer',
+          customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
+          items: menuCartItems.map(c => ({
+            menuItemId: c.id,
+            name: c.name,
+            variantName: c.variantName,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,
+          })),
+          retailItems: retailCartItems.map(c => ({
+            _id: c.id,
+            name: c.name,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,
+          })),
+        });
+        setSearchParams({});
+        navigate(`/invoice/${editInvoiceId}`);
+      } else {
+        // 1. Create the order
+        const res = await api.post('/orders/takeaway', {
+          orderType: 'TAKEAWAY',
+          items: menuCartItems.map(c => ({
+            menuItemId: c.id,
+            name: c.name,
+            variantName: c.variantName,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,
+          })),
+          retailItems: retailCartItems.map(c => ({
+            _id: c.id,
+            name: c.name,
+            quantity: c.quantity,
+            priceAtOrderTime: c.price,
+            gstSlab: c.gstSlab,
+          })),
+        });
 
-      // 2. Immediately pay and close the order
-      const payRes = await api.post('/billing/pay', {
-        orderId: res.data._id,
-        paymentMode,
-        customerPhone: customerPhone || '9999999999',
-        customerName: customerName.trim() || 'Walk-in Customer',
-        customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
-        retailItems: [], // already in order, processPayment handles deduction
-        additionalMenuItems: [],
-      });
+        // 2. Immediately pay and close the order
+        const payRes = await api.post('/billing/pay', {
+          orderId: res.data._id,
+          paymentMode,
+          customerPhone: customerPhone || '9999999999',
+          customerName: customerName.trim() || 'Walk-in Customer',
+          customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
+          retailItems: [], // already in order, processPayment handles deduction
+          additionalMenuItems: [],
+        });
 
-      // 3. Navigate to the generated invoice
-      navigate(`/invoice/${payRes.data.invoice._id}`);
+        // 3. Navigate to the generated invoice
+        navigate(`/invoice/${payRes.data.invoice._id}`);
+      }
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
       const errorData = e?.response?.data;

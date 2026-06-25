@@ -23,7 +23,7 @@ export default function InvoiceScreen() {
           api.get(`/billing/invoice/${invoiceId}`), // We need to add this endpoint if it doesn't exist!
           api.get('/restaurant/info'),
         ]);
-        setInvoice(invRes.data);
+        setInvoice(invRes.data.invoice || invRes.data);
         setRestaurant(restRes.data);
       } catch (err) {
         console.error(err);
@@ -87,6 +87,12 @@ export default function InvoiceScreen() {
             className="flex items-center gap-2 px-8 py-3 bg-maroon text-white rounded-xl font-bold shadow-lg hover:bg-opacity-90 transition-transform active:scale-95"
           >
             <Printer size={20} /> Print Receipt
+          </button>
+          <button 
+            onClick={() => navigate(`/pos?edit=${invoice._id}`)} 
+            className="px-8 py-3 border-2 border-orange-300 text-orange-600 rounded-xl font-bold bg-white shadow-sm hover:bg-orange-50 transition-transform active:scale-95"
+          >
+            Edit Invoice
           </button>
           <button onClick={() => navigate(-1)} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
             Close

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../utils/api';
 import { useBranchStore } from '../../store/branchStore';
-import { FileText, Download } from 'lucide-react';
+import { FileText, Download, Edit } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function InvoiceRegister() {
     const { selectedBranchId } = useBranchStore();
+    const navigate = useNavigate();
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -55,11 +57,12 @@ export default function InvoiceRegister() {
                             <th className="px-6 py-3">GST (₹)</th>
                             <th className="px-6 py-3">Grand Total (₹)</th>
                             <th className="px-6 py-3">Status</th>
+                            <th className="px-6 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {loading ? (
-                            <tr><td colSpan={7} className="px-6 py-10 text-center animate-pulse">Loading Invoices...</td></tr>
+                            <tr><td colSpan={8} className="px-6 py-10 text-center animate-pulse">Loading Invoices...</td></tr>
                         ) : invoices.length > 0 ? (
                             invoices.map((inv) => (
                                 <tr key={inv._id} className="border-b hover:bg-gray-50">
@@ -74,10 +77,19 @@ export default function InvoiceRegister() {
                                             VALID
                                         </span>
                                     </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button
+                                            onClick={() => navigate(`/pos?edit=${inv._id}`)}
+                                            className="text-orange-600 hover:text-orange-800 p-2 hover:bg-orange-50 rounded-lg transition-colors"
+                                            title="Edit Invoice"
+                                        >
+                                            <Edit size={16} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))
                         ) : (
-                            <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">No invoices generated yet.</td></tr>
+                            <tr><td colSpan={8} className="px-6 py-10 text-center text-gray-400">No invoices generated yet.</td></tr>
                         )}
                     </tbody>
                 </table>

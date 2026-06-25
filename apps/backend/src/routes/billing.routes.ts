@@ -15,6 +15,7 @@ router.use(requireAuth);
 
 router.get('/preview/:orderId', billingCtrl.previewBill);
 router.get('/invoice/:id', billingCtrl.getInvoice);
+router.put('/invoice/:id', billingCtrl.updateInvoice);
 router.get('/customer/:phone', billingCtrl.billingCustomerLookup);
 router.post('/razorpay/order', validate(createRazorpayOrderSchema), billingCtrl.createRazorpayOrder);
 router.post('/generate/:orderId', billingCtrl.generateBill);
