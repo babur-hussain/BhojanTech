@@ -203,7 +203,7 @@ export default function BranchManagement() {
                                         className="w-full border-gray-200 border rounded-xl p-3 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all bg-white"
                                     >
                                         <option value="">-- No Manager Assigned --</option>
-                                        {staffList.filter(s => s.role === 'MANAGER' || s.role === 'OWNER').map(s => (
+                                        {staffList.filter(s => s.role === 'MANAGER' || s.role === 'BRANCH_MANAGER' || s.role === 'OWNER').map(s => (
                                             <option key={s._id} value={s._id}>{s.name} ({s.role})</option>
                                         ))}
                                     </select>

@@ -541,6 +541,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                     <select className="input w-full" value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
                       <option value="WAITER">Waiter</option>
                       <option value="KITCHEN_STAFF">Kitchen Staff</option>
+                      <option value="MANAGER">Manager</option>
                       <option value="BRANCH_MANAGER">Branch Manager</option>
                       <option value="ACCOUNTANT">Accountant</option>
                     </select>
