@@ -94,14 +94,16 @@ export default function DirectPOS() {
   useEffect(() => {
     if (editInvoiceId && !loading) {
       api.get(`/billing/invoice/${editInvoiceId}`).then(res => {
-        const { invoice, order } = res.data;
-        if (invoice && order) {
-          const newCart: CartItem[] = order.items.map((i: any) => ({
-            id: i.isRetailItem ? i.retailItemId : i.menuItemId,
+        const invoice = res.data.invoice || res.data;
+        const order = res.data.order;
+        if (invoice) {
+          const itemsSource = order ? order.items : invoice.lineItems;
+          const newCart: CartItem[] = itemsSource.map((i: any) => ({
+            id: i.menuItemId || i.retailItemId || i._id || Math.random().toString(),
             type: i.isRetailItem ? 'retail' : 'menu',
-            name: i.name,
+            name: i.name || 'Item',
             variantName: i.variantName,
-            price: i.priceAtOrderTime,
+            price: i.priceAtOrderTime || i.unitPrice || 0,
             quantity: i.quantity,
             gstSlab: i.gstSlab || 0,
           }));
@@ -707,7 +709,7 @@ export default function DirectPOS() {
               className="w-full mt-3 py-4 bg-maroon hover:bg-opacity-90 text-white font-black text-base rounded-xl shadow disabled:opacity-50 flex items-center justify-center gap-2 transition-transform active:scale-95"
             >
               {paying ? <Loader2 size={20} className="animate-spin" /> : null}
-              {paying ? 'Processing...' : `CREATE INVOICE · ₹${subtotal.toFixed(0)}`}
+              {paying ? 'Processing...' : (editInvoiceId ? `UPDATE INVOICE · ₹${subtotal.toFixed(0)}` : `CREATE INVOICE · ₹${subtotal.toFixed(0)}`)}
             </button>
           </div>
         </div>
