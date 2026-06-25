@@ -349,8 +349,11 @@ export default function DirectPOS() {
             />
             <input
               type="text" placeholder="Name" value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="w-1/3 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-maroon focus:border-transparent outline-none shadow-sm transition-all"
+              onChange={e => {
+                const capitalized = e.target.value.replace(/\b\w/g, char => char.toUpperCase());
+                setCustomerName(capitalized);
+              }}
+              className="w-1/3 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-800 placeholder-gray-400 focus:ring-2 focus:ring-maroon focus:border-transparent outline-none shadow-sm transition-all capitalize"
             />
             <input
               type="text" maxLength={10} placeholder="DD/MM/YYYY" value={customerDob}
