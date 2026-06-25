@@ -381,50 +381,76 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     const roundOff = +(rounded - raw).toFixed(2);
     const grandTotal = rounded;
 
-    // Invoice number (atomic sequence)
-    const branchId = req.user!.branchId;
-    const seq = await (InvoiceSequence as any).getNextSequence(
-      new mongoose.Types.ObjectId(restaurantId as string),
-      branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
-    );
-    // Look up branch prefix for invoice numbering
-    let branchPrefix: string | undefined;
-    if (branchId) {
-      const branch = await Branch.findById(branchId).select('invoicePrefix').lean() as any;
-      branchPrefix = branch?.invoicePrefix;
+    let invoice: any = null;
+    let attempts = 0;
+    const maxAttempts = 10;
+    let finalError = null;
+
+    while (attempts < maxAttempts && !invoice) {
+      try {
+        attempts++;
+        const branchId = req.user!.branchId;
+        const seq = await (InvoiceSequence as any).getNextSequence(
+          new mongoose.Types.ObjectId(restaurantId as string),
+          branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
+        );
+        let branchPrefix: string | undefined;
+        if (branchId) {
+          const branch = await Branch.findById(branchId).select('invoicePrefix').lean() as any;
+          branchPrefix = branch?.invoicePrefix;
+        }
+        const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
+
+        const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
+
+        invoice = await Invoice.create({
+          invoiceNumber,
+          restaurantId,
+          branchId: branchId || undefined,
+          orderId: order._id,
+          tableNumber: order.tableNumber || 'DIRECT',
+          waiterName: order.waiterName || req.user!.name || 'Staff',
+          orderType,
+          lineItems: allLineItems,
+          subtotalINR: allSubtotal,
+          gstBreakup,
+          totalGSTINR: totalGST,
+          discount: discount
+            ? { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy }
+            : undefined,
+          roundOff,
+          grandTotalINR: grandTotal,
+          payments: payments ?? [{ mode: paymentMode, amountINR: grandTotal }],
+          paymentMode,
+          amountPaidINR: amountPaidINR ?? grandTotal,
+          changeINR: Math.max(0, (amountPaidINR ?? grandTotal) - grandTotal),
+          totalInWords,
+          totalInWordHindi,
+          razorpayOrderId,
+          razorpayPaymentId,
+          customerPhone,
+          dailySequence: seq,
+        });
+
+      } catch (err: any) {
+        if (err.code === 11000) {
+          // Check if this was a race condition for the same order
+          const dup = await Invoice.findOne({ orderId: order._id }).sort({ createdAt: -1 });
+          if (dup) {
+            invoice = dup;
+            break;
+          }
+          // If not the same order, it's a sequence collision. Loop and retry with new sequence.
+          finalError = err;
+        } else {
+          throw err;
+        }
+      }
     }
-    const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
 
-    const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
-
-    const invoice = await Invoice.create({
-      invoiceNumber,
-      restaurantId,
-      branchId: branchId || undefined,
-      orderId: order._id,
-      tableNumber: order.tableNumber || 'DIRECT',
-      waiterName: order.waiterName || req.user!.name || 'Staff',
-      orderType,
-      lineItems: allLineItems,
-      subtotalINR: allSubtotal,
-      gstBreakup,
-      totalGSTINR: totalGST,
-      discount: discount
-        ? { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy }
-        : undefined,
-      roundOff,
-      grandTotalINR: grandTotal,
-      payments: payments ?? [{ mode: paymentMode, amountINR: grandTotal }],
-      paymentMode,
-      amountPaidINR: amountPaidINR ?? grandTotal,
-      changeINR: Math.max(0, (amountPaidINR ?? grandTotal) - grandTotal),
-      totalInWords,
-      totalInWordHindi,
-      razorpayOrderId,
-      razorpayPaymentId,
-      customerPhone,
-      dailySequence: seq,
-    });
+    if (!invoice) {
+      throw finalError || new Error('Failed to generate a unique invoice number after multiple attempts.');
+    }
 
     // Update order & table status
     order.status = 'PAID';
