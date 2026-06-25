@@ -628,20 +628,26 @@ export interface PrintReceiptOptions {
 }
 
 export async function printReceipt(options: PrintReceiptOptions | HTMLElement | null) {
-  // Legacy call: printReceipt(domNode) — no-op, popup disabled
   if (options === null || options instanceof HTMLElement) {
-    throw new Error('QZ Tray is required for printing. Browser popup is disabled.');
+    // Legacy fallback
+    popupPrint(options);
+    return;
   }
 
-  const { receiptData, printerName } = options;
+  const { receiptData, receiptContainerRef, printerName } = options;
 
-  if (!receiptData) {
-    throw new Error('No receipt data provided.');
+  if (!receiptData && !receiptContainerRef) {
+    throw new Error('No receipt data or container provided.');
   }
 
   const connected = await ensureConnected();
   if (!connected) {
-    throw new Error('QZ Tray is not running. Please start QZ Tray and try again.');
+    if (receiptContainerRef) {
+      console.warn('QZ Tray not running. Falling back to browser print.');
+      popupPrint(receiptContainerRef);
+      return;
+    }
+    throw new Error('QZ Tray is not running and no visual receipt provided for fallback.');
   }
 
   try {
