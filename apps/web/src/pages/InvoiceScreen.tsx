@@ -36,7 +36,7 @@ export default function InvoiceScreen() {
   if (loading) return <PageLoader message="Loading Invoice..." />;
   if (!invoice) return <div className="p-8 text-center text-red-500 font-bold">Invoice not found!</div>;
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
     const now = new Date(invoice.createdAt || Date.now());
     const printerName = restaurant?.printerName || localStorage.getItem('qz_receipt_printer') || '';
     const receiptData: ReceiptData = {
@@ -68,15 +68,11 @@ export default function InvoiceScreen() {
       totalGST: invoice.totalGSTINR || 0,
       amountInWords: invoice.totalInWords || toWordsEN(invoice.grandTotalINR),
     };
-    try {
-      await printReceipt({
-        receiptData,
-        receiptContainerRef: receiptRef.current,
-        printerName,
-      });
-    } catch (err: any) {
-      alert(err.message || 'Failed to print receipt.');
-    }
+    printReceipt({
+      receiptData,
+      receiptContainerRef: receiptRef.current,
+      printerName,
+    });
   };
 
   return (
