@@ -232,7 +232,7 @@ export default function DirectPOS() {
       const payRes = await api.post('/billing/pay', {
         orderId: res.data._id,
         paymentMode,
-        customerPhone: customerPhone || '0000000000',
+        customerPhone: customerPhone || '9999999999',
         customerName: customerName.trim() || 'Walk-in Customer',
         customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
         retailItems: [], // already in order, processPayment handles deduction
