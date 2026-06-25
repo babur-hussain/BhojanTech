@@ -158,43 +158,134 @@ async function getQZ() {
 }
 
 let qzConnectionPromise: Promise<boolean> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let closeListenerAttached = false;
 
-/** Connect to QZ Tray WebSocket robustly */
+// ── Connection-change subscription (used by useQZTray hook) ─────────────────
+type ConnectionChangeCallback = (connected: boolean) => void;
+const connectionChangeListeners = new Set<ConnectionChangeCallback>();
+
+/** Subscribe to QZ connection state changes. Returns an unsubscribe function. */
+export function onConnectionChange(cb: ConnectionChangeCallback): () => void {
+  connectionChangeListeners.add(cb);
+  return () => { connectionChangeListeners.delete(cb); };
+}
+
+function notifyConnectionChange(connected: boolean) {
+  connectionChangeListeners.forEach((cb) => {
+    try { cb(connected); } catch { /* ignore listener errors */ }
+  });
+}
+
+/** Attach a one-time close/error listener that auto-reconnects */
+function attachCloseListener(q: any) {
+  if (closeListenerAttached) return;
+  closeListenerAttached = true;
+
+  const handleClose = () => {
+    closeListenerAttached = false;
+    console.warn('[QZ Tray] WebSocket closed unexpectedly — scheduling auto-reconnect…');
+    notifyConnectionChange(false);
+    scheduleReconnect();
+  };
+
+  try {
+    // qz-tray exposes a setClosedCallbacks helper
+    q.websocket.setClosedCallbacks(handleClose);
+  } catch {
+    // Fallback: listen on the raw WebSocket object
+    try {
+      const ws = q.websocket.getConnection();
+      if (ws) {
+        ws.onclose = handleClose;
+        ws.onerror = () => {
+          console.warn('[QZ Tray] WebSocket error detected');
+          handleClose();
+        };
+      }
+    } catch { /* best-effort */ }
+  }
+}
+
+/** Schedule a reconnect attempt with exponential back-off (max 30 s) */
+function scheduleReconnect(attempt = 0) {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+
+  const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // 1s → 2s → 4s → … → 30s cap
+  console.log(`[QZ Tray] Reconnect attempt ${attempt + 1} in ${delay}ms…`);
+
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    const ok = await doConnect();
+    if (!ok) {
+      scheduleReconnect(attempt + 1); // keep trying forever
+    }
+  }, delay);
+}
+
+/** Low-level connect (no recursion guard — callers must hold the mutex) */
+async function doConnect(): Promise<boolean> {
+  try {
+    const q = await getQZ();
+    if (!q) return false;
+
+    // If already fully open, nothing to do
+    if (q.websocket.isActive()) {
+      const ws = q.websocket.getConnection();
+      if (ws && ws.readyState === 1) {
+        attachCloseListener(q);
+        notifyConnectionChange(true);
+        return true;
+      }
+      // Stuck in CONNECTING / CLOSING — tear down first
+      try { await q.websocket.disconnect(); } catch { /* ignore */ }
+    }
+
+    await q.websocket.connect({
+      retries: 5,       // generous retries on each attempt
+      delay:   1,       // 1 second between retries
+      keepAlive: 60,    // ping every 60 s — prevents browser from killing idle WS
+    });
+
+    console.log('[QZ Tray] WebSocket connected ✅');
+    attachCloseListener(q);
+    notifyConnectionChange(true);
+    return true;
+  } catch (err) {
+    console.error('[QZ Tray] Connection attempt failed:', err);
+    notifyConnectionChange(false);
+    return false;
+  }
+}
+
+/** Connect to QZ Tray WebSocket robustly (public entry point, mutex-guarded) */
 async function ensureConnected(): Promise<boolean> {
   try {
     const q = await getQZ();
     if (!q) return false;
 
-    // Wait for any existing connection attempt to complete
-    if (qzConnectionPromise) {
-      await qzConnectionPromise;
-    }
-
-    // If fully connected and ready, return true
-    if (q.websocket.isActive() && q.websocket.getConnection()?.readyState === 1) {
-      return true;
-    }
-
-    // Otherwise, initiate a new connection and wait for it
-    qzConnectionPromise = (async () => {
-      try {
-        if (q.websocket.isActive()) {
-          // It's in CONNECTING state or stuck, forcefully disconnect first to prevent errors
-          q.websocket.disconnect();
-        }
-        await q.websocket.connect({ retries: 2, delay: 500 });
+    // Fast path — already connected and healthy
+    if (q.websocket.isActive()) {
+      const ws = q.websocket.getConnection();
+      if (ws && ws.readyState === 1) {
+        attachCloseListener(q);
         return true;
-      } catch (err) {
-        console.error('QZ connection failed:', err);
-        return false;
-      } finally {
-        qzConnectionPromise = null;
       }
-    })();
+    }
+
+    // If another connect is in-flight, piggyback on it
+    if (qzConnectionPromise) {
+      return await qzConnectionPromise;
+    }
+
+    // Start a new guarded connect
+    qzConnectionPromise = doConnect().finally(() => {
+      qzConnectionPromise = null;
+    });
 
     return await qzConnectionPromise;
   } catch (err) {
-    console.error('QZ initialization failed:', err);
+    console.error('[QZ Tray] ensureConnected failed:', err);
     return false;
   }
 }
