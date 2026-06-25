@@ -99,7 +99,7 @@ export default function AnalyticsDashboard() {
           api.get(`/bookings?date=${new Date().toISOString().split('T')[0]}`)
         ]);
         const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-        setLiveOrders(allOrders.filter((o: any) => o.status === 'OPEN'));
+        setLiveOrders(allOrders.filter((o: any) => o.status === 'OPEN' && o.orderType === 'DINE_IN'));
         const allBookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : [];
         setPendingBookings(allBookings.filter((b: any) => ['PENDING', 'CONFIRMED', 'READY'].includes(b.status)).length);
       } catch (e) {
