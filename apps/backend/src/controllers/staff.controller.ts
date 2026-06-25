@@ -555,7 +555,14 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
       });
       const totalAdvanceAmount = activeAdvances.reduce((sum, a) => sum + a.amount, 0);
 
-      const netPayable = Math.max(0, +(grossPayable - totalAdvanceAmount).toFixed(2));
+      let advancesToDeduct = totalAdvanceAmount;
+      let carryForward = 0;
+      if (totalAdvanceAmount > grossPayable) {
+        advancesToDeduct = grossPayable;
+        carryForward = +(totalAdvanceAmount - grossPayable).toFixed(2);
+      }
+
+      const netPayable = Math.max(0, +(grossPayable - advancesToDeduct).toFixed(2));
 
       const salaryRecord = await SalaryRecord.findOneAndUpdate(
         { staffId: s._id, month },
@@ -566,7 +573,7 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
             totalWorkingDays, presentDays: present,
             absentDays: Math.max(0, absent), halfDays,
             deductions: +deductions.toFixed(2),
-            advances: totalAdvanceAmount,
+            advances: advancesToDeduct,
             netPayable,
           },
           $setOnInsert: { isPaid: false },
@@ -587,8 +594,24 @@ export const calculatePayroll = async (req: AuthRequest, res: Response) => {
           }
         );
 
-        // Reset totalAdvances on staff
-        await StaffMember.findByIdAndUpdate(s._id, { totalAdvances: 0 });
+        if (carryForward > 0) {
+          // Carry forward the remaining balance to the next month
+          await AdvancePayment.create({
+            restaurantId: req.user!.restaurantId,
+            branchId: s.branchId,
+            staffId: s._id,
+            staffName: s.name,
+            amount: carryForward,
+            reason: 'Carry forward from previous month',
+            date: new Date(),
+            approvedBy: req.user!.name || 'System',
+            recordedBy: req.user!.name || 'System',
+            status: 'ACTIVE'
+          });
+        }
+
+        // Reset totalAdvances on staff to the carry forward amount (0 if fully recovered)
+        await StaffMember.findByIdAndUpdate(s._id, { totalAdvances: carryForward });
       }
 
       return salaryRecord;
@@ -768,4 +791,81 @@ export const getTodayDuty = async (req: AuthRequest, res: Response) => {
       todayAttendance: attMap[s._id.toString()] || null,
     })));
   } catch { return res.status(500).json({ error: 'Server error' }); }
+};
+
+// ─── Staff Ledger ─────────────────────────────────────────────────────────────
+
+export const getStaffLedger = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    const { id } = req.params;
+
+    // 1. Fetch Advances (Excluding system-generated carry forwards to avoid double-counting in ledger view)
+    const advances = await AdvancePayment.find({ ...query, staffId: id, reason: { $ne: 'Carry forward from previous month' } });
+    
+    // 2. Fetch Salary Records
+    const salaryRecords = await SalaryRecord.find({ ...query, staffId: id });
+
+    const ledgerEvents: any[] = [];
+
+    // Add Advances (Debit)
+    advances.forEach(a => {
+      ledgerEvents.push({
+        date: new Date(a.date),
+        type: 'ADVANCE',
+        description: a.reason ? `Advance: ${a.reason}` : 'Advance Payment',
+        amount: a.amount,
+        debit: a.amount,
+        credit: 0
+      });
+    });
+
+    // Add Salaries
+    salaryRecords.forEach(s => {
+      // The Gross Salary is credited at the end of the month
+      const [year, monthStr] = s.month.split('-');
+      // We log the salary earned as of the last day of the month
+      const salaryDate = new Date(parseInt(year), parseInt(monthStr), 0, 23, 59, 59);
+      const gross = s.netPayable + s.advances; // Math to get original gross payable
+
+      ledgerEvents.push({
+        date: salaryDate,
+        type: 'SALARY_EARNED',
+        description: `Salary Earned (${s.month})`,
+        amount: gross,
+        debit: 0,
+        credit: gross
+      });
+
+      // If Paid, the Net Payable was physically given out to the staff (Debit)
+      if (s.isPaid) {
+        ledgerEvents.push({
+          date: s.paidDate ? new Date(s.paidDate) : salaryDate,
+          type: 'SALARY_PAID',
+          description: `Salary Paid (${s.month})`,
+          amount: s.netPayable,
+          debit: s.netPayable,
+          credit: 0
+        });
+      }
+    });
+
+    // Sort chronologically
+    ledgerEvents.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    // Compute running balance
+    let currentBalance = 0;
+    const ledger = ledgerEvents.map(e => {
+      currentBalance = currentBalance + e.credit - e.debit;
+      return { ...e, balance: currentBalance };
+    });
+
+    // Current unadjusted balance from advances
+    const activeAdvances = await AdvancePayment.find({ ...query, staffId: id, status: 'ACTIVE' });
+    const totalAdvances = activeAdvances.reduce((sum, a) => sum + a.amount, 0);
+
+    return res.json({ currentBalance, totalAdvances, ledger: ledger.reverse() }); // Reverse so newest is first
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
 };

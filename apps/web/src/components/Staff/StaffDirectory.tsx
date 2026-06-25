@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useBranchStore } from '../../store/branchStore';
 import { api } from '../../utils/api';
+import StaffLedgerModal from './StaffLedgerModal';
 
 const ROLE_COLORS: Record<string, string> = {
   SUPER_OWNER: 'bg-purple-100 text-purple-700',
@@ -40,9 +41,10 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
   // Modal states
   const [showAdd, setShowAdd] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
-  const [detailStaff, setDetailStaff] = useState<any>(null);
+  const [detailStaff, setDetailStaff] = useState<any | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
+  const [showLedgerModal, setShowLedgerModal] = useState<boolean>(false);
   const [transferStaffName, setTransferStaffName] = useState('');
   const [targetBranchId, setTargetBranchId] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
@@ -383,9 +385,9 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
               </DetailSection>
             )}
 
-            {/* Advance Balance */}
+            {/* Advance Balance / Ledger */}
             {detailStaff.advanceBalance !== undefined && (
-              <DetailSection title="Advance Payments" icon={<IndianRupee size={14} />}>
+              <DetailSection title="Ledger & Advances" icon={<IndianRupee size={14} />}>
                 <div className={`rounded-lg p-3 text-center ${detailStaff.advanceBalance > 0 ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
                   <p className={`text-2xl font-black ${detailStaff.advanceBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                     ₹{detailStaff.advanceBalance.toLocaleString('en-IN')}
@@ -394,19 +396,12 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                     {detailStaff.advanceBalance > 0 ? 'Outstanding Advance Balance' : 'No Active Advances'}
                   </p>
                 </div>
-                {detailStaff.activeAdvances?.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {detailStaff.activeAdvances.map((a: any) => (
-                      <div key={a._id} className="flex justify-between text-xs py-1.5 border-b border-gray-100 last:border-0">
-                        <div>
-                          <span className="text-gray-700 font-medium">₹{a.amount.toLocaleString('en-IN')}</span>
-                          {a.reason && <span className="text-gray-400 ml-1.5">— {a.reason}</span>}
-                        </div>
-                        <span className="text-gray-400">{new Date(a.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <button
+                  onClick={() => setShowLedgerModal(true)}
+                  className="w-full mt-2 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
+                >
+                  View Full Salary Ledger <ChevronRight size={14} />
+                </button>
               </DetailSection>
             )}
 
@@ -639,6 +634,11 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Ledger Modal */}
+      {showLedgerModal && detailStaff && (
+        <StaffLedgerModal staff={detailStaff} onClose={() => setShowLedgerModal(false)} />
       )}
     </div>
   );

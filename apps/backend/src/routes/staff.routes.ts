@@ -15,8 +15,9 @@ router.post('/', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), validat
 router.put('/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), staff.updateStaff);
 router.delete('/:id', requireRole([UserRole.OWNER]), staff.removeStaff);
 
-// Staff Detail & Transfer
+// Staff Detail & Ledger & Transfer
 router.get('/detail/:id', staff.getStaffDetail);
+router.get('/ledger/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), staff.getStaffLedger);
 router.post('/:id/transfer', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), staff.transferStaff);
 
 // Attendance
