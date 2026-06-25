@@ -53,6 +53,8 @@ export default function DirectPOS() {
   const [customItemPrice, setCustomItemPrice] = useState('');
   const [customItemGst, setCustomItemGst] = useState('0');
 
+  const [itemForVariant, setItemForVariant] = useState<any>(null);
+
   const [paying, setPaying] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -241,7 +243,12 @@ export default function DirectPOS() {
       navigate(`/invoice/${payRes.data.invoice._id}`);
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
-      alert(e?.response?.data?.error || 'Failed to create invoice. Please try again.');
+      const errorData = e?.response?.data;
+      const errMsg = typeof errorData?.error === 'string' ? errorData.error 
+                   : errorData?.message ? errorData.message 
+                   : errorData?.error ? JSON.stringify(errorData.error)
+                   : 'Failed to create invoice. Please try again.';
+      alert(errMsg);
     } finally {
       setPaying(false);
     }
@@ -436,7 +443,13 @@ export default function DirectPOS() {
               {filteredMenu.map((item: any) => (
                 <div
                   key={item._id}
-                  onClick={() => addMenuToCart(item)}
+                  onClick={() => {
+                    if (item.variants && item.variants.length > 1) {
+                      setItemForVariant(item);
+                    } else {
+                      addMenuToCart(item, 0);
+                    }
+                  }}
                   className="bg-white border border-gray-100 rounded-xl p-3 cursor-pointer hover:border-saffron hover:shadow-md transition-all flex flex-col"
                 >
                   {item.imageUrls?.[0] || item.imageUrl ? (
@@ -644,6 +657,57 @@ export default function DirectPOS() {
           onScan={(barcode) => { handleBarcodeScan(barcode); setShowCamera(false); }}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
+      {/* Variant Selection Modal */}
+      {itemForVariant && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Choose Variant</h3>
+              <button onClick={() => setItemForVariant(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mb-4 flex items-center gap-3">
+               {itemForVariant.imageUrls?.[0] || itemForVariant.imageUrl ? (
+                 <img src={getMediaUrl(itemForVariant.imageUrls?.[0] || itemForVariant.imageUrl)} alt={itemForVariant.name} className="w-16 h-16 object-cover rounded-lg border border-gray-100" />
+               ) : (
+                 <div className="w-16 h-16 bg-gray-50 border border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-300">
+                   <ImageIcon size={20} />
+                 </div>
+               )}
+               <div>
+                 <p className="font-bold text-gray-800">{itemForVariant.name}</p>
+                 {itemForVariant.hindiName && <p className="text-xs text-gray-500">{itemForVariant.hindiName}</p>}
+               </div>
+            </div>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {itemForVariant.variants.map((v: any, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    addMenuToCart(itemForVariant, idx);
+                    setItemForVariant(null);
+                  }}
+                  className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-maroon hover:bg-red-50 transition-all text-left"
+                >
+                  <span className="font-semibold text-sm text-gray-800">{v.name}</span>
+                  <div className="text-right">
+                    {v.specialPriceINR && v.specialPriceINR < v.priceINR ? (
+                      <>
+                        <span className="text-xs text-gray-400 line-through mr-1.5">₹{v.priceINR}</span>
+                        <span className="font-bold text-maroon">₹{v.specialPriceINR}</span>
+                      </>
+                    ) : (
+                      <span className="font-bold text-gray-800">₹{v.priceINR}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

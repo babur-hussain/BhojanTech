@@ -169,6 +169,7 @@ export default function Bookings() {
   const { selectedBranchId } = useBranchStore();
   
   const [showMenuPopup, setShowMenuPopup] = useState(false);
+  const [itemForVariant, setItemForVariant] = useState<any>(null);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
   const [menuFilter, setMenuFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
   const [selectedMenuCategory, setSelectedMenuCategory] = useState<string>('all');
@@ -264,9 +265,14 @@ export default function Bookings() {
       setShowModal(false);
       setFormData({ ...formData, customerName: '', customerPhone: '', specialRequests: '', depositAmount: 0 });
       fetchBookings();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create booking', err);
-      alert('Failed to create booking');
+      const errorData = err?.response?.data;
+      const errMsg = typeof errorData?.error === 'string' ? errorData.error 
+                   : errorData?.message ? errorData.message 
+                   : errorData?.error ? JSON.stringify(errorData.error)
+                   : 'Failed to create booking';
+      alert(errMsg);
     }
   };
 
@@ -890,6 +896,64 @@ export default function Bookings() {
         </div>
       )}
 
+      {/* Variant Selection Modal */}
+      {itemForVariant && (
+        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Choose Variant</h3>
+              <button onClick={() => setItemForVariant(null)} className="text-gray-400 hover:text-gray-600">
+                <XCircle size={24} />
+              </button>
+            </div>
+            <div className="mb-4 flex items-center gap-3">
+               {itemForVariant.imageUrls?.[0] || itemForVariant.imageUrl ? (
+                 <img src={getMediaUrl(itemForVariant.imageUrls?.[0] || itemForVariant.imageUrl)} alt={itemForVariant.name} className="w-16 h-16 object-cover rounded-lg border border-gray-100" />
+               ) : (
+                 <div className="w-16 h-16 bg-gray-50 border border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-300">
+                   <span className="text-gray-300 text-2xl font-black">{itemForVariant.name.charAt(0)}</span>
+                 </div>
+               )}
+               <div>
+                 <p className="font-bold text-gray-800">{itemForVariant.name}</p>
+                 {itemForVariant.hindiName && <p className="text-xs text-gray-500">{itemForVariant.hindiName}</p>}
+               </div>
+            </div>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {itemForVariant.variants.map((v: any, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setFormData({
+                      ...formData,
+                      productName: itemForVariant.name,
+                      totalAmount: v.specialPriceINR || v.priceINR || 0,
+                      depositAmount: 0,
+                      weight: v.name && v.name.toLowerCase() !== 'default' ? v.name : '1'
+                    });
+                    setItemForVariant(null);
+                    setShowMenuPopup(false);
+                  }}
+                  className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-maroon hover:bg-red-50 transition-all text-left"
+                >
+                  <span className="font-semibold text-sm text-gray-800">{v.name}</span>
+                  <div className="text-right">
+                    {v.specialPriceINR && v.specialPriceINR < v.priceINR ? (
+                      <>
+                        <span className="text-xs text-gray-400 line-through mr-1.5">₹{v.priceINR}</span>
+                        <span className="font-bold text-maroon">₹{v.specialPriceINR}</span>
+                      </>
+                    ) : (
+                      <span className="font-bold text-gray-800">₹{v.priceINR}</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Full Menu Selection Popup */}
       {showMenuPopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900 bg-opacity-60 backdrop-blur-sm">
@@ -1006,14 +1070,19 @@ export default function Bookings() {
                     key={item._id}
                     type="button"
                     onClick={() => {
-                      setFormData({
-                        ...formData,
-                        productName: item.name,
-                        totalAmount: item.variants?.[0]?.priceINR || 0,
-                        depositAmount: 0,
-                        weight: item.variants?.[0]?.name && item.variants[0].name.toLowerCase() !== 'default' ? item.variants[0].name : '1'
-                      });
-                      setShowMenuPopup(false);
+                      if (item.variants && item.variants.length > 1) {
+                        setItemForVariant(item);
+                      } else {
+                        const variant = item.variants?.[0];
+                        setFormData({
+                          ...formData,
+                          productName: item.name,
+                          totalAmount: variant?.specialPriceINR || variant?.priceINR || 0,
+                          depositAmount: 0,
+                          weight: variant?.name && variant.name.toLowerCase() !== 'default' ? variant.name : '1'
+                        });
+                        setShowMenuPopup(false);
+                      }
                     }}
                     className="flex flex-col items-center text-center p-4 bg-white rounded-2xl border border-gray-200 hover:border-maroon hover:shadow-lg transition-all group"
                   >
