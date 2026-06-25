@@ -157,30 +157,51 @@ async function getQZ() {
   }
 }
 
-/** Connect to QZ Tray WebSocket if not already connected */
+let qzConnectionPromise: Promise<boolean> | null = null;
+
+/** Connect to QZ Tray WebSocket robustly */
 async function ensureConnected(): Promise<boolean> {
   try {
     const q = await getQZ();
     if (!q) return false;
-    if (q.websocket.isActive()) return true;
-    await q.websocket.connect({ retries: 1, delay: 300 });
-    return q.websocket.isActive();
-  } catch {
+
+    // Wait for any existing connection attempt to complete
+    if (qzConnectionPromise) {
+      await qzConnectionPromise;
+    }
+
+    // If fully connected and ready, return true
+    if (q.websocket.isActive() && q.websocket.getConnection()?.readyState === 1) {
+      return true;
+    }
+
+    // Otherwise, initiate a new connection and wait for it
+    qzConnectionPromise = (async () => {
+      try {
+        if (q.websocket.isActive()) {
+          // It's in CONNECTING state or stuck, forcefully disconnect first to prevent errors
+          q.websocket.disconnect();
+        }
+        await q.websocket.connect({ retries: 2, delay: 500 });
+        return true;
+      } catch (err) {
+        console.error('QZ connection failed:', err);
+        return false;
+      } finally {
+        qzConnectionPromise = null;
+      }
+    })();
+
+    return await qzConnectionPromise;
+  } catch (err) {
+    console.error('QZ initialization failed:', err);
     return false;
   }
 }
 
 /** Returns true if QZ Tray WebSocket is currently active */
 export async function isQZConnected(): Promise<boolean> {
-  try {
-    const q = await getQZ();
-    if (!q) return false;
-    if (q.websocket.isActive()) return true;
-    await q.websocket.connect({ retries: 0, delay: 0 });
-    return q.websocket.isActive();
-  } catch {
-    return false;
-  }
+  return await ensureConnected();
 }
 
 /**

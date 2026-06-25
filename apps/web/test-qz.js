@@ -1,2 +1,2 @@
 import qz from 'qz-tray';
-console.log(qz.security);
+console.log(qz.websocket.connect.toString());
