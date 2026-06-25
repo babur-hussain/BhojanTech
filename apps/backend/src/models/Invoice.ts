@@ -55,7 +55,7 @@ export interface IInvoice extends Document {
 
 const InvoiceSchema: Schema = new Schema(
   {
-    invoiceNumber: { type: String, required: true, unique: true },
+    invoiceNumber: { type: String, required: true },
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
     branchId: { type: Schema.Types.ObjectId, ref: 'Branch', index: true },
     orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
@@ -82,6 +82,8 @@ const InvoiceSchema: Schema = new Schema(
   },
   { timestamps: true }
 );
+
+InvoiceSchema.index({ restaurantId: 1, invoiceNumber: 1 }, { unique: true });
 
 // NOTE: Daily sequence generation is now handled by the InvoiceSequence model
 // which uses atomic $inc operations for collision-free numbering.
