@@ -231,7 +231,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
             disabled={isAllBranches}
             title={isAllBranches ? "Select a specific branch to invite staff" : ""}
             className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
-            <Plus size={16} /> Invite Staff
+            <Plus size={16} /> Create Staff
           </button>
         </div>
 
@@ -468,7 +468,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b bg-cream rounded-t-xl flex items-center justify-between">
               <div>
-                <h2 className="font-bold text-maroon text-lg">{editingStaffId ? 'Edit Staff Member' : 'Invite Staff Member'}</h2>
+                <h2 className="font-bold text-maroon text-lg">{editingStaffId ? 'Edit Staff Member' : 'Create Staff Member'}</h2>
                 {!editingStaffId && <p className="text-xs text-gray-500 mt-0.5">They'll receive an SMS to download the app</p>}
               </div>
               <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
