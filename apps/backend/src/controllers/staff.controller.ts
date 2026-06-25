@@ -29,6 +29,13 @@ export const createStaff = async (req: AuthRequest, res: Response) => {
       name, phone, role, designation, salaryType, salaryAmount, shift, joiningDate,
       email, address, emergencyContact, bankDetails
     } = req.body;
+
+    // First check if phone exists in User collection
+    const existingUser = await mongoose.model('User').findOne({ phoneNumber: phone });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User with this phone number already exists' });
+    }
+
     const member = await StaffMember.create({
       name, phone, role, designation, salaryType, salaryAmount, shift, email, address,
       emergencyContact, bankDetails,
@@ -37,6 +44,18 @@ export const createStaff = async (req: AuthRequest, res: Response) => {
       restaurantId: req.user!.restaurantId,
       branchId,
     });
+
+    // Create the User record so they can login via phone auth
+    await mongoose.model('User').create({
+      firebaseUid: `pending_${require('crypto').randomUUID()}`,
+      phoneNumber: phone,
+      email,
+      role: role || 'STAFF',
+      name,
+      restaurantId: req.user!.restaurantId,
+      branchId: branchId || undefined,
+    });
+
     return res.status(201).json(member);
   } catch (err: any) {
     console.error('Failed to create staff:', err);
@@ -73,6 +92,23 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
       { $set: updateData }, { new: true }
     );
     if (!member) return res.status(404).json({ error: 'Not found' });
+
+    // Sync User record if phone is available
+    if (member.phone) {
+      const userUpdate: any = {};
+      if (name !== undefined) userUpdate.name = name;
+      if (role !== undefined) userUpdate.role = role;
+      if (email !== undefined) userUpdate.email = email;
+      if (isActive !== undefined) userUpdate.isActive = isActive;
+      
+      if (Object.keys(userUpdate).length > 0) {
+        await mongoose.model('User').findOneAndUpdate(
+          { phoneNumber: member.phone },
+          { $set: userUpdate }
+        );
+      }
+    }
+
     return res.json(member);
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
@@ -81,10 +117,19 @@ export const removeStaff = async (req: AuthRequest, res: Response) => {
   try {
     const query = getBaseQuery(req);
     query._id = req.params.id;
-    await StaffMember.findOneAndUpdate(
+    const member = await StaffMember.findOneAndUpdate(
       query,
-      { isActive: false }
+      { isActive: false },
+      { new: true }
     );
+    
+    if (member && member.phone) {
+      await mongoose.model('User').findOneAndUpdate(
+        { phoneNumber: member.phone },
+        { isActive: false }
+      );
+    }
+    
     return res.json({ success: true });
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };

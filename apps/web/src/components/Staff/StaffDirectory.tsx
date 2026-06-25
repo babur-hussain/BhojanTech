@@ -229,7 +229,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
           </select>
           <button onClick={openAddModal}
             disabled={isAllBranches}
-            title={isAllBranches ? "Select a specific branch to invite staff" : ""}
+            title={isAllBranches ? "Select a specific branch to create staff" : ""}
             className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg text-sm font-semibold ${isAllBranches ? 'bg-gray-400 cursor-not-allowed' : 'bg-maroon hover:bg-opacity-90'}`}>
             <Plus size={16} /> Create Staff
           </button>
@@ -591,7 +591,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                 <button onClick={() => setShowAdd(false)} className="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
                 <button onClick={handleSave} disabled={isSubmitting || !form.name || !form.phone}
                   className="px-5 py-2 bg-maroon text-white rounded-lg text-sm font-semibold disabled:opacity-50">
-                  {isSubmitting ? 'Saving...' : (editingStaffId ? 'Save Changes' : 'Send Invite SMS')}
+                  {isSubmitting ? 'Saving...' : (editingStaffId ? 'Save Changes' : 'Create Staff')}
                 </button>
               </div>
             </div>
