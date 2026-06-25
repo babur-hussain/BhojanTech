@@ -45,6 +45,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
   const [showLedgerModal, setShowLedgerModal] = useState<boolean>(false);
+  const [ledgerModalAddAdvance, setLedgerModalAddAdvance] = useState<boolean>(false);
   const [transferStaffName, setTransferStaffName] = useState('');
   const [targetBranchId, setTargetBranchId] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
@@ -396,12 +397,20 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                     {detailStaff.advanceBalance > 0 ? 'Outstanding Advance Balance' : 'No Active Advances'}
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowLedgerModal(true)}
-                  className="w-full mt-2 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
-                >
-                  View Full Salary Ledger <ChevronRight size={14} />
-                </button>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => { setLedgerModalAddAdvance(true); setShowLedgerModal(true); }}
+                    className="flex-1 py-2 bg-white border border-orange-200 text-orange-600 rounded-lg text-xs font-bold hover:bg-orange-50 transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Plus size={14} /> Give Advance
+                  </button>
+                  <button
+                    onClick={() => { setLedgerModalAddAdvance(false); setShowLedgerModal(true); }}
+                    className="flex-1 py-2 bg-white border border-blue-200 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"
+                  >
+                    Full Ledger <ChevronRight size={14} />
+                  </button>
+                </div>
               </DetailSection>
             )}
 
@@ -432,8 +441,29 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">₹{s.netPayable.toLocaleString('en-IN')}</span>
                       {s.isPaid
-                        ? <span className="text-green-600"><CheckCircle size={12} /></span>
-                        : <span className="text-amber-500 text-[10px] font-medium">Pending</span>
+                        ? <span className="text-green-600 flex items-center gap-1"><CheckCircle size={12} /> Paid</span>
+                        : <div className="flex items-center gap-1.5">
+                            <span className="text-amber-500 text-[10px] font-medium">Pending</span>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await api.patch(`/staff/payroll/${s._id}/paid`);
+                                  // Optimistically update the detailStaff state
+                                  setDetailStaff({
+                                    ...detailStaff,
+                                    salaryHistory: detailStaff.salaryHistory.map((sh: any) => sh._id === s._id ? { ...sh, isPaid: true } : sh)
+                                  });
+                                } catch (err) {
+                                  console.error('Failed to mark salary paid', err);
+                                  alert('Failed to mark salary as paid');
+                                }
+                              }}
+                              className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold hover:bg-green-200 transition-colors"
+                            >
+                              Pay Now
+                            </button>
+                          </div>
                       }
                     </div>
                   </div>
@@ -638,7 +668,11 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
 
       {/* Ledger Modal */}
       {showLedgerModal && detailStaff && (
-        <StaffLedgerModal staff={detailStaff} onClose={() => setShowLedgerModal(false)} />
+        <StaffLedgerModal 
+          staff={detailStaff} 
+          defaultShowAddAdvance={ledgerModalAddAdvance}
+          onClose={() => { setShowLedgerModal(false); setLedgerModalAddAdvance(false); }} 
+        />
       )}
     </div>
   );

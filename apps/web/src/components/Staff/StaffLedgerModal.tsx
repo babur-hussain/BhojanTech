@@ -18,10 +18,10 @@ interface LedgerResponse {
   ledger: LedgerEvent[];
 }
 
-export default function StaffLedgerModal({ staff, onClose }: { staff: any, onClose: () => void }) {
+export default function StaffLedgerModal({ staff, onClose, defaultShowAddAdvance = false }: { staff: any, onClose: () => void, defaultShowAddAdvance?: boolean }) {
   const [data, setData] = useState<LedgerResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAddAdvance, setShowAddAdvance] = useState(false);
+  const [showAddAdvance, setShowAddAdvance] = useState(defaultShowAddAdvance);
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advanceReason, setAdvanceReason] = useState('');
   const [savingAdvance, setSavingAdvance] = useState(false);
