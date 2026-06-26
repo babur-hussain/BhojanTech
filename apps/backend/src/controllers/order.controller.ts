@@ -18,9 +18,9 @@ export const getActiveOrders = async (req: AuthRequest, res: Response) => {
     // Include PAID orders so that Takeaway / Direct Invoices remain on LiveOrders until COMPLETED
     query.status = { $in: ['OPEN', 'BILLED', 'PAID'] };
 
-    // Auto-close stale orders older than 48 hours (2 days)
-    const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const staleQuery = { ...query, createdAt: { $lte: twoDaysAgo } };
+    // Auto-close stale orders older than 24 hours (1 day)
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const staleQuery = { ...query, createdAt: { $lte: twentyFourHoursAgo } };
     
     const staleOrders = await Order.find(staleQuery).select('_id').lean();
     if (staleOrders.length > 0) {
