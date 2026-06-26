@@ -194,18 +194,12 @@ function notifyConnectionChange(connected: boolean) {
 // ── Pure status check ───────────────────────────────────────────────────────
 
 /**
- * Returns true if the QZ Tray WebSocket is currently active.
- * This is a PURE STATUS CHECK — it does NOT attempt to connect.
- * Safe to call from health-check timers without side effects.
+ * Check if QZ Tray is connected, and attempt to connect if it is not.
+ * Since ensureConnected is idempotent and handles fast-paths safely,
+ * this is safe to call from health checks or initial mounts.
  */
 export async function isQZConnected(): Promise<boolean> {
-  try {
-    const q = await getQZ();
-    if (!q) return false;
-    return q.websocket.isActive();
-  } catch {
-    return false;
-  }
+  return await ensureConnected();
 }
 
 // ── Close & error callbacks (registered once per connection) ────────────────
