@@ -159,7 +159,8 @@ async function getQZ() {
 
 let qzConnectionPromise: Promise<boolean> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let closeListenerAttached = false;
+let intentionalDisconnect = false;  // flag to suppress auto-reconnect on explicit disconnect
+let isReconnecting = false;         // mutex to prevent re-entrant reconnect loops
 
 // ── Connection-change subscription (used by useQZTray hook) ─────────────────
 type ConnectionChangeCallback = (connected: boolean) => void;
@@ -177,33 +178,31 @@ function notifyConnectionChange(connected: boolean) {
   });
 }
 
-/** Attach a one-time close/error listener that auto-reconnects */
-function attachCloseListener(q: any) {
-  if (closeListenerAttached) return;
-  closeListenerAttached = true;
-
-  const handleClose = () => {
-    closeListenerAttached = false;
-    console.warn('[QZ Tray] WebSocket closed unexpectedly — scheduling auto-reconnect…');
-    notifyConnectionChange(false);
-    scheduleReconnect();
-  };
-
+/**
+ * Register the closed-callback via QZ Tray's official API.
+ * setClosedCallbacks fires for BOTH unexpected drops AND intentional disconnect(),
+ * so we use the `intentionalDisconnect` flag to tell them apart.
+ */
+function registerCloseCallback(q: any) {
   try {
-    // qz-tray exposes a setClosedCallbacks helper
-    q.websocket.setClosedCallbacks(handleClose);
-  } catch {
-    // Fallback: listen on the raw WebSocket object
-    try {
-      const ws = q.websocket.getConnection();
-      if (ws) {
-        ws.onclose = handleClose;
-        ws.onerror = () => {
-          console.warn('[QZ Tray] WebSocket error detected');
-          handleClose();
-        };
+    q.websocket.setClosedCallbacks([
+      function onQZClosed() {
+        if (intentionalDisconnect) {
+          // This was our own disconnect() call (e.g. during reconnect cleanup).
+          // Reset the flag and do NOT auto-reconnect.
+          intentionalDisconnect = false;
+          console.log('[QZ Tray] Intentional disconnect completed.');
+          return;
+        }
+
+        // Unexpected close — QZ Tray died, network hiccup, browser killed WS, etc.
+        console.warn('[QZ Tray] WebSocket closed unexpectedly — scheduling auto-reconnect…');
+        notifyConnectionChange(false);
+        scheduleReconnect();
       }
-    } catch { /* best-effort */ }
+    ]);
+  } catch (e) {
+    console.warn('[QZ Tray] Could not register close callback:', e);
   }
 }
 
@@ -211,7 +210,7 @@ function attachCloseListener(q: any) {
 function scheduleReconnect(attempt = 0) {
   if (reconnectTimer) clearTimeout(reconnectTimer);
 
-  const delay = Math.min(1000 * Math.pow(2, attempt), 30000); // 1s → 2s → 4s → … → 30s cap
+  const delay = Math.min(1000 * Math.pow(2, attempt), 30_000); // 1s → 2s → 4s → … → 30s cap
   console.log(`[QZ Tray] Reconnect attempt ${attempt + 1} in ${delay}ms…`);
 
   reconnectTimer = setTimeout(async () => {
@@ -223,24 +222,47 @@ function scheduleReconnect(attempt = 0) {
   }, delay);
 }
 
-/** Low-level connect (no recursion guard — callers must hold the mutex) */
+/**
+ * Low-level connect. Handles teardown of stale connections safely.
+ * Uses `intentionalDisconnect` flag so our close-callback doesn't re-enter.
+ */
 async function doConnect(): Promise<boolean> {
+  if (isReconnecting) {
+    // Another doConnect is already in progress — don't stack up
+    return false;
+  }
+  isReconnecting = true;
+
   try {
     const q = await getQZ();
     if (!q) return false;
 
-    // If already fully open, nothing to do
+    // If the WebSocket is already fully open and healthy, just ensure callback is attached
     if (q.websocket.isActive()) {
-      const ws = q.websocket.getConnection();
-      if (ws && ws.readyState === 1) {
-        attachCloseListener(q);
-        notifyConnectionChange(true);
-        return true;
+      try {
+        const ws = q.websocket.getConnection();
+        if (ws && ws.readyState === 1) {
+          registerCloseCallback(q);
+          notifyConnectionChange(true);
+          return true;
+        }
+      } catch { /* getConnection may not exist in all versions */ }
+
+      // Connection exists but isn't fully open (CONNECTING / CLOSING).
+      // Tear it down safely before reconnecting.
+      try {
+        intentionalDisconnect = true;
+        await q.websocket.disconnect();
+      } catch {
+        // disconnect() rejects if already closing or no connection — that's fine
+        intentionalDisconnect = false;
       }
-      // Stuck in CONNECTING / CLOSING — tear down first
-      try { await q.websocket.disconnect(); } catch { /* ignore */ }
+
+      // Small delay to let QZ Tray clean up internally
+      await new Promise(r => setTimeout(r, 300));
     }
 
+    // Now connect fresh
     await q.websocket.connect({
       retries: 5,       // generous retries on each attempt
       delay:   1,       // 1 second between retries
@@ -248,13 +270,15 @@ async function doConnect(): Promise<boolean> {
     });
 
     console.log('[QZ Tray] WebSocket connected ✅');
-    attachCloseListener(q);
+    registerCloseCallback(q);
     notifyConnectionChange(true);
     return true;
   } catch (err) {
     console.error('[QZ Tray] Connection attempt failed:', err);
     notifyConnectionChange(false);
     return false;
+  } finally {
+    isReconnecting = false;
   }
 }
 
@@ -266,11 +290,13 @@ async function ensureConnected(): Promise<boolean> {
 
     // Fast path — already connected and healthy
     if (q.websocket.isActive()) {
-      const ws = q.websocket.getConnection();
-      if (ws && ws.readyState === 1) {
-        attachCloseListener(q);
-        return true;
-      }
+      try {
+        const ws = q.websocket.getConnection();
+        if (ws && ws.readyState === 1) {
+          registerCloseCallback(q);
+          return true;
+        }
+      } catch { /* getConnection may not exist */ }
     }
 
     // If another connect is in-flight, piggyback on it
@@ -838,6 +864,20 @@ async function _printESCPOS(escpos: string, printerName: string | null) {
   await q.print(config, [
     { type: 'raw', format: 'plain', data: escpos },
   ]);
+
+  // ── Post-print health check ────────────────────────────────────────────────
+  // After a print, re-register the close callback in case QZ Tray's internal
+  // state was modified during the print cycle. Also verify the connection is
+  // still alive — if not, kick off reconnect immediately.
+  try {
+    if (q.websocket.isActive()) {
+      registerCloseCallback(q);
+    } else {
+      console.warn('[QZ Tray] Connection dropped after print — reconnecting…');
+      notifyConnectionChange(false);
+      scheduleReconnect();
+    }
+  } catch { /* best-effort — don't let post-print check break the print flow */ }
 }
 
 function popupPrint(receiptEl: HTMLElement | null) {
