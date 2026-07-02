@@ -25,6 +25,7 @@ import {
 } from '../services/loyaltyService';
 import { Feedback } from '../models/Feedback';
 import { RetailItem } from '../models/RetailItem';
+import { sendInvoiceWA } from '../services/whatsappService';
 
 export const getInvoice = async (req: AuthRequest, res: Response) => {
   try {
@@ -544,6 +545,15 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       type: 'ORDER_PAID', orderId: order._id,
     });
 
+    // Send Invoice via WhatsApp if customerPhone is present
+    if (customerPhone) {
+      const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
+      const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
+      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber).catch(err => {
+        console.error('[WhatsApp] Failed to send invoice:', err);
+      });
+    }
+
     return res.status(201).json({ invoice });
   } catch (error: any) {
     console.error('Payment Error:', error);
@@ -833,6 +843,15 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       ? `restaurant_${restaurantId}_branch_${branchId}`
       : `restaurant_${restaurantId}`;
     io.to(room).emit('order_update', { type: 'NEW_ORDER', order });
+
+    // Send Invoice via WhatsApp if customerPhone is present
+    if (customerPhone) {
+      const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
+      const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
+      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber).catch(err => {
+        console.error('[WhatsApp] Failed to send invoice:', err);
+      });
+    }
 
     return res.status(201).json({ invoice, loyaltyInfo, order });
   } catch (err) {
