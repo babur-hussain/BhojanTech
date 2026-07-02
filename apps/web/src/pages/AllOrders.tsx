@@ -5,7 +5,7 @@ import {
   UtensilsCrossed, Globe, ShoppingBag, CheckCircle2, Clock, Receipt, XCircle, ChevronDown, ChevronUp, ExternalLink, Printer
 } from 'lucide-react';
 import { api } from '../utils/api';
-import { toast } from 'react-hot-toast';
+
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { useAuth } from '../context/AuthContext';
@@ -153,11 +153,11 @@ export default function AllOrders() {
     }
     
     try {
-      toast.loading('Sending WhatsApp...', { id: 'wa' });
+      
       await api.post(`/billing/whatsapp/${orderId}`, { customerPhone: targetPhone });
-      toast.success('WhatsApp Receipt Sent!', { id: 'wa' });
+      alert('WhatsApp Receipt Sent Successfully!');
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to send WhatsApp', { id: 'wa' });
+      alert(err.response?.data?.error || 'Failed to send WhatsApp');
     }
   };
 
