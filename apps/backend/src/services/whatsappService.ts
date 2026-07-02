@@ -248,7 +248,9 @@ export const sendWhatsAppDocument = async (
     phoneNumber: string,
     documentUrl: string,
     caption: string = '',
-    correlationId?: string
+    correlationId?: string,
+    customApiKey?: string,
+    customApiSecret?: string
 ): Promise<LoomiFlowResponse> => {
     if (!phoneNumber) return { success: false, error: 'No phone number provided' };
 
@@ -257,7 +259,7 @@ export const sendWhatsAppDocument = async (
         documentUrl,
         caption,
         correlationId: correlationId || crypto.randomUUID(),
-    });
+    }, 3, customApiKey, customApiSecret);
 };
 
 // ─── Convenience wrappers for specific restaurant events ──────────────────────
@@ -293,7 +295,10 @@ export const sendInvoiceWA = async (
     invoiceNumber: string,
     context?: { restaurantId?: string, branchId?: string, customerName?: string, amount?: number, date?: Date, restaurantName?: string, paymentStatus?: string }
 ) => {
-    if (context?.restaurantId && context?.branchId) {
+    let apiKey: string | undefined;
+    let apiSecret: string | undefined;
+
+    if (context?.restaurantId) {
         try {
             const integration = await Integration.findOne({ 
                 restaurantId: context.restaurantId, 
@@ -301,6 +306,11 @@ export const sendInvoiceWA = async (
                 platform: 'LOOMIFLOW', 
                 status: 'ACTIVE' 
             });
+
+            if (integration) {
+                apiKey = integration.apiKey;
+                apiSecret = integration.apiSecret;
+            }
 
             if (integration && integration.whatsappConfig?.invoiceTemplateName) {
                 const config = integration.whatsappConfig;
@@ -339,8 +349,8 @@ export const sendInvoiceWA = async (
                         'en',
                         components,
                         `invoice-${invoiceNumber}`,
-                        integration.apiKey,
-                        integration.apiSecret
+                        apiKey,
+                        apiSecret
                     );
 
                     if (templateRes && templateRes.success === false) {
@@ -359,7 +369,7 @@ export const sendInvoiceWA = async (
         }
     }
 
-    return sendWhatsAppDocument(phone, invoiceUrl, `Invoice ${invoiceNumber}`, `invoice-${invoiceNumber}`);
+    return sendWhatsAppDocument(phone, invoiceUrl, `Invoice ${invoiceNumber}`, `invoice-${invoiceNumber}`, apiKey, apiSecret);
 };
 
 export const sendBookingWA = async (
