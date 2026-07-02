@@ -332,15 +332,20 @@ export const sendInvoiceWA = async (
                     components = [{ type: 'body', parameters }];
                 }
 
-                return sendWhatsAppTemplate(
-                    phone,
-                    config.invoiceTemplateName!,
-                    'en',
-                    components,
-                    `invoice-${invoiceNumber}`,
-                    integration.apiKey,
-                    integration.apiSecret
-                );
+                try {
+                    return await sendWhatsAppTemplate(
+                        phone,
+                        config.invoiceTemplateName!,
+                        'en',
+                        components,
+                        `invoice-${invoiceNumber}`,
+                        integration.apiKey,
+                        integration.apiSecret
+                    );
+                } catch (templateError: any) {
+                    logger.warn(`[WhatsApp] Template sending failed, falling back to document: ${templateError.message}`);
+                    // Fall back to document below
+                }
             }
         } catch (err) {
             logger.error(`[WhatsApp] Error fetching integration for invoice: ${err}`);
