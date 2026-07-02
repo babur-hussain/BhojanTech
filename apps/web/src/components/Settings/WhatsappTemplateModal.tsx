@@ -19,8 +19,12 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
     const [bookingTemplateName, setBookingTemplateName] = useState('');
     const [bookingMapping, setBookingMapping] = useState<Record<string, string>>({});
 
-    const MAPPABLE_FIELDS = [
-        'CustomerName', 'InvoiceNumber', 'InvoiceUrl', 'Amount', 'Date'
+    const INVOICE_FIELDS = [
+        'CustomerName', 'CustomerPhone', 'InvoiceNumber', 'InvoiceUrl', 'Amount', 'Date', 'RestaurantName', 'PaymentStatus'
+    ];
+
+    const BOOKING_FIELDS = [
+        'CustomerName', 'CustomerPhone', 'BookingDate', 'BookingTime', 'Guests', 'TableNumber', 'RestaurantName', 'BookingStatus'
     ];
 
     useEffect(() => {
@@ -85,6 +89,7 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
         mapping: Record<string, string>, 
         setMapping: any
     ) => {
+        const mappableFields = type === 'Invoice' ? INVOICE_FIELDS : BOOKING_FIELDS;
         const selectedTemplate = templates.find(t => t.name === templateName);
         
         let requiredVariables = 0;
@@ -133,7 +138,7 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
                                         className="flex-1 p-2 bg-white border rounded text-sm"
                                     >
                                         <option value="">-- Map Field --</option>
-                                        {MAPPABLE_FIELDS.map(f => (
+                                        {mappableFields.map(f => (
                                             <option key={f} value={f}>{f}</option>
                                         ))}
                                     </select>

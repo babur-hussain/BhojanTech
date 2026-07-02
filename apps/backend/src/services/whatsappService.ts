@@ -291,7 +291,7 @@ export const sendInvoiceWA = async (
     phone: string, 
     invoiceUrl: string, 
     invoiceNumber: string,
-    context?: { restaurantId?: string, branchId?: string, customerName?: string, amount?: number, date?: Date }
+    context?: { restaurantId?: string, branchId?: string, customerName?: string, amount?: number, date?: Date, restaurantName?: string, paymentStatus?: string }
 ) => {
     if (context?.restaurantId && context?.branchId) {
         try {
@@ -315,10 +315,13 @@ export const sendInvoiceWA = async (
                     let text = '';
                     switch (mappedField) {
                         case 'CustomerName': text = context.customerName || 'Customer'; break;
+                        case 'CustomerPhone': text = phone; break;
                         case 'InvoiceNumber': text = invoiceNumber; break;
                         case 'InvoiceUrl': text = invoiceUrl; break;
                         case 'Amount': text = context.amount ? context.amount.toString() : '0'; break;
                         case 'Date': text = context.date ? context.date.toLocaleDateString() : new Date().toLocaleDateString(); break;
+                        case 'RestaurantName': text = context.restaurantName || 'Our Restaurant'; break;
+                        case 'PaymentStatus': text = context.paymentStatus || 'Completed'; break;
                         default: text = 'N/A';
                     }
                     parameters.push({ type: 'text', text });
@@ -346,6 +349,66 @@ export const sendInvoiceWA = async (
 
     return sendWhatsAppDocument(phone, invoiceUrl, `Invoice ${invoiceNumber}`, `invoice-${invoiceNumber}`);
 };
+
+export const sendBookingWA = async (
+    phone: string, 
+    context: { restaurantId: string, branchId: string, customerName?: string, bookingDate?: Date, bookingTime?: string, guests?: number, tableNumber?: string, restaurantName?: string, bookingStatus?: string }
+) => {
+    try {
+        const integration = await Integration.findOne({ 
+            restaurantId: context.restaurantId, 
+            branchId: context.branchId, 
+            platform: 'LOOMIFLOW', 
+            status: 'ACTIVE' 
+        });
+
+        if (integration && integration.whatsappConfig?.bookingTemplateName) {
+            const config = integration.whatsappConfig;
+            const mapping = config.bookingTemplateMapping || {};
+            
+            // Map the variables based on the DB mapping config
+            const parameters = [];
+            for (let i = 1; i <= 10; i++) {
+                const mappedField = mapping[i.toString()];
+                if (!mappedField) break;
+                
+                let text = '';
+                switch (mappedField) {
+                    case 'CustomerName': text = context.customerName || 'Customer'; break;
+                    case 'CustomerPhone': text = phone; break;
+                    case 'BookingDate': text = context.bookingDate ? context.bookingDate.toLocaleDateString() : new Date().toLocaleDateString(); break;
+                    case 'BookingTime': text = context.bookingTime || 'N/A'; break;
+                    case 'Guests': text = context.guests ? context.guests.toString() : '1'; break;
+                    case 'TableNumber': text = context.tableNumber || 'N/A'; break;
+                    case 'RestaurantName': text = context.restaurantName || 'Our Restaurant'; break;
+                    case 'BookingStatus': text = context.bookingStatus || 'Confirmed'; break;
+                    default: text = 'N/A';
+                }
+                parameters.push({ type: 'text', text });
+            }
+
+            let components: any[] = [];
+            if (parameters.length > 0) {
+                components = [{ type: 'body', parameters }];
+            }
+
+            return sendWhatsAppTemplate(
+                phone,
+                config.bookingTemplateName!,
+                'en',
+                components,
+                `booking-${context.customerName}`,
+                integration.apiKey,
+                integration.apiSecret
+            );
+        }
+    } catch (err) {
+        logger.error(`[WhatsApp] Error fetching integration for booking: ${err}`);
+    }
+
+    return { success: false, error: 'No booking template configured' };
+};
+
 
 export const sendLowStockAlertWA = async (phone: string, items: string[]) => {
     const itemList = items.slice(0, 10).join('\n• ');
