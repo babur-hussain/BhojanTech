@@ -333,7 +333,7 @@ export const sendInvoiceWA = async (
                 }
 
                 try {
-                    return await sendWhatsAppTemplate(
+                    const templateRes = await sendWhatsAppTemplate(
                         phone,
                         config.invoiceTemplateName!,
                         'en',
@@ -342,9 +342,16 @@ export const sendInvoiceWA = async (
                         integration.apiKey,
                         integration.apiSecret
                     );
+
+                    if (templateRes && templateRes.success === false) {
+                        logger.warn(`[WhatsApp] Template sending failed, falling back to document: ${templateRes.error}`);
+                        // Do not return, let it fall through to sendWhatsAppDocument below
+                    } else {
+                        return templateRes;
+                    }
                 } catch (templateError: any) {
-                    logger.warn(`[WhatsApp] Template sending failed, falling back to document: ${templateError.message}`);
-                    // Fall back to document below
+                    logger.warn(`[WhatsApp] Template sending threw error, falling back to document: ${templateError.message}`);
+                    // Do not return, let it fall through to sendWhatsAppDocument below
                 }
             }
         } catch (err) {
