@@ -1049,13 +1049,17 @@ export const resendWhatsApp = async (req: AuthRequest, res: Response) => {
     const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
     const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
     
-    sendInvoiceWA(phone, invoiceUrl, invoice.invoiceNumber, {
+    const waRes = await sendInvoiceWA(phone, invoiceUrl, invoice.invoiceNumber, {
       restaurantId: req.user!.restaurantId,
-      branchId: order.branchId.toString(),
+      branchId: order.branchId ? order.branchId.toString() : '',
       customerName: order.customerName || undefined,
       amount: invoice.grandTotalINR,
       date: invoice.createdAt
-    }).catch(err => console.error('[WhatsApp] Resend failed:', err));
+    });
+
+    if (!waRes || waRes.success === false) {
+      return res.status(500).json({ error: waRes?.error || 'Failed to send WhatsApp via LoomiFlow API' });
+    }
 
     return res.json({ success: true, message: 'WhatsApp receipt sent' });
   } catch (err) {
