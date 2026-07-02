@@ -5,6 +5,7 @@ import {
   UtensilsCrossed, Globe, ShoppingBag, CheckCircle2, Clock, Receipt, XCircle, ChevronDown, ChevronUp, ExternalLink, Printer
 } from 'lucide-react';
 import { api } from '../utils/api';
+import { toast } from 'react-hot-toast';
 import { printReceipt, toWordsEN, type ReceiptData } from '../utils/thermalPrint';
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { useAuth } from '../context/AuthContext';
@@ -140,6 +141,23 @@ export default function AllOrders() {
     } finally {
       setPrintingId(null);
       setPrintPreview(null);
+    }
+  };
+
+  const handleResendWhatsApp = async (orderId: string, phone: string) => {
+    let targetPhone = phone;
+    if (!targetPhone || targetPhone === '9999999999') {
+      const p = prompt('Enter customer phone number with country code (e.g. 919876543210):');
+      if (!p) return;
+      targetPhone = p;
+    }
+    
+    try {
+      toast.loading('Sending WhatsApp...', { id: 'wa' });
+      await api.post(`/billing/whatsapp/${orderId}`, { customerPhone: targetPhone });
+      toast.success('WhatsApp Receipt Sent!', { id: 'wa' });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to send WhatsApp', { id: 'wa' });
     }
   };
 
@@ -362,6 +380,12 @@ export default function AllOrders() {
                             <button onClick={() => navigate(`/bill/${order._id}`)}
                               className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-maroon text-white rounded-lg hover:bg-opacity-90 font-semibold transition">
                               <ExternalLink size={12} /> Bill
+                            </button>
+                          )}
+                          {(order.status === 'PAID' || order.status === 'BILLED') && (
+                            <button onClick={() => handleResendWhatsApp(order._id, order.customerPhone)}
+                              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold transition">
+                              <i className="fa-brands fa-whatsapp"></i> WA
                             </button>
                           )}
                         </div>

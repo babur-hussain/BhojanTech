@@ -1031,3 +1031,35 @@ export const updateInvoice = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({ error: 'Server error while updating invoice' });
   }
 };
+
+export const resendWhatsApp = async (req: AuthRequest, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { customerPhone } = req.body;
+    
+    const order = await Order.findOne({ _id: orderId, restaurantId: req.user!.restaurantId });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    
+    const invoice = await Invoice.findOne({ orderId: order._id });
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    
+    const phone = customerPhone || order.customerPhone;
+    if (!phone) return res.status(400).json({ error: 'No phone number provided or saved for this order' });
+
+    const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
+    const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
+    
+    sendInvoiceWA(phone, invoiceUrl, invoice.invoiceNumber, {
+      restaurantId: req.user!.restaurantId,
+      branchId: order.branchId.toString(),
+      customerName: order.customerName || undefined,
+      amount: invoice.grandTotalINR,
+      date: invoice.createdAt
+    }).catch(err => console.error('[WhatsApp] Resend failed:', err));
+
+    return res.json({ success: true, message: 'WhatsApp receipt sent' });
+  } catch (err) {
+    console.error('Error resending WhatsApp:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};

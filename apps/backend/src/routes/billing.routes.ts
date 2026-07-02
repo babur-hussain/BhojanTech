@@ -21,6 +21,7 @@ router.post('/razorpay/order', validate(createRazorpayOrderSchema), billingCtrl.
 router.post('/generate/:orderId', billingCtrl.generateBill);
 router.post('/pay', validate(finalizeBillSchema), billingCtrl.processPayment);
 router.post('/direct', billingCtrl.createDirectBill);
+router.post('/whatsapp/:orderId', billingCtrl.resendWhatsApp);
 router.get('/eod', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), billingCtrl.eodSummary);
 
 export default router;
