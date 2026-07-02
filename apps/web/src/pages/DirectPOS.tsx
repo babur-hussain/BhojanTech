@@ -59,6 +59,7 @@ export default function DirectPOS() {
 
   const [paying, setPaying] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
+  const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerDob, setCustomerDob] = useState('');
@@ -253,6 +254,7 @@ export default function DirectPOS() {
           customerPhone: customerPhone || '9999999999',
           customerName: customerName.trim() || 'Walk-in Customer',
           customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
+          sendWhatsApp,
           items: menuCartItems.map(c => ({
             menuItemId: c.id,
             name: c.name,
@@ -299,6 +301,7 @@ export default function DirectPOS() {
           customerPhone: customerPhone || '9999999999',
           customerName: customerName.trim() || 'Walk-in Customer',
           customerDob: customerDob ? customerDob.split('/').reverse().join('-') : undefined,
+          sendWhatsApp,
           retailItems: [], // already in order, processPayment handles deduction
           additionalMenuItems: [],
         });
@@ -687,6 +690,19 @@ export default function DirectPOS() {
                 <span>₹{cart.filter(c => c.type === 'retail').reduce((s, c) => s + c.price * c.quantity, 0).toFixed(2)}</span>
               </div>
             )}
+
+            {/* WhatsApp Receipt Toggle */}
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                <span className="text-green-600 text-lg">📱</span> WhatsApp Receipt
+              </span>
+              <button
+                onClick={() => setSendWhatsApp(!sendWhatsApp)}
+                className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 ${sendWhatsApp ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${sendWhatsApp ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+            </div>
 
             {/* Payment Mode */}
             <div className="grid grid-cols-3 gap-1.5 mt-3">

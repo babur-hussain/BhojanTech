@@ -233,6 +233,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       razorpayPaymentId,
       retailItems = [],    // [{ _id, quantity }]
       additionalMenuItems = [], // [{ menuItemId, name, variantName, quantity, priceAtOrderTime, gstSlab }]
+      sendWhatsApp = true,
     } = req.body;
 
     const restaurantId = req.user!.restaurantId;
@@ -546,7 +547,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     });
 
     // Send Invoice via WhatsApp if customerPhone is present
-    if (customerPhone) {
+    if (customerPhone && sendWhatsApp !== false) {
       const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
       const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
       sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
@@ -851,7 +852,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     io.to(room).emit('order_update', { type: 'NEW_ORDER', order });
 
     // Send Invoice via WhatsApp if customerPhone is present
-    if (customerPhone) {
+    if (customerPhone && sendWhatsApp !== false) {
       const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
       const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
       sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
