@@ -549,7 +549,13 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     if (customerPhone) {
       const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
       const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
-      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber).catch(err => {
+      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
+        restaurantId: req.user!.restaurantId,
+        branchId: order.branchId.toString(),
+        customerName: customerName || undefined,
+        amount: invoice.grandTotalINR,
+        date: invoice.createdAt
+      }).catch(err => {
         console.error('[WhatsApp] Failed to send invoice:', err);
       });
     }
@@ -848,7 +854,13 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     if (customerPhone) {
       const CUSTOMER_APP_URL = process.env.CUSTOMER_APP_URL || 'https://customer.lfvs.in';
       const invoiceUrl = `${CUSTOMER_APP_URL}/invoice/${invoice._id}`;
-      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber).catch(err => {
+      sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
+        restaurantId: req.user!.restaurantId,
+        branchId: order.branchId.toString(),
+        customerName: customerName || undefined,
+        amount: invoice.grandTotalINR,
+        date: invoice.createdAt
+      }).catch(err => {
         console.error('[WhatsApp] Failed to send invoice:', err);
       });
     }

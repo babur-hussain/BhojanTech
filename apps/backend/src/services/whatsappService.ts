@@ -22,6 +22,7 @@
 
 import crypto from 'crypto';
 import logger from '../utils/logger';
+import { Integration } from '../models/Integration';
 
 const LOOMIFLOW_URL = process.env.LOOMIFLOW_API_URL;
 const LOOMIFLOW_API_KEY = process.env.LOOMIFLOW_API_KEY;
@@ -109,10 +110,15 @@ interface LoomiFlowResponse {
 
 async function callLoomiFlow(
     endpoint: string,
-    payload: Record<string, unknown>,
-    maxRetries = 3
+    payload: Record<string, unknown> | null,
+    maxRetries = 3,
+    customApiKey?: string,
+    customApiSecret?: string
 ): Promise<LoomiFlowResponse> {
-    if (!isConfigured()) {
+    const activeApiKey = customApiKey || LOOMIFLOW_API_KEY;
+    const activeApiSecret = customApiSecret || LOOMIFLOW_API_SECRET;
+
+    if (!LOOMIFLOW_URL || !activeApiKey || !activeApiSecret) {
         logger.info(`[WhatsApp] LoomiFlow not configured — message logged: ${JSON.stringify(payload)}`);
         return { success: false, messageId: null, fallback: true };
     }
@@ -123,24 +129,30 @@ async function callLoomiFlow(
     }
 
     const url = `${LOOMIFLOW_URL}${endpoint}`;
-    const method = 'POST';
-    const bodyStr = JSON.stringify(payload);
+    const method = payload ? 'POST' : 'GET';
+    const bodyStr = payload ? JSON.stringify(payload) : '';
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const timestamp = new Date().toISOString();
             const path = `/api/v1/external${endpoint}`;
-            const signature = signRequest(method, path, bodyStr, timestamp);
+            const stringToSign = `${timestamp}${method}${path}${bodyStr}`;
+            const signature = crypto
+                .createHmac('sha256', activeApiSecret!)
+                .update(stringToSign)
+                .digest('hex');
+
+            const headers: Record<string, string> = {
+                'x-api-key': activeApiKey!,
+                'x-timestamp': timestamp,
+                'x-signature': signature,
+            };
+            if (payload) headers['Content-Type'] = 'application/json';
 
             const response = await fetch(url, {
                 method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': LOOMIFLOW_API_KEY!,
-                    'x-timestamp': timestamp,
-                    'x-signature': signature,
-                },
-                body: bodyStr,
+                headers,
+                body: payload ? bodyStr : undefined,
                 signal: AbortSignal.timeout(15000), // 15s timeout per attempt
             });
 
@@ -200,6 +212,11 @@ export const sendWhatsAppNotification = async (
     });
 };
 
+export const fetchLoomiFlowTemplates = async (apiKey: string, apiSecret: string): Promise<any> => {
+    const res = await callLoomiFlow('/templates', null, 3, apiKey, apiSecret);
+    return res;
+};
+
 /**
  * Send a template WhatsApp message via LoomiFlow.
  * Templates are required for business-initiated conversations (outside the 24h window).
@@ -209,7 +226,9 @@ export const sendWhatsAppTemplate = async (
     templateName: string,
     languageCode: string = 'en',
     components?: any[],
-    correlationId?: string
+    correlationId?: string,
+    customApiKey?: string,
+    customApiSecret?: string
 ): Promise<LoomiFlowResponse> => {
     if (!phoneNumber) return { success: false, error: 'No phone number provided' };
 
@@ -219,7 +238,7 @@ export const sendWhatsAppTemplate = async (
         languageCode,
         components,
         correlationId: correlationId || crypto.randomUUID(),
-    });
+    }, 3, customApiKey, customApiSecret);
 };
 
 /**
@@ -268,7 +287,63 @@ export const sendStaffInviteWA = async (phone: string, restaurantName: string, i
     return sendWhatsAppNotification(phone, msg, `staff-invite-${phone}`);
 };
 
-export const sendInvoiceWA = async (phone: string, invoiceUrl: string, invoiceNumber: string) => {
+export const sendInvoiceWA = async (
+    phone: string, 
+    invoiceUrl: string, 
+    invoiceNumber: string,
+    context?: { restaurantId?: string, branchId?: string, customerName?: string, amount?: number, date?: Date }
+) => {
+    if (context?.restaurantId && context?.branchId) {
+        try {
+            const integration = await Integration.findOne({ 
+                restaurantId: context.restaurantId, 
+                branchId: context.branchId, 
+                platform: 'LOOMIFLOW', 
+                status: 'ACTIVE' 
+            });
+
+            if (integration && integration.whatsappConfig?.invoiceTemplateName) {
+                const config = integration.whatsappConfig;
+                const mapping = config.invoiceTemplateMapping || {};
+                
+                // Map the variables based on the DB mapping config
+                const parameters = [];
+                for (let i = 1; i <= 10; i++) {
+                    const mappedField = mapping[i.toString()];
+                    if (!mappedField) break;
+                    
+                    let text = '';
+                    switch (mappedField) {
+                        case 'CustomerName': text = context.customerName || 'Customer'; break;
+                        case 'InvoiceNumber': text = invoiceNumber; break;
+                        case 'InvoiceUrl': text = invoiceUrl; break;
+                        case 'Amount': text = context.amount ? context.amount.toString() : '0'; break;
+                        case 'Date': text = context.date ? context.date.toLocaleDateString() : new Date().toLocaleDateString(); break;
+                        default: text = 'N/A';
+                    }
+                    parameters.push({ type: 'text', text });
+                }
+
+                let components: any[] = [];
+                if (parameters.length > 0) {
+                    components = [{ type: 'body', parameters }];
+                }
+
+                return sendWhatsAppTemplate(
+                    phone,
+                    config.invoiceTemplateName!,
+                    'en',
+                    components,
+                    `invoice-${invoiceNumber}`,
+                    integration.apiKey,
+                    integration.apiSecret
+                );
+            }
+        } catch (err) {
+            logger.error(`[WhatsApp] Error fetching integration for invoice: ${err}`);
+        }
+    }
+
     return sendWhatsAppDocument(phone, invoiceUrl, `Invoice ${invoiceNumber}`, `invoice-${invoiceNumber}`);
 };
 

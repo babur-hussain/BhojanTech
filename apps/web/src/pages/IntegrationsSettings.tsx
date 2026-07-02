@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranchStore } from '../store/branchStore';
 import { api } from '../utils/api';
-import { RefreshCw, Play, Pause, Save } from 'lucide-react';
+import { RefreshCw, Play, Pause, Save, MessageCircle } from 'lucide-react';
+import WhatsappTemplateModal from '../components/Settings/WhatsappTemplateModal';
 
 interface IntegrationSetting {
     _id?: string;
-    platform: 'ZOMATO' | 'SWIGGY' | 'ONDC';
+    platform: 'ZOMATO' | 'SWIGGY' | 'ONDC' | 'LOOMIFLOW';
     restaurantIdOnPlatform: string;
     webhookSecret: string;
     status: 'ACTIVE' | 'PAUSED' | 'ERROR';
@@ -22,9 +23,10 @@ export default function IntegrationsSettings() {
     const [syncingMenu, setSyncingMenu] = useState<string | null>(null);
 
     // Form states
-    const [newPlatform, setNewPlatform] = useState<'ZOMATO' | 'SWIGGY' | 'ONDC'>('ZOMATO');
+    const [newPlatform, setNewPlatform] = useState<'ZOMATO' | 'SWIGGY' | 'ONDC' | 'LOOMIFLOW'>('ZOMATO');
     const [newId, setNewId] = useState('');
     const [newSecret, setNewSecret] = useState('');
+    const [whatsappModalIntegration, setWhatsappModalIntegration] = useState<string | null>(null);
 
     useEffect(() => {
         if (user?.restaurantId) {
@@ -56,8 +58,10 @@ export default function IntegrationsSettings() {
             await api.post(`/integrations`, {
                 branchId: selectedBranchId,
                 platform: newPlatform,
-                restaurantIdOnPlatform: newId,
-                webhookSecret: newSecret,
+                restaurantIdOnPlatform: newId, // We use newId for restaurantIdOnPlatform / storeId / apiKey
+                webhookSecret: newSecret, // We use newSecret for webhookSecret / apiSecret
+                apiKey: newPlatform === 'LOOMIFLOW' ? newId : undefined,
+                apiSecret: newPlatform === 'LOOMIFLOW' ? newSecret : undefined,
                 autoAccept: true,
                 prepTimeMinutes: 30
             });
@@ -125,22 +129,29 @@ export default function IntegrationsSettings() {
                                 <option value="ZOMATO">Zomato</option>
                                 <option value="SWIGGY">Swiggy</option>
                                 <option value="ONDC">ONDC (Beckn)</option>
+                                <option value="LOOMIFLOW">LoomiFlow (WhatsApp)</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold mb-1 text-gray-700">Restaurant ID on Platform</label>
+                            <label className="block text-sm font-semibold mb-1 text-gray-700">
+                                {newPlatform === 'LOOMIFLOW' ? 'API Key' : 'Restaurant ID on Platform'}
+                            </label>
                             <input
                                 type="text" required
                                 value={newId} onChange={e => setNewId(e.target.value)}
-                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" placeholder="E.g., 123456"
+                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" 
+                                placeholder={newPlatform === 'LOOMIFLOW' ? "Enter LoomiFlow API Key" : "E.g., 123456"}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold mb-1 text-gray-700">Webhook Secret / API Key</label>
+                            <label className="block text-sm font-semibold mb-1 text-gray-700">
+                                {newPlatform === 'LOOMIFLOW' ? 'API Secret' : 'Webhook Secret / API Key'}
+                            </label>
                             <input
                                 type="password" required
                                 value={newSecret} onChange={e => setNewSecret(e.target.value)}
-                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" placeholder="Token for verification"
+                                className="w-full p-2.5 bg-gray-50 border rounded-lg focus:ring-saffron" 
+                                placeholder="Token for verification"
                             />
                         </div>
                         <button type="submit" disabled={selectedBranchId === 'all'} className="w-full bg-maroon text-white font-bold py-3 rounded-lg hover:bg-opacity-90 transition mt-2">
@@ -160,11 +171,11 @@ export default function IntegrationsSettings() {
                                     <div className="flex justify-between items-start mb-3">
                                         <div className="flex items-center gap-3">
                                             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white
-                                                ${intg.platform === 'ZOMATO' ? 'bg-red-600' : intg.platform === 'SWIGGY' ? 'bg-orange-500' : 'bg-blue-600'}`}>
+                                                ${intg.platform === 'ZOMATO' ? 'bg-red-600' : intg.platform === 'SWIGGY' ? 'bg-orange-500' : intg.platform === 'LOOMIFLOW' ? 'bg-green-500' : 'bg-blue-600'}`}>
                                                 {intg.platform[0]}
                                             </div>
                                             <div>
-                                                <h3 className="font-bold text-lg">{intg.platform}</h3>
+                                                <h3 className="font-bold text-lg">{intg.platform === 'LOOMIFLOW' ? 'WhatsApp (LoomiFlow)' : intg.platform}</h3>
                                                 <p className="text-xs text-gray-500 font-mono">Store: {intg.restaurantIdOnPlatform}</p>
                                             </div>
                                         </div>
@@ -178,13 +189,25 @@ export default function IntegrationsSettings() {
                                             {intg.status === 'PAUSED' ? <Play size={14}/> : <Pause size={14}/>}
                                             {intg.status === 'PAUSED' ? 'Resume' : 'Pause'}
                                         </button>
-                                        <button 
-                                            onClick={() => syncMenu(intg._id!)} 
-                                            disabled={syncingMenu === intg._id}
-                                            className="flex items-center gap-1.5 text-sm font-semibold border border-maroon text-maroon px-3 py-1.5 rounded-lg hover:bg-maroon hover:text-white transition disabled:opacity-50">
-                                            <RefreshCw size={14} className={syncingMenu === intg._id ? 'animate-spin' : ''} />
-                                            {syncingMenu === intg._id ? 'Syncing...' : 'Sync Menu'}
-                                        </button>
+                                        
+                                        {intg.platform !== 'LOOMIFLOW' && (
+                                            <button 
+                                                onClick={() => syncMenu(intg._id!)} 
+                                                disabled={syncingMenu === intg._id}
+                                                className="flex items-center gap-1.5 text-sm font-semibold border border-maroon text-maroon px-3 py-1.5 rounded-lg hover:bg-maroon hover:text-white transition disabled:opacity-50">
+                                                <RefreshCw size={14} className={syncingMenu === intg._id ? 'animate-spin' : ''} />
+                                                {syncingMenu === intg._id ? 'Syncing...' : 'Sync Menu'}
+                                            </button>
+                                        )}
+
+                                        {intg.platform === 'LOOMIFLOW' && (
+                                            <button 
+                                                onClick={() => setWhatsappModalIntegration(intg._id!)}
+                                                className="flex items-center gap-1.5 text-sm font-semibold border border-green-600 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-600 hover:text-white transition">
+                                                <MessageCircle size={14} />
+                                                Configure Templates
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -192,6 +215,16 @@ export default function IntegrationsSettings() {
                     )}
                 </div>
             </div>
+
+            {whatsappModalIntegration && (
+                <WhatsappTemplateModal
+                    integrationId={whatsappModalIntegration}
+                    onClose={() => {
+                        setWhatsappModalIntegration(null);
+                        fetchIntegrations();
+                    }}
+                />
+            )}
         </div>
     );
 }

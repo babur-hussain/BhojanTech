@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleZomatoWebhook, handleSwiggyWebhook, handleOndcWebhook, getIntegrations, createIntegration, updateIntegration, toggleIntegrationStatus, getReconciliationReport, syncMenu } from '../controllers/integration.controller';
+import { handleZomatoWebhook, handleSwiggyWebhook, handleOndcWebhook, getIntegrations, createIntegration, updateIntegration, toggleIntegrationStatus, getReconciliationReport, syncMenu, getWhatsappTemplates } from '../controllers/integration.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router: express.Router = express.Router();
@@ -16,5 +16,6 @@ router.post('/', createIntegration);
 router.put('/:id', updateIntegration);
 router.post('/:id/pause', toggleIntegrationStatus);
 router.post('/:id/sync-menu', syncMenu);
+router.get('/:id/whatsapp-templates', getWhatsappTemplates);
 
 export default router;

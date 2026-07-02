@@ -8,6 +8,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import { getBaseQuery } from '../utils/queryHelpers';
 import { menuSyncQueue } from '../workers/menuSync.worker';
+import { fetchLoomiFlowTemplates } from '../services/whatsappService';
 
 export const handleZomatoWebhook = async (req: Request, res: Response): Promise<any> => {
     try {
@@ -285,14 +286,16 @@ export const syncMenu = async (req: AuthRequest, res: Response): Promise<any> =>
 
 export const createIntegration = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
-        const { platform, branchId, apiKey, apiSecret, webhookSecret, storeId, isActive } = req.body;
+        const { platform, branchId, apiKey, apiSecret, webhookSecret, restaurantIdOnPlatform, storeId, isActive, whatsappConfig } = req.body;
         const integration = await Integration.create({
             platform,
             branchId,
             apiKey,
             apiSecret,
             webhookSecret,
+            restaurantIdOnPlatform: restaurantIdOnPlatform || storeId,
             storeId,
+            whatsappConfig,
             isActive: isActive ?? true,
             status: 'ACTIVE',
             restaurantId: req.user!.restaurantId,
@@ -305,13 +308,14 @@ export const createIntegration = async (req: AuthRequest, res: Response): Promis
 
 export const updateIntegration = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
-        const { apiKey, apiSecret, webhookSecret, storeId, isActive } = req.body;
+        const { apiKey, apiSecret, webhookSecret, storeId, isActive, whatsappConfig } = req.body;
         const updateData: any = {};
         if (apiKey !== undefined) updateData.apiKey = apiKey;
         if (apiSecret !== undefined) updateData.apiSecret = apiSecret;
         if (webhookSecret !== undefined) updateData.webhookSecret = webhookSecret;
         if (storeId !== undefined) updateData.storeId = storeId;
         if (isActive !== undefined) updateData.isActive = isActive;
+        if (whatsappConfig !== undefined) updateData.whatsappConfig = whatsappConfig;
 
         const integration = await Integration.findOneAndUpdate(
             { _id: req.params.id, restaurantId: req.user!.restaurantId },
@@ -400,5 +404,28 @@ export const getReconciliationReport = async (req: AuthRequest, res: Response): 
     } catch (error) {
         console.error('Reconciliation error:', error);
         return res.status(500).json({ error: 'Server error' });
+    }
+};
+
+export const getWhatsappTemplates = async (req: AuthRequest, res: Response): Promise<any> => {
+    try {
+        const integration = await Integration.findOne({ _id: req.params.id, restaurantId: req.user!.restaurantId });
+        if (!integration || integration.platform !== 'LOOMIFLOW') {
+            return res.status(404).json({ error: 'LoomiFlow integration not found' });
+        }
+        
+        // Use integration API keys, or fallback to environment variables
+        const apiKey = integration.apiKey || process.env.LOOMIFLOW_API_KEY;
+        const apiSecret = integration.apiSecret || process.env.LOOMIFLOW_API_SECRET;
+        
+        if (!apiKey || !apiSecret) {
+            return res.status(400).json({ error: 'LoomiFlow credentials not configured' });
+        }
+        
+        const templates = await fetchLoomiFlowTemplates(apiKey, apiSecret);
+        return res.json(templates);
+    } catch (error: any) {
+        console.error('getWhatsappTemplates error:', error);
+        return res.status(500).json({ error: 'Server error fetching templates' });
     }
 };
