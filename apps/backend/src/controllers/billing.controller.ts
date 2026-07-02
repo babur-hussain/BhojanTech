@@ -228,6 +228,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       customerPhone,
       customerName,
       customerDob,
+      sendWhatsApp = true,
       redeemPoints: pointsToRedeem,
       razorpayOrderId,
       razorpayPaymentId,
