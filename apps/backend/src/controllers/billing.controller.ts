@@ -234,7 +234,6 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       razorpayPaymentId,
       retailItems = [],    // [{ _id, quantity }]
       additionalMenuItems = [], // [{ menuItemId, name, variantName, quantity, priceAtOrderTime, gstSlab }]
-      sendWhatsApp = true,
     } = req.body;
 
     const restaurantId = req.user!.restaurantId;
@@ -665,6 +664,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       customerPhone,
       customerName,
       customerDob,
+      sendWhatsApp = true,
       redeemPoints: pointsToRedeem,
     } = req.body;
 
