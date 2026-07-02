@@ -24,7 +24,7 @@ import crypto from 'crypto';
 import logger from '../utils/logger';
 import { Integration } from '../models/Integration';
 
-const LOOMIFLOW_URL = process.env.LOOMIFLOW_API_URL;
+const LOOMIFLOW_URL = process.env.LOOMIFLOW_API_URL || 'https://whatsappapi.lfvs.in/api/v1/external';
 const LOOMIFLOW_API_KEY = process.env.LOOMIFLOW_API_KEY;
 const LOOMIFLOW_API_SECRET = process.env.LOOMIFLOW_API_SECRET;
 
