@@ -548,7 +548,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
 
     // Send Invoice via WhatsApp if customerPhone is present
     if (customerPhone && sendWhatsApp !== false) {
-      const API_URL = process.env.API_URL || 'https://api.restoos.com';
+      const API_URL = process.env.API_URL || 'https://server.bhojantech.lfvs.in';
       const invoiceUrl = `${API_URL}/api/v1/public/invoice/${invoice._id}/pdf`;
       sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
         restaurantId: req.user!.restaurantId,
@@ -1046,7 +1046,7 @@ export const resendWhatsApp = async (req: AuthRequest, res: Response) => {
     const phone = customerPhone || order.customerPhone;
     if (!phone) return res.status(400).json({ error: 'No phone number provided or saved for this order' });
 
-    const API_URL = process.env.API_URL || 'https://api.restoos.com';
+    const API_URL = process.env.API_URL || 'https://server.bhojantech.lfvs.in';
     const invoiceUrl = `${API_URL}/api/v1/public/invoice/${invoice._id}/pdf`;
     
     const waRes = await sendInvoiceWA(phone, invoiceUrl, invoice.invoiceNumber, {
