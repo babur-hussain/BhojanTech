@@ -359,17 +359,16 @@ export default function DirectPOS() {
         // 3. Open invoice in new tab and reset POS tab
         window.open(`/invoice/${payRes.data.invoice._id}`, '_blank');
         
-        setTabs(prev => {
-          if (prev.length === 1) {
+        if (tabs.length === 1) {
              const newTab = createEmptyTab(tabCounter);
-             setTabCounter(c => c + 1);
+             setTabCounter(tabCounter + 1);
+             setTabs([newTab]);
              setActiveTabId(newTab.id);
-             return [newTab];
-          }
-          const filtered = prev.filter(t => t.id !== activeTab.id);
-          setActiveTabId(filtered[filtered.length - 1].id);
-          return filtered;
-        });
+        } else {
+             const filtered = tabs.filter(t => t.id !== activeTab.id);
+             setTabs(filtered);
+             setActiveTabId(filtered[filtered.length - 1].id);
+        }
         setCustomer(null);
       }
     } catch (e: any) {
@@ -687,25 +686,30 @@ export default function DirectPOS() {
                   {tab.cart.length}
                 </span>
               )}
-              {tabs.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (tabs.length === 1) {
+                    const newTab = createEmptyTab(tabCounter);
+                    setTabCounter(tabCounter + 1);
+                    setTabs([newTab]);
+                    setActiveTabId(newTab.id);
+                  } else {
                     const newTabs = tabs.filter(t => t.id !== tab.id);
                     setTabs(newTabs);
                     if (activeTab.id === tab.id) setActiveTabId(newTabs[newTabs.length - 1].id);
-                  }}
-                  className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ml-1`}
-                >
-                  <X size={12} />
-                </button>
-              )}
+                  }
+                }}
+                className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ml-1`}
+              >
+                <X size={12} />
+              </button>
             </div>
           ))}
           <button
             onClick={() => {
               const newTab = createEmptyTab(tabCounter);
-              setTabCounter(prev => prev + 1);
+              setTabCounter(tabCounter + 1);
               setTabs(prev => [...prev, newTab]);
               setActiveTabId(newTab.id);
             }}
