@@ -44,7 +44,6 @@ export default function DirectPOS() {
 
   interface POSTab {
     id: string;
-    title: string;
     cart: CartItem[];
     customerPhone: string;
     customerName: string;
@@ -53,9 +52,8 @@ export default function DirectPOS() {
     sendWhatsApp: boolean;
   }
 
-  const createEmptyTab = (idx = 1): POSTab => ({
+  const createEmptyTab = (): POSTab => ({
     id: Date.now().toString() + Math.random(),
-    title: `Order ${idx}`,
     cart: [],
     customerPhone: '',
     customerName: '',
@@ -64,9 +62,8 @@ export default function DirectPOS() {
     sendWhatsApp: true,
   });
 
-  const [tabs, setTabs] = useState<POSTab[]>([createEmptyTab(1)]);
+  const [tabs, setTabs] = useState<POSTab[]>([createEmptyTab()]);
   const [activeTabId, setActiveTabId] = useState<string>('');
-  const [tabCounter, setTabCounter] = useState(2);
 
   // Auto-select first tab if none active
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
@@ -360,8 +357,7 @@ export default function DirectPOS() {
         window.open(`/invoice/${payRes.data.invoice._id}`, '_blank');
         
         if (tabs.length === 1) {
-             const newTab = createEmptyTab(tabCounter);
-             setTabCounter(tabCounter + 1);
+             const newTab = createEmptyTab();
              setTabs([newTab]);
              setActiveTabId(newTab.id);
         } else {
@@ -674,13 +670,13 @@ export default function DirectPOS() {
         
         {/* Tab Bar for Multi-Invoicing */}
         <div className="flex gap-2 overflow-x-auto pb-1 items-center shrink-0 w-full no-scrollbar">
-          {tabs.map((tab) => (
+          {tabs.map((tab, idx) => (
             <div
               key={tab.id}
               onClick={() => setActiveTabId(tab.id)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer whitespace-nowrap transition-colors ${activeTab.id === tab.id ? 'bg-maroon text-white border-maroon shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
             >
-              <span className="text-sm font-bold">{tab.title}</span>
+              <span className="text-sm font-bold">Order {idx + 1}</span>
               {tab.cart.length > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${activeTab.id === tab.id ? 'bg-white text-maroon' : 'bg-maroon text-white'}`}>
                   {tab.cart.length}
@@ -690,8 +686,7 @@ export default function DirectPOS() {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (tabs.length === 1) {
-                    const newTab = createEmptyTab(tabCounter);
-                    setTabCounter(tabCounter + 1);
+                    const newTab = createEmptyTab();
                     setTabs([newTab]);
                     setActiveTabId(newTab.id);
                   } else {
@@ -708,8 +703,7 @@ export default function DirectPOS() {
           ))}
           <button
             onClick={() => {
-              const newTab = createEmptyTab(tabCounter);
-              setTabCounter(tabCounter + 1);
+              const newTab = createEmptyTab();
               setTabs(prev => [...prev, newTab]);
               setActiveTabId(newTab.id);
             }}
