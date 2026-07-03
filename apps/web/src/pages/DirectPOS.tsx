@@ -42,8 +42,63 @@ export default function DirectPOS() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Unified cart
-  const [cart, setCart] = useState<CartItem[]>([]);
+  interface POSTab {
+    id: string;
+    title: string;
+    cart: CartItem[];
+    customerPhone: string;
+    customerName: string;
+    customerDob: string;
+    paymentMode: 'CASH' | 'UPI' | 'CARD';
+    sendWhatsApp: boolean;
+  }
+
+  const createEmptyTab = (idx = 1): POSTab => ({
+    id: Date.now().toString() + Math.random(),
+    title: `Order ${idx}`,
+    cart: [],
+    customerPhone: '',
+    customerName: '',
+    customerDob: '',
+    paymentMode: 'CASH',
+    sendWhatsApp: true,
+  });
+
+  const [tabs, setTabs] = useState<POSTab[]>([createEmptyTab(1)]);
+  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [tabCounter, setTabCounter] = useState(2);
+
+  // Auto-select first tab if none active
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  if (!activeTabId && tabs.length > 0) setActiveTabId(tabs[0].id);
+
+  const updateActiveTab = (updates: Partial<POSTab>) => {
+    setTabs(prev => prev.map(t => t.id === activeTab.id ? { ...t, ...updates } : t));
+  };
+
+  const cart = activeTab?.cart || [];
+  const setCart = (updater: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
+    setTabs(prev => prev.map(t => {
+      if (t.id !== activeTab.id) return t;
+      const newCart = typeof updater === 'function' ? updater(t.cart) : updater;
+      return { ...t, cart: newCart };
+    }));
+  };
+
+  const paymentMode = activeTab?.paymentMode || 'CASH';
+  const setPaymentMode = (val: 'CASH' | 'UPI' | 'CARD') => updateActiveTab({ paymentMode: val });
+
+  const sendWhatsApp = activeTab?.sendWhatsApp ?? true;
+  const setSendWhatsApp = (val: boolean) => updateActiveTab({ sendWhatsApp: val });
+
+  const customerPhone = activeTab?.customerPhone || '';
+  const setCustomerPhone = (val: string) => updateActiveTab({ customerPhone: val });
+
+  const customerName = activeTab?.customerName || '';
+  const setCustomerName = (val: string) => updateActiveTab({ customerName: val });
+
+  const customerDob = activeTab?.customerDob || '';
+  const setCustomerDob = (val: string) => updateActiveTab({ customerDob: val });
 
   // Scanner feedback
   const [scanFeedback, setScanFeedback] = useState<{ text: string; ok: boolean } | null>(null);
@@ -58,11 +113,6 @@ export default function DirectPOS() {
   const [itemForVariant, setItemForVariant] = useState<any>(null);
 
   const [paying, setPaying] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
-  const [sendWhatsApp, setSendWhatsApp] = useState(true);
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerDob, setCustomerDob] = useState('');
   const [customer, setCustomer] = useState<any>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [suggLoading, setSuggLoading] = useState(false);
@@ -306,8 +356,21 @@ export default function DirectPOS() {
           additionalMenuItems: [],
         });
 
-        // 3. Navigate to the generated invoice
-        navigate(`/invoice/${payRes.data.invoice._id}`);
+        // 3. Open invoice in new tab and reset POS tab
+        window.open(`/invoice/${payRes.data.invoice._id}`, '_blank');
+        
+        setTabs(prev => {
+          if (prev.length === 1) {
+             const newTab = createEmptyTab(tabCounter);
+             setTabCounter(c => c + 1);
+             setActiveTabId(newTab.id);
+             return [newTab];
+          }
+          const filtered = prev.filter(t => t.id !== activeTab.id);
+          setActiveTabId(filtered[filtered.length - 1].id);
+          return filtered;
+        });
+        setCustomer(null);
       }
     } catch (e: any) {
       console.error('POS error:', e?.response?.data || e);
@@ -608,8 +671,54 @@ export default function DirectPOS() {
       </div>
 
       {/* ── Right: Cart & Checkout ─────────────────────────────────────── */}
-      <div className="w-full lg:w-[380px] bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden self-start max-h-[calc(100vh-80px)]">
-        {/* Header */}
+      <div className="w-full lg:w-[380px] flex flex-col gap-3 h-full max-h-[calc(100vh-80px)]">
+        
+        {/* Tab Bar for Multi-Invoicing */}
+        <div className="flex gap-2 overflow-x-auto pb-1 items-center shrink-0 w-full no-scrollbar">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              onClick={() => setActiveTabId(tab.id)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer whitespace-nowrap transition-colors ${activeTab.id === tab.id ? 'bg-maroon text-white border-maroon shadow-sm' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+            >
+              <span className="text-sm font-bold">{tab.title}</span>
+              {tab.cart.length > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${activeTab.id === tab.id ? 'bg-white text-maroon' : 'bg-maroon text-white'}`}>
+                  {tab.cart.length}
+                </span>
+              )}
+              {tabs.length > 1 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newTabs = tabs.filter(t => t.id !== tab.id);
+                    setTabs(newTabs);
+                    if (activeTab.id === tab.id) setActiveTabId(newTabs[newTabs.length - 1].id);
+                  }}
+                  className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ml-1`}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              const newTab = createEmptyTab(tabCounter);
+              setTabCounter(prev => prev + 1);
+              setTabs(prev => [...prev, newTab]);
+              setActiveTabId(newTab.id);
+            }}
+            className="flex items-center justify-center p-1.5 bg-white border border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-gray-800 hover:border-gray-400 transition ml-1"
+            title="New Invoice Tab"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+
+        {/* Cart Window */}
+        <div className="w-full bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden self-start flex-1 min-h-0">
+          {/* Header */}
         <div className="bg-maroon text-white p-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2"><ShoppingCart size={18} /> Current Order</h2>
           <div className="flex items-center gap-2">
@@ -732,6 +841,7 @@ export default function DirectPOS() {
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Camera Scanner Modal */}
