@@ -319,7 +319,8 @@ export const sendInvoiceWA = async (
                 // Map the variables based on the DB mapping config
                 const parameters = [];
                 for (let i = 1; i <= 10; i++) {
-                    const mappedField = mapping[i.toString()];
+                    // Support both plain objects and Mongoose Maps
+                    const mappedField = typeof mapping.get === 'function' ? mapping.get(i.toString()) : mapping[i.toString()];
                     if (!mappedField) break;
                     
                     let text = '';
@@ -407,7 +408,8 @@ export const sendBookingWA = async (
             // Map the variables based on the DB mapping config
             const parameters = [];
             for (let i = 1; i <= 10; i++) {
-                const mappedField = mapping[i.toString()];
+                // Support both plain objects and Mongoose Maps
+                const mappedField = typeof mapping.get === 'function' ? mapping.get(i.toString()) : mapping[i.toString()];
                 if (!mappedField) break;
                 
                 let text = '';
