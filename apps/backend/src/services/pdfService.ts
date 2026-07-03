@@ -1,116 +1,260 @@
 import PDFDocument from 'pdfkit';
 import { IInvoice } from '../models/Invoice';
 import { IRestaurant } from '../models/Restaurant';
-import path from 'path';
 
 export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
         try {
-            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
             const buffers: Buffer[] = [];
 
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
             doc.on('error', reject);
 
-            // --- Header ---
-            doc.fontSize(20).text(restaurant.name || 'Restaurant Invoice', { align: 'center' });
-            if (restaurant.address) {
-                doc.fontSize(10).text(restaurant.address, { align: 'center' });
-            }
-            if (restaurant.contactNumber) {
-                doc.text(`Phone: ${restaurant.contactNumber}`, { align: 'center' });
-            }
-            if (restaurant.gstin) {
-                doc.text(`GSTIN: ${restaurant.gstin}`, { align: 'center' });
-            }
-            if (restaurant.fssaiNumber) {
-                doc.text(`FSSAI: ${restaurant.fssaiNumber}`, { align: 'center' });
-            }
+            const pageWidth = 595.28;
+            const rightMargin = 50;
+            const width = pageWidth - 100; // 495.28
 
-            doc.moveDown(2);
+            // helper for page breaks
+            const checkPageBreak = (requiredHeight: number) => {
+                if (doc.y + requiredHeight > 780) {
+                    doc.addPage();
+                    doc.y = 50;
+                }
+            };
 
-            // --- Invoice Details ---
-            doc.fontSize(12).text(`Invoice No: ${invoice.invoiceNumber}`);
-            doc.text(`Date: ${invoice.createdAt ? new Date(invoice.createdAt).toLocaleString() : new Date().toLocaleString()}`);
-            if (invoice.customerName) {
-                doc.text(`Customer Name: ${invoice.customerName}`);
-            }
-            if (invoice.customerPhone) {
-                doc.text(`Customer Phone: ${invoice.customerPhone}`);
-            }
+            // --- Header Section ---
+            doc.font('Helvetica-Bold').fontSize(24).fillColor('#000000');
+            // Mocking Zudio style lowercase logo using restaurant name
+            doc.text(restaurant.name.toLowerCase(), 50, 50, { width: 250, align: 'left' });
+
+            doc.font('Helvetica-Bold').fontSize(10);
+            doc.text(`${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`, 300, 50, { width: width - 250, align: 'right' });
+            doc.font('Helvetica').fontSize(9).fillColor('#00BCD4');
+            doc.text('Store Details >', 300, 65, { width: width - 250, align: 'right' });
+
+            // --- Black Banner ---
+            doc.moveDown(1.5);
+            const bannerY = doc.y;
+            doc.rect(50, bannerY, width, 60).fill('#000000');
+            doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(11);
+            doc.text('WE ARE NEVER HAPPY, TILL YOU ARE HAPPY.', 50, bannerY + 15, { align: 'center', width: width });
+            doc.text('TELL US HOW WE DID.', 50, bannerY + 28, { align: 'center', width: width });
+            doc.font('Helvetica').fontSize(9);
+            doc.text('👆 TAP TO GIVE FEEDBACK', 50, bannerY + 42, { align: 'center', width: width });
             
-            doc.text(`Order Type: ${invoice.orderType || 'DINE_IN'}`);
-            if (invoice.tableNumber) {
-                doc.text(`Table: ${invoice.tableNumber}`);
-            }
-
+            // --- Title & Store Info ---
+            doc.y = bannerY + 80;
+            doc.fillColor('#000000').font('Helvetica-Bold').fontSize(11);
+            doc.text('TAX INVOICE', 50, doc.y, { align: 'center', width: width });
+            
             doc.moveDown(1);
+            doc.fontSize(9).font('Helvetica-Bold');
+            doc.text(`Store Contact Number : `, 50, doc.y, { continued: true, align: 'center', width: width });
+            doc.font('Helvetica').text(restaurant.contactNumber || 'NA');
 
-            // --- Table Header ---
-            const startY = doc.y;
+            doc.moveDown(0.5);
             doc.font('Helvetica-Bold');
-            doc.text('Item', 50, startY);
-            doc.text('Qty', 300, startY, { width: 50, align: 'center' });
-            doc.text('Price', 350, startY, { width: 70, align: 'right' });
-            doc.text('Total', 420, startY, { width: 70, align: 'right' });
-            doc.font('Helvetica');
+            doc.text(`Place Of Supply : `, 50, doc.y, { continued: true, align: 'center', width: width });
+            doc.font('Helvetica').text(restaurant.address || 'NA');
 
-            let currentY = startY + 20;
+            // --- Metadata Columns ---
+            doc.moveDown(2);
+            const metaY = doc.y;
+            
+            // Left Column
+            doc.font('Helvetica-Bold').fontSize(9);
+            const dateStr = invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'medium' }) : 'NA';
+            doc.text('Date & Time : ', 50, metaY, { continued: true }).font('Helvetica').text(dateStr);
+            
+            doc.font('Helvetica-Bold').text('Bill : ', 50, metaY + 15, { continued: true }).font('Helvetica').text(invoice.invoiceNumber);
+            doc.font('Helvetica-Bold').text('Cashier : ', 50, metaY + 30, { continued: true }).font('Helvetica').text(invoice.waiterName || 'NA');
+
+            doc.moveDown(1.5);
+            const customerY = doc.y;
+            doc.font('Helvetica-Bold').text('Customer ID : ', 50, customerY, { continued: true }).font('Helvetica').text(invoice.customerName ? invoice.customerName.toUpperCase() : 'WALK-IN');
+            
+            doc.font('Helvetica-Bold').text('Mobile No : ', 50, customerY + 15, { continued: true });
+            doc.font('Helvetica');
+            const mobileX = 105;
+            const mobileText = invoice.customerPhone || 'NA';
+            doc.text(mobileText, mobileX, customerY + 15);
+            doc.underline(mobileX, customerY + 15, doc.widthOfString(mobileText), 9);
+
+            // Right Column
+            doc.font('Helvetica-Bold').text('POS : ', 400, metaY, { continued: true }).font('Helvetica').text(invoice.tableNumber || '1');
+
+            // --- Line Items Table Header ---
+            doc.y = customerY + 45;
+            const headerY = doc.y;
+            doc.font('Helvetica-Bold').fontSize(9);
+            doc.text('Description', 50, headerY);
+            doc.text('QTY', 250, headerY);
+            doc.text('Unit Amt', 350, headerY, { width: 145, align: 'right' });
+            
+            doc.text('Item Code', 50, headerY + 15);
+            doc.text('Total Amt', 350, headerY + 15, { width: 145, align: 'right' });
+            
+            doc.text('HSN Code', 50, headerY + 30);
+            doc.text('Taxable Amount', 350, headerY + 30, { width: 145, align: 'right' });
+            
+            doc.y = headerY + 55;
 
             // --- Line Items ---
+            let totalQty = 0;
             invoice.lineItems.forEach((item) => {
-                doc.text(item.name || 'Item', 50, currentY, { width: 250 });
-                doc.text(item.quantity.toString(), 300, currentY, { width: 50, align: 'center' });
-                doc.text(item.unitPrice.toFixed(2), 350, currentY, { width: 70, align: 'right' });
-                doc.text(item.lineTotal.toFixed(2), 420, currentY, { width: 70, align: 'right' });
-                currentY = Math.max(doc.y, currentY + 15);
-                if (currentY > 750) { // Add new page if overflowing
-                    doc.addPage();
-                    currentY = 50;
-                }
+                checkPageBreak(50);
+                const currentY = doc.y;
+                totalQty += item.quantity;
+                
+                doc.font('Helvetica').fontSize(9);
+                doc.text(item.name.toUpperCase(), 50, currentY, { width: 180 });
+                doc.text(`${item.quantity} PC`, 250, currentY);
+                doc.text(`₹${item.unitPrice.toFixed(2)}`, 350, currentY, { width: 145, align: 'right' });
+                
+                // item code (mocked with SKU or NA)
+                doc.text(item.variantName || 'NA', 50, currentY + 15);
+                doc.text(`₹${item.lineTotal.toFixed(2)}`, 350, currentY + 15, { width: 145, align: 'right' });
+                
+                // hsn code & taxable amount
+                const taxableAmt = item.lineTotal / (1 + (item.gstSlab / 100));
+                doc.text(item.hsnCode || 'NA', 50, currentY + 30);
+                doc.text(`₹${taxableAmt.toFixed(2)}`, 350, currentY + 30, { width: 145, align: 'right' });
+                
+                doc.y = currentY + 55;
             });
 
-            // --- Summary ---
-            doc.moveDown(2);
-            let summaryY = Math.max(currentY + 20, doc.y);
-            const summaryX = 350;
+            // --- Totals Section ---
+            checkPageBreak(80);
+            doc.moveDown(1);
+            let summaryY = doc.y;
+            doc.font('Helvetica-Bold').fontSize(9);
+            
+            doc.text(`Total QTY : ${totalQty}`, 50, summaryY);
+            doc.text(`Total Items : ${invoice.lineItems.length}`, 200, summaryY);
+            doc.text(`Grand Total : ₹${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
 
-            doc.text('Subtotal:', summaryX, summaryY);
-            doc.text(invoice.subtotalINR.toFixed(2), summaryX + 70, summaryY, { width: 70, align: 'right' });
-            summaryY += 15;
-
-            if (invoice.discount && invoice.discount.flatAmount > 0) {
-                doc.text('Discount:', summaryX, summaryY);
-                doc.text(`-${invoice.discount.flatAmount.toFixed(2)}`, summaryX + 70, summaryY, { width: 70, align: 'right' });
-                summaryY += 15;
-            }
-
-            if (invoice.totalGSTINR > 0) {
-                doc.text('Total GST:', summaryX, summaryY);
-                doc.text(invoice.totalGSTINR.toFixed(2), summaryX + 70, summaryY, { width: 70, align: 'right' });
-                summaryY += 15;
-            }
-
-            if (invoice.roundOff !== 0) {
-                doc.text('Round Off:', summaryX, summaryY);
-                doc.text(invoice.roundOff.toFixed(2), summaryX + 70, summaryY, { width: 70, align: 'right' });
-                summaryY += 15;
-            }
-
-            doc.font('Helvetica-Bold');
-            doc.text('Grand Total:', summaryX, summaryY);
-            doc.text(invoice.grandTotalINR.toFixed(2), summaryX + 70, summaryY, { width: 70, align: 'right' });
-            doc.font('Helvetica');
             summaryY += 25;
+            doc.font('Helvetica-Bold');
+            doc.text('Total Discount', 50, summaryY);
+            doc.font('Helvetica').text(`₹${(invoice.discount?.flatAmount || 0).toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
+            
+            summaryY += 15;
+            doc.font('Helvetica-Bold');
+            doc.text('Net Payable', 50, summaryY);
+            doc.text(`₹${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
 
-            // --- Footer ---
-            doc.moveDown(2);
-            doc.text('Thank you for your visit!', { align: 'center' });
+            // --- Payment Methods ---
+            checkPageBreak(50);
+            summaryY += 30;
+            doc.font('Helvetica-Bold').text('Payment Methods', 50, summaryY);
+            
+            let paymentY = summaryY + 15;
+            doc.font('Helvetica');
+            if (invoice.payments && invoice.payments.length > 0) {
+                invoice.payments.forEach(p => {
+                    doc.text(p.mode, 50, paymentY);
+                    if (p.mode === 'CARD') {
+                        doc.text('************9999', 200, paymentY);
+                    }
+                    doc.text(`₹${p.amountINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
+                    paymentY += 15;
+                });
+            } else {
+                doc.text(invoice.paymentMode, 50, paymentY);
+                if (invoice.paymentMode === 'CARD') {
+                    doc.text('************9999', 200, paymentY);
+                }
+                doc.text(`₹${invoice.amountPaidINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
+                paymentY += 15;
+            }
+
+            // --- Footer (Tax Breakdown) ---
+            checkPageBreak(60);
+            doc.y = paymentY + 20;
+            const taxBoxY = doc.y;
+            
+            // Draw dashed box
+            // Note: saving and restoring graphics state prevents dash affecting other elements if we draw later
+            doc.save();
+            doc.rect(50, taxBoxY, width, 40).dash(3, { space: 3 }).stroke();
+            doc.restore();
+
+            doc.font('Helvetica-Bold').fontSize(8);
+            doc.text('HSN Code', 60, taxBoxY + 15);
+            
+            // CGST Header
+            doc.text('CGST', 200, taxBoxY + 5, { width: 100, align: 'center' });
+            doc.text('Rate', 180, taxBoxY + 25);
+            doc.text('Amt', 260, taxBoxY + 25);
+            // SGST Header
+            doc.text('SGST', 350, taxBoxY + 5, { width: 100, align: 'center' });
+            doc.text('Rate', 330, taxBoxY + 25);
+            doc.text('Amt', 410, taxBoxY + 25);
+            
+            // Draw internal dashed lines for the table structure inside the box
+            doc.save();
+            // Vertical separators
+            doc.moveTo(160, taxBoxY).lineTo(160, taxBoxY + 40).dash(3, {space:3}).stroke();
+            doc.moveTo(310, taxBoxY).lineTo(310, taxBoxY + 40).dash(3, {space:3}).stroke();
+            // Horizontal separator under CGST/SGST
+            doc.moveTo(160, taxBoxY + 20).lineTo(310, taxBoxY + 20).dash(3, {space:3}).stroke();
+            doc.moveTo(310, taxBoxY + 20).lineTo(460, taxBoxY + 20).dash(3, {space:3}).stroke();
+            // Vertical sub-separators
+            doc.moveTo(235, taxBoxY + 20).lineTo(235, taxBoxY + 40).dash(3, {space:3}).stroke();
+            doc.moveTo(385, taxBoxY + 20).lineTo(385, taxBoxY + 40).dash(3, {space:3}).stroke();
+            doc.restore();
+
+            // Populate Tax Rows
+            let taxRowY = taxBoxY + 40;
+            if (invoice.gstBreakup && invoice.gstBreakup.length > 0) {
+                invoice.gstBreakup.forEach(tax => {
+                    doc.save();
+                    // Extend the box
+                    doc.rect(50, taxBoxY, width, (taxRowY - taxBoxY) + 20).dash(3, { space: 3 }).stroke();
+                    // Draw vertical separators down
+                    doc.moveTo(160, taxRowY).lineTo(160, taxRowY + 20).dash(3, {space:3}).stroke();
+                    doc.moveTo(310, taxRowY).lineTo(310, taxRowY + 20).dash(3, {space:3}).stroke();
+                    doc.moveTo(235, taxRowY).lineTo(235, taxRowY + 20).dash(3, {space:3}).stroke();
+                    doc.moveTo(385, taxRowY).lineTo(385, taxRowY + 20).dash(3, {space:3}).stroke();
+                    doc.restore();
+                    
+                    doc.font('Helvetica').fontSize(8);
+                    // Use a fallback HSN if we don't have it on the breakup level.
+                    // Ideally, GST breakup should group by HSN, but our model just has slab.
+                    doc.text('MULTIPLE', 60, taxRowY + 5); 
+                    
+                    const cgstRate = (tax.slab / 2).toFixed(2) + '%';
+                    const sgstRate = (tax.slab / 2).toFixed(2) + '%';
+                    
+                    doc.text(cgstRate, 180, taxRowY + 5);
+                    doc.text(`₹${tax.cgst.toFixed(2)}`, 260, taxRowY + 5);
+                    
+                    doc.text(sgstRate, 330, taxRowY + 5);
+                    doc.text(`₹${tax.sgst.toFixed(2)}`, 410, taxRowY + 5);
+                    
+                    taxRowY += 20;
+                });
+            } else {
+                 doc.save();
+                 doc.rect(50, taxBoxY, width, 60).dash(3, { space: 3 }).stroke();
+                 doc.moveTo(160, taxRowY).lineTo(160, taxRowY + 20).dash(3, {space:3}).stroke();
+                 doc.moveTo(310, taxRowY).lineTo(310, taxRowY + 20).dash(3, {space:3}).stroke();
+                 doc.moveTo(235, taxRowY).lineTo(235, taxRowY + 20).dash(3, {space:3}).stroke();
+                 doc.moveTo(385, taxRowY).lineTo(385, taxRowY + 20).dash(3, {space:3}).stroke();
+                 doc.restore();
+                 doc.font('Helvetica').fontSize(8);
+                 doc.text('NA', 60, taxRowY + 5);
+                 doc.text('0.00%', 180, taxRowY + 5);
+                 doc.text('₹0.00', 260, taxRowY + 5);
+                 doc.text('0.00%', 330, taxRowY + 5);
+                 doc.text('₹0.00', 410, taxRowY + 5);
+            }
 
             doc.end();
-        } catch (err) {
-            reject(err);
+        } catch (error) {
+            reject(error);
         }
     });
 };
