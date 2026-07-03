@@ -320,7 +320,8 @@ export const sendInvoiceWA = async (
                 const parameters = [];
                 for (let i = 1; i <= 10; i++) {
                     // Support both plain objects and Mongoose Maps
-                    const mappedField = typeof mapping.get === 'function' ? mapping.get(i.toString()) : mapping[i.toString()];
+                    const mappingAny = mapping as any;
+                    const mappedField = typeof mappingAny.get === 'function' ? mappingAny.get(i.toString()) : mappingAny[i.toString()];
                     if (!mappedField) break;
                     
                     let text = '';
@@ -409,7 +410,8 @@ export const sendBookingWA = async (
             const parameters = [];
             for (let i = 1; i <= 10; i++) {
                 // Support both plain objects and Mongoose Maps
-                const mappedField = typeof mapping.get === 'function' ? mapping.get(i.toString()) : mapping[i.toString()];
+                const mappingAny = mapping as any;
+                const mappedField = typeof mappingAny.get === 'function' ? mappingAny.get(i.toString()) : mappingAny[i.toString()];
                 if (!mappedField) break;
                 
                 let text = '';
