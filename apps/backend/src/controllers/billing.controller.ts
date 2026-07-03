@@ -547,12 +547,12 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     });
 
     // Send Invoice via WhatsApp if customerPhone is present
-    if (customerPhone && sendWhatsApp !== false) {
+    if (customerPhone && sendWhatsApp !== false && customerPhone !== '9999999999') {
       const API_URL = process.env.API_URL || 'https://server.bhojantech.lfvs.in';
       const invoiceUrl = `${API_URL}/api/v1/public/invoice/${invoice._id}/pdf`;
       sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
         restaurantId: req.user!.restaurantId,
-        branchId: order.branchId.toString(),
+        branchId: order.branchId ? order.branchId.toString() : '',
         customerName: customerName || undefined,
         amount: invoice.grandTotalINR,
         date: invoice.createdAt
@@ -853,12 +853,12 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     io.to(room).emit('order_update', { type: 'NEW_ORDER', order });
 
     // Send Invoice via WhatsApp if customerPhone is present
-    if (customerPhone && sendWhatsApp !== false) {
+    if (customerPhone && sendWhatsApp !== false && customerPhone !== '9999999999') {
       const API_URL = process.env.API_URL || 'https://server.bhojantech.lfvs.in';
       const invoiceUrl = `${API_URL}/api/v1/public/invoice/${invoice._id}/pdf`;
       sendInvoiceWA(customerPhone, invoiceUrl, invoice.invoiceNumber, {
         restaurantId: req.user!.restaurantId,
-        branchId: order.branchId.toString(),
+        branchId: order.branchId ? order.branchId.toString() : '',
         customerName: customerName || undefined,
         amount: invoice.grandTotalINR,
         date: invoice.createdAt
