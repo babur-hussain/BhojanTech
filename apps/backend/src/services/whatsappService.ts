@@ -338,8 +338,23 @@ export const sendInvoiceWA = async (
                 }
 
                 let components: any[] = [];
+                
+                // Invoice templates generally require a document header
+                if (invoiceUrl) {
+                    components.push({
+                        type: 'header',
+                        parameters: [{
+                            type: 'document',
+                            document: {
+                                link: invoiceUrl,
+                                filename: `Invoice-${invoiceNumber}.pdf`
+                            }
+                        }]
+                    });
+                }
+
                 if (parameters.length > 0) {
-                    components = [{ type: 'body', parameters }];
+                    components.push({ type: 'body', parameters });
                 }
 
                 try {
@@ -353,15 +368,15 @@ export const sendInvoiceWA = async (
                         apiSecret
                     );
 
+                    // User requested to strictly use template if configured.
                     if (templateRes && templateRes.success === false) {
-                        logger.warn(`[WhatsApp] Template sending failed, falling back to document: ${templateRes.error}`);
-                        // Do not return, let it fall through to sendWhatsAppDocument below
-                    } else {
-                        return templateRes;
+                        logger.warn(`[WhatsApp] Invoice template sending failed: ${templateRes.error}`);
                     }
+                    
+                    return templateRes;
                 } catch (templateError: any) {
-                    logger.warn(`[WhatsApp] Template sending threw error, falling back to document: ${templateError.message}`);
-                    // Do not return, let it fall through to sendWhatsAppDocument below
+                    logger.warn(`[WhatsApp] Template sending threw error: ${templateError.message}`);
+                    return { success: false, error: templateError.message };
                 }
             }
         } catch (err) {
@@ -369,6 +384,7 @@ export const sendInvoiceWA = async (
         }
     }
 
+    // Only fallback to raw document if NO template integration is configured
     return sendWhatsAppDocument(phone, invoiceUrl, `Invoice ${invoiceNumber}`, `invoice-${invoiceNumber}`, apiKey, apiSecret);
 };
 

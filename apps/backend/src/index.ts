@@ -241,8 +241,11 @@ import retailItemRoutes from './routes/retailItem.routes';
 import bookingRoutes from './routes/bookingRoutes';
 import mediaRoutes from './routes/media.routes';
 import loyaltyRoutes from './routes/loyalty.routes';
+import publicRoutes from './routes/public/public.routes';
 
 app.use('/api/restaurant', restaurantRoutes);
+// Public routes
+app.use('/api/v1/public', publicRoutes);
 import { initCronJobs } from './utils/cronJobs';
 import './services/menuSync.service'; // Start Bull Queue Worker for single item
 import './workers/menuSync.worker'; // Start Bull Queue Worker for full menu sync
