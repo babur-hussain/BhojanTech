@@ -116,16 +116,16 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                 doc.font('Helvetica').fontSize(9);
                 doc.text(item.name.toUpperCase(), 50, currentY, { width: 180 });
                 doc.text(`${item.quantity} PC`, 250, currentY);
-                doc.text(`₹${item.unitPrice.toFixed(2)}`, 350, currentY, { width: 145, align: 'right' });
+                doc.text(`Rs. ${item.unitPrice.toFixed(2)}`, 350, currentY, { width: 145, align: 'right' });
                 
                 // item code (mocked with SKU or NA)
                 doc.text(item.variantName || 'NA', 50, currentY + 15);
-                doc.text(`₹${item.lineTotal.toFixed(2)}`, 350, currentY + 15, { width: 145, align: 'right' });
+                doc.text(`Rs. ${item.lineTotal.toFixed(2)}`, 350, currentY + 15, { width: 145, align: 'right' });
                 
                 // hsn code & taxable amount
                 const taxableAmt = item.lineTotal / (1 + (item.gstSlab / 100));
                 doc.text(item.hsnCode || 'NA', 50, currentY + 30);
-                doc.text(`₹${taxableAmt.toFixed(2)}`, 350, currentY + 30, { width: 145, align: 'right' });
+                doc.text(`Rs. ${taxableAmt.toFixed(2)}`, 350, currentY + 30, { width: 145, align: 'right' });
                 
                 doc.y = currentY + 55;
             });
@@ -138,17 +138,17 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             
             doc.text(`Total QTY : ${totalQty}`, 50, summaryY);
             doc.text(`Total Items : ${invoice.lineItems.length}`, 200, summaryY);
-            doc.text(`Grand Total : ₹${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
+            doc.text(`Grand Total : Rs. ${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
 
             summaryY += 20;
             doc.font('Helvetica-Bold');
             doc.text('Total Discount', 50, summaryY);
-            doc.font('Helvetica').text(`₹${(invoice.discount?.flatAmount || 0).toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
+            doc.font('Helvetica').text(`Rs. ${(invoice.discount?.flatAmount || 0).toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
             
             summaryY += 15;
             doc.font('Helvetica-Bold');
             doc.text('Net Payable', 50, summaryY);
-            doc.text(`₹${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
+            doc.text(`Rs. ${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
 
             // --- Payment Methods ---
             checkPageBreak(50);
@@ -163,7 +163,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                     if (p.mode === 'CARD') {
                         doc.text('************9999', 200, paymentY);
                     }
-                    doc.text(`₹${p.amountINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
+                    doc.text(`Rs. ${p.amountINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
                     paymentY += 15;
                 });
             } else {
@@ -171,7 +171,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                 if (invoice.paymentMode === 'CARD') {
                     doc.text('************9999', 200, paymentY);
                 }
-                doc.text(`₹${invoice.amountPaidINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
+                doc.text(`Rs. ${invoice.amountPaidINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
                 paymentY += 15;
             }
 
@@ -234,10 +234,10 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                     const sgstRate = (tax.slab / 2).toFixed(2) + '%';
                     
                     doc.text(cgstRate, 180, taxRowY + 5);
-                    doc.text(`₹${tax.cgst.toFixed(2)}`, 260, taxRowY + 5);
+                    doc.text(`Rs. ${tax.cgst.toFixed(2)}`, 260, taxRowY + 5);
                     
                     doc.text(sgstRate, 330, taxRowY + 5);
-                    doc.text(`₹${tax.sgst.toFixed(2)}`, 410, taxRowY + 5);
+                    doc.text(`Rs. ${tax.sgst.toFixed(2)}`, 410, taxRowY + 5);
                     
                     taxRowY += 20;
                 });
@@ -252,9 +252,9 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                  doc.font('Helvetica').fontSize(8);
                  doc.text('NA', 60, taxRowY + 5);
                  doc.text('0.00%', 180, taxRowY + 5);
-                 doc.text('₹0.00', 260, taxRowY + 5);
+                 doc.text('Rs. 0.00', 260, taxRowY + 5);
                  doc.text('0.00%', 330, taxRowY + 5);
-                 doc.text('₹0.00', 410, taxRowY + 5);
+                 doc.text('Rs. 0.00', 410, taxRowY + 5);
             }
 
             doc.end();
