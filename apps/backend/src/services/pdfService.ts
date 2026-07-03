@@ -25,9 +25,9 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             };
 
             // --- Header Section ---
-            doc.font('Helvetica-Bold').fontSize(24).fillColor('#000000');
-            // Mocking Zudio style lowercase logo using restaurant name
-            doc.text(restaurant.name.toLowerCase(), 50, 50, { width: 250, align: 'left' });
+            doc.font('Helvetica-Bold').fontSize(26).fillColor('#000000');
+            // Mocking Zudio style lowercase logo using restaurant name with character spacing
+            doc.text(restaurant.name.toLowerCase(), 50, 48, { width: 250, align: 'left', characterSpacing: 1.5 });
 
             doc.font('Helvetica-Bold').fontSize(10);
             doc.text(`${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`, 300, 50, { width: width - 250, align: 'right' });
@@ -42,7 +42,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.text('WE ARE NEVER HAPPY, TILL YOU ARE HAPPY.', 50, bannerY + 15, { align: 'center', width: width });
             doc.text('TELL US HOW WE DID.', 50, bannerY + 28, { align: 'center', width: width });
             doc.font('Helvetica').fontSize(9);
-            doc.text('👆 TAP TO GIVE FEEDBACK', 50, bannerY + 42, { align: 'center', width: width });
+            doc.text('TAP TO GIVE FEEDBACK', 50, bannerY + 42, { align: 'center', width: width });
             
             // --- Title & Store Info ---
             doc.y = bannerY + 80;
@@ -50,32 +50,36 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.text('TAX INVOICE', 50, doc.y, { align: 'center', width: width });
             
             doc.moveDown(1);
-            doc.fontSize(9).font('Helvetica-Bold');
-            doc.text(`Store Contact Number : `, 50, doc.y, { continued: true, align: 'center', width: width });
-            doc.font('Helvetica').text(restaurant.contactNumber || 'NA');
+            doc.fontSize(9).font('Helvetica');
+            doc.text(`Store Contact Number : ${restaurant.contactNumber || 'NA'}`, 50, doc.y, { align: 'center', width: width });
 
             doc.moveDown(0.5);
-            doc.font('Helvetica-Bold');
-            doc.text(`Place Of Supply : `, 50, doc.y, { continued: true, align: 'center', width: width });
-            doc.font('Helvetica').text(restaurant.address || 'NA');
+            doc.text(`Place Of Supply : ${restaurant.address || 'NA'}`, 50, doc.y, { align: 'center', width: width });
 
             // --- Metadata Columns ---
             doc.moveDown(2);
             const metaY = doc.y;
             
             // Left Column
+            // Left Column
             doc.font('Helvetica-Bold').fontSize(9);
             const dateStr = invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'medium' }) : 'NA';
-            doc.text('Date & Time : ', 50, metaY, { continued: true }).font('Helvetica').text(dateStr);
             
-            doc.font('Helvetica-Bold').text('Bill : ', 50, metaY + 15, { continued: true }).font('Helvetica').text(invoice.invoiceNumber);
-            doc.font('Helvetica-Bold').text('Cashier : ', 50, metaY + 30, { continued: true }).font('Helvetica').text(invoice.waiterName || 'NA');
+            doc.text('Date & Time : ', 50, metaY);
+            doc.font('Helvetica').text(dateStr, 120, metaY);
+            
+            doc.font('Helvetica-Bold').text('Bill : ', 50, metaY + 15);
+            doc.font('Helvetica').text(invoice.invoiceNumber, 80, metaY + 15);
+            
+            doc.font('Helvetica-Bold').text('Cashier : ', 50, metaY + 30);
+            doc.font('Helvetica').text(invoice.waiterName || 'NA', 95, metaY + 30);
 
             doc.moveDown(1.5);
             const customerY = doc.y;
-            doc.font('Helvetica-Bold').text('Customer ID : ', 50, customerY, { continued: true }).font('Helvetica').text(invoice.customerName ? invoice.customerName.toUpperCase() : 'WALK-IN');
+            doc.font('Helvetica-Bold').text('Customer ID : ', 50, customerY);
+            doc.font('Helvetica').text(invoice.customerName ? invoice.customerName.toUpperCase() : 'WALK-IN', 120, customerY);
             
-            doc.font('Helvetica-Bold').text('Mobile No : ', 50, customerY + 15, { continued: true });
+            doc.font('Helvetica-Bold').text('Mobile No : ', 50, customerY + 15);
             doc.font('Helvetica');
             const mobileX = 105;
             const mobileText = invoice.customerPhone || 'NA';
@@ -83,7 +87,8 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.underline(mobileX, customerY + 15, doc.widthOfString(mobileText), 9);
 
             // Right Column
-            doc.font('Helvetica-Bold').text('POS : ', 400, metaY, { continued: true }).font('Helvetica').text(invoice.tableNumber || '1');
+            doc.font('Helvetica-Bold').text('POS : ', 400, metaY);
+            doc.font('Helvetica').text(invoice.tableNumber || '1', 435, metaY);
 
             // --- Line Items Table Header ---
             doc.y = customerY + 45;
@@ -135,7 +140,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.text(`Total Items : ${invoice.lineItems.length}`, 200, summaryY);
             doc.text(`Grand Total : ₹${invoice.grandTotalINR.toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
 
-            summaryY += 25;
+            summaryY += 20;
             doc.font('Helvetica-Bold');
             doc.text('Total Discount', 50, summaryY);
             doc.font('Helvetica').text(`₹${(invoice.discount?.flatAmount || 0).toFixed(2)}`, 350, summaryY, { width: 145, align: 'right' });
@@ -147,7 +152,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
 
             // --- Payment Methods ---
             checkPageBreak(50);
-            summaryY += 30;
+            summaryY += 25;
             doc.font('Helvetica-Bold').text('Payment Methods', 50, summaryY);
             
             let paymentY = summaryY + 15;
