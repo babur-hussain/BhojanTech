@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, getMediaUrl } from '../utils/api';
-import { Save, Store, CreditCard, FileText, MapPin, Loader2, CheckCircle, AlertCircle, QrCode, Printer, Wifi, WifiOff, RefreshCw, Settings, BookOpen, Plus, X, Award } from 'lucide-react';
+import { Save, Store, CreditCard, FileText, MapPin, Loader2, CheckCircle, AlertCircle, QrCode, Printer, Wifi, WifiOff, RefreshCw, Settings, BookOpen, Plus, X, Award, Upload, Trash2 } from 'lucide-react';
 import { useQZTray } from '../hooks/useQZTray';
 import { printTestReceipt } from '../utils/thermalPrint';
 
@@ -51,6 +51,7 @@ export default function RestaurantSettings() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'general' | 'compliance' | 'payments' | 'bookings' | 'loyalty'>('general');
   const [newCategory, setNewCategory] = useState('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   const [qzStatus, setQzStatus] = useState<'checking' | 'connected' | 'disconnected'>('disconnected');
   const [qzTesting, setQzTesting] = useState(false);
@@ -177,6 +178,30 @@ export default function RestaurantSettings() {
     }));
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      setIsUploadingLogo(true);
+      const uploadData = new FormData();
+      uploadData.append('images', files[0]);
+      
+      const res = await api.post('/menu/upload', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
+      });
+      
+      if (res.data.urls && res.data.urls.length > 0) {
+        setForm(f => ({ ...f, logoUrl: res.data.urls[0] }));
+        showToast('success', 'Logo uploaded successfully');
+      }
+    } catch (error: any) {
+      showToast('error', error?.response?.data?.error || 'Failed to upload logo');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
   const upiQrUrl = form.upiId
     ? `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`upi://pay?pa=${form.upiId}&pn=${form.name}&cu=INR`)}`
     : null;
@@ -297,17 +322,45 @@ export default function RestaurantSettings() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Logo URL</label>
-                  <input
-                    type="url" value={form.logoUrl}
-                    onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
-                    placeholder="https://your-logo.png"
-                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-maroon focus:border-transparent transition"
-                  />
-                  {form.logoUrl && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <img src={getMediaUrl(form.logoUrl)} alt="Logo preview" className="h-16 w-16 object-contain border rounded-xl p-1 bg-gray-50" />
-                      <span className="text-xs text-gray-500 font-medium">Active logo preview</span>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Restaurant Logo</label>
+                  {!form.logoUrl ? (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors bg-white">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        {isUploadingLogo ? (
+                          <Loader2 size={24} className="text-gray-400 mb-2 animate-spin" />
+                        ) : (
+                          <Upload size={24} className="text-gray-400 mb-2" />
+                        )}
+                        <p className="mb-1 text-sm text-gray-500 font-semibold">
+                          {isUploadingLogo ? 'Uploading...' : 'Click to upload logo'}
+                        </p>
+                        <p className="text-xs text-gray-400">PNG, JPG up to 5MB</p>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={isUploadingLogo} />
+                    </label>
+                  ) : (
+                    <div className="flex items-start gap-4 p-4 border border-gray-200 rounded-xl bg-gray-50">
+                      <div className="w-24 h-24 bg-white rounded-lg border border-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                        <img src={getMediaUrl(form.logoUrl)} alt="Restaurant Logo" className="w-full h-full object-contain p-2" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-800 mb-1">Logo Uploaded</p>
+                        <p className="text-xs text-gray-500 mb-3">This logo will be displayed on your digital receipts and PDFs.</p>
+                        <div className="flex gap-2">
+                          <label className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-50 cursor-pointer shadow-sm transition-colors flex items-center gap-1">
+                            {isUploadingLogo ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                            {isUploadingLogo ? 'Uploading...' : 'Change Logo'}
+                            <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={isUploadingLogo} />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setForm(f => ({ ...f, logoUrl: '' }))}
+                            className="px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 cursor-pointer shadow-sm transition-colors flex items-center gap-1"
+                          >
+                            <Trash2 size={14} /> Remove
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

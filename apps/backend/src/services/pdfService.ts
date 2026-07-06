@@ -1,9 +1,10 @@
 import PDFDocument from 'pdfkit';
+import axios from 'axios';
 import { IInvoice } from '../models/Invoice';
 import { IRestaurant } from '../models/Restaurant';
 
 export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): Promise<Buffer> => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
             const buffers: Buffer[] = [];
@@ -25,14 +26,36 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             };
 
             // --- Header Section ---
-            doc.font('Helvetica-Bold').fontSize(26).fillColor('#000000');
-            // Mocking Zudio style lowercase logo using restaurant name with character spacing
-            doc.text(restaurant.name.toLowerCase(), 50, 48, { width: 250, align: 'left', characterSpacing: 1.5 });
+            let startY = 50;
+            let logoBuffer: Buffer | null = null;
+            
+            if (restaurant.logoUrl) {
+                try {
+                    const response = await axios.get(restaurant.logoUrl, { responseType: 'arraybuffer', timeout: 5000 });
+                    logoBuffer = Buffer.from(response.data, 'binary');
+                } catch (e) {
+                    console.error("Failed to load logo for PDF:", e);
+                }
+            }
 
-            doc.font('Helvetica-Bold').fontSize(10);
-            doc.text(`${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`, 300, 50, { width: width - 250, align: 'right' });
-            doc.font('Helvetica').fontSize(9).fillColor('#00BCD4');
-            doc.text('Store Details >', 300, 65, { width: width - 250, align: 'right' });
+            if (logoBuffer) {
+                // center the logo
+                doc.image(logoBuffer, 50, startY, { fit: [width, 60], align: 'center' });
+                doc.y = startY + 75;
+            } else {
+                doc.y = startY;
+                doc.font('Helvetica-Bold').fontSize(24).fillColor('#111827');
+                doc.text(restaurant.name.toUpperCase(), 50, doc.y, { align: 'center', characterSpacing: 2 });
+                doc.moveDown(0.5);
+            }
+
+            doc.font('Helvetica-Bold').fontSize(12).fillColor('#374151');
+            doc.text(`${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`, 50, doc.y, { align: 'center' });
+            doc.moveDown(0.2);
+            doc.font('Helvetica').fontSize(9).fillColor('#6B7280');
+            doc.text(restaurant.address || 'Address Not Available', 50, doc.y, { align: 'center' });
+            doc.moveDown(0.2);
+            doc.text(`Contact: ${restaurant.contactNumber || 'NA'}`, 50, doc.y, { align: 'center' });
 
             // --- Black Banner ---
             doc.moveDown(1.5);
@@ -44,17 +67,10 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.font('Helvetica').fontSize(9);
             doc.text('TAP TO GIVE FEEDBACK', 50, bannerY + 42, { align: 'center', width: width });
             
-            // --- Title & Store Info ---
+            // --- Title ---
             doc.y = bannerY + 80;
             doc.fillColor('#000000').font('Helvetica-Bold').fontSize(11);
             doc.text('TAX INVOICE', 50, doc.y, { align: 'center', width: width });
-            
-            doc.moveDown(1);
-            doc.fontSize(9).font('Helvetica');
-            doc.text(`Store Contact Number : ${restaurant.contactNumber || 'NA'}`, 50, doc.y, { align: 'center', width: width });
-
-            doc.moveDown(0.5);
-            doc.text(`Place Of Supply : ${restaurant.address || 'NA'}`, 50, doc.y, { align: 'center', width: width });
 
             // --- Metadata Columns ---
             doc.moveDown(2);
@@ -98,11 +114,11 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.text('QTY', 250, headerY);
             doc.text('Unit Amt', 350, headerY, { width: 145, align: 'right' });
             
-            doc.text('Item Code', 50, headerY + 15);
+            doc.text('Item Code | HSN', 50, headerY + 15);
             doc.text('Total Amt', 350, headerY + 15, { width: 145, align: 'right' });
             
-            doc.text('HSN Code', 50, headerY + 30);
-            doc.text('Taxable Amount', 350, headerY + 30, { width: 145, align: 'right' });
+            doc.text('Tax (CGST & SGST)', 50, headerY + 30);
+            doc.text('Taxable Amt', 350, headerY + 30, { width: 145, align: 'right' });
             
             doc.y = headerY + 55;
 
@@ -118,13 +134,21 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                 doc.text(`${item.quantity} PC`, 250, currentY);
                 doc.text(`Rs. ${item.unitPrice.toFixed(2)}`, 350, currentY, { width: 145, align: 'right' });
                 
-                // item code (mocked with SKU or NA)
-                doc.text(item.variantName || 'NA', 50, currentY + 15);
+                // item code & hsn
+                const itemCode = item.variantName || 'NA';
+                const hsnCode = item.hsnCode || 'NA';
+                doc.text(`${itemCode} | HSN: ${hsnCode}`, 50, currentY + 15);
                 doc.text(`Rs. ${item.lineTotal.toFixed(2)}`, 350, currentY + 15, { width: 145, align: 'right' });
                 
-                // hsn code & taxable amount
+                // taxes & taxable amount
                 const taxableAmt = item.lineTotal / (1 + (item.gstSlab / 100));
-                doc.text(item.hsnCode || 'NA', 50, currentY + 30);
+                const totalTax = item.lineTotal - taxableAmt;
+                const halfSlab = (item.gstSlab / 2).toFixed(1);
+                const halfTax = (totalTax / 2).toFixed(2);
+                
+                doc.font('Helvetica').fontSize(8.5).fillColor('#4B5563');
+                doc.text(`CGST: ${halfSlab}% (Rs. ${halfTax}) | SGST: ${halfSlab}% (Rs. ${halfTax})`, 50, currentY + 30);
+                doc.font('Helvetica').fontSize(9).fillColor('#000000');
                 doc.text(`Rs. ${taxableAmt.toFixed(2)}`, 350, currentY + 30, { width: 145, align: 'right' });
                 
                 doc.y = currentY + 55;
@@ -173,88 +197,6 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                 }
                 doc.text(`Rs. ${invoice.amountPaidINR.toFixed(2)}`, 350, paymentY, { width: 145, align: 'right' });
                 paymentY += 15;
-            }
-
-            // --- Footer (Tax Breakdown) ---
-            checkPageBreak(60);
-            doc.y = paymentY + 20;
-            const taxBoxY = doc.y;
-            
-            // Draw dashed box
-            // Note: saving and restoring graphics state prevents dash affecting other elements if we draw later
-            doc.save();
-            doc.rect(50, taxBoxY, width, 40).dash(3, { space: 3 }).stroke();
-            doc.restore();
-
-            doc.font('Helvetica-Bold').fontSize(8);
-            doc.text('HSN Code', 60, taxBoxY + 15);
-            
-            // CGST Header
-            doc.text('CGST', 200, taxBoxY + 5, { width: 100, align: 'center' });
-            doc.text('Rate', 180, taxBoxY + 25);
-            doc.text('Amt', 260, taxBoxY + 25);
-            // SGST Header
-            doc.text('SGST', 350, taxBoxY + 5, { width: 100, align: 'center' });
-            doc.text('Rate', 330, taxBoxY + 25);
-            doc.text('Amt', 410, taxBoxY + 25);
-            
-            // Draw internal dashed lines for the table structure inside the box
-            doc.save();
-            // Vertical separators
-            doc.moveTo(160, taxBoxY).lineTo(160, taxBoxY + 40).dash(3, {space:3}).stroke();
-            doc.moveTo(310, taxBoxY).lineTo(310, taxBoxY + 40).dash(3, {space:3}).stroke();
-            // Horizontal separator under CGST/SGST
-            doc.moveTo(160, taxBoxY + 20).lineTo(310, taxBoxY + 20).dash(3, {space:3}).stroke();
-            doc.moveTo(310, taxBoxY + 20).lineTo(460, taxBoxY + 20).dash(3, {space:3}).stroke();
-            // Vertical sub-separators
-            doc.moveTo(235, taxBoxY + 20).lineTo(235, taxBoxY + 40).dash(3, {space:3}).stroke();
-            doc.moveTo(385, taxBoxY + 20).lineTo(385, taxBoxY + 40).dash(3, {space:3}).stroke();
-            doc.restore();
-
-            // Populate Tax Rows
-            let taxRowY = taxBoxY + 40;
-            if (invoice.gstBreakup && invoice.gstBreakup.length > 0) {
-                invoice.gstBreakup.forEach(tax => {
-                    doc.save();
-                    // Extend the box
-                    doc.rect(50, taxBoxY, width, (taxRowY - taxBoxY) + 20).dash(3, { space: 3 }).stroke();
-                    // Draw vertical separators down
-                    doc.moveTo(160, taxRowY).lineTo(160, taxRowY + 20).dash(3, {space:3}).stroke();
-                    doc.moveTo(310, taxRowY).lineTo(310, taxRowY + 20).dash(3, {space:3}).stroke();
-                    doc.moveTo(235, taxRowY).lineTo(235, taxRowY + 20).dash(3, {space:3}).stroke();
-                    doc.moveTo(385, taxRowY).lineTo(385, taxRowY + 20).dash(3, {space:3}).stroke();
-                    doc.restore();
-                    
-                    doc.font('Helvetica').fontSize(8);
-                    // Use a fallback HSN if we don't have it on the breakup level.
-                    // Ideally, GST breakup should group by HSN, but our model just has slab.
-                    doc.text('MULTIPLE', 60, taxRowY + 5); 
-                    
-                    const cgstRate = (tax.slab / 2).toFixed(2) + '%';
-                    const sgstRate = (tax.slab / 2).toFixed(2) + '%';
-                    
-                    doc.text(cgstRate, 180, taxRowY + 5);
-                    doc.text(`Rs. ${tax.cgst.toFixed(2)}`, 260, taxRowY + 5);
-                    
-                    doc.text(sgstRate, 330, taxRowY + 5);
-                    doc.text(`Rs. ${tax.sgst.toFixed(2)}`, 410, taxRowY + 5);
-                    
-                    taxRowY += 20;
-                });
-            } else {
-                 doc.save();
-                 doc.rect(50, taxBoxY, width, 60).dash(3, { space: 3 }).stroke();
-                 doc.moveTo(160, taxRowY).lineTo(160, taxRowY + 20).dash(3, {space:3}).stroke();
-                 doc.moveTo(310, taxRowY).lineTo(310, taxRowY + 20).dash(3, {space:3}).stroke();
-                 doc.moveTo(235, taxRowY).lineTo(235, taxRowY + 20).dash(3, {space:3}).stroke();
-                 doc.moveTo(385, taxRowY).lineTo(385, taxRowY + 20).dash(3, {space:3}).stroke();
-                 doc.restore();
-                 doc.font('Helvetica').fontSize(8);
-                 doc.text('NA', 60, taxRowY + 5);
-                 doc.text('0.00%', 180, taxRowY + 5);
-                 doc.text('Rs. 0.00', 260, taxRowY + 5);
-                 doc.text('0.00%', 330, taxRowY + 5);
-                 doc.text('Rs. 0.00', 410, taxRowY + 5);
             }
 
             doc.end();
