@@ -61,6 +61,7 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             doc.moveDown(1.5);
             const bannerY = doc.y;
             doc.rect(50, bannerY, width, 60).fill('#000000');
+            doc.link(50, bannerY, width, 60, 'https://review-flow-seven.vercel.app/review/celebration-point');
             doc.fillColor('#FFFFFF').font('Helvetica-Bold').fontSize(11);
             doc.text('WE ARE NEVER HAPPY, TILL YOU ARE HAPPY.', 50, bannerY + 15, { align: 'center', width: width });
             doc.text('TELL US HOW WE DID.', 50, bannerY + 28, { align: 'center', width: width });
