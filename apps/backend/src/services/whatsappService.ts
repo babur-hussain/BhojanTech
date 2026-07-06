@@ -196,6 +196,15 @@ async function callLoomiFlow(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
+ * Ensures phone number has a country code (defaults to 91 for India if 10 digits)
+ */
+const formatPhoneNumber = (phone: string): string => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 10) return `91${digits}`;
+    return digits;
+};
+
+/**
  * Send a plain text WhatsApp message via LoomiFlow.
  */
 export const sendWhatsAppNotification = async (
@@ -206,7 +215,7 @@ export const sendWhatsAppNotification = async (
     if (!phoneNumber) return { success: false, error: 'No phone number provided' };
 
     return callLoomiFlow('/send-message', {
-        to: phoneNumber,
+        to: formatPhoneNumber(phoneNumber),
         message,
         correlationId: correlationId || crypto.randomUUID(),
     });
@@ -233,7 +242,7 @@ export const sendWhatsAppTemplate = async (
     if (!phoneNumber) return { success: false, error: 'No phone number provided' };
 
     return callLoomiFlow('/send-template', {
-        to: phoneNumber,
+        to: formatPhoneNumber(phoneNumber),
         templateName,
         languageCode,
         components,
@@ -255,7 +264,7 @@ export const sendWhatsAppDocument = async (
     if (!phoneNumber) return { success: false, error: 'No phone number provided' };
 
     return callLoomiFlow('/send-document', {
-        to: phoneNumber,
+        to: formatPhoneNumber(phoneNumber),
         documentUrl,
         caption,
         correlationId: correlationId || crypto.randomUUID(),
