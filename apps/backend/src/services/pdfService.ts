@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
+import sharp from 'sharp';
 import { IInvoice } from '../models/Invoice';
 import { IRestaurant } from '../models/Restaurant';
 
@@ -45,7 +46,8 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                     }
                     
                     const response = await axios.get(fetchUrl, { responseType: 'arraybuffer', timeout: 5000 });
-                    logoBuffer = Buffer.from(response.data, 'binary');
+                    const rawBuffer = Buffer.from(response.data, 'binary');
+                    logoBuffer = await sharp(rawBuffer).png().toBuffer();
                 } catch (e: any) {
                     console.error("Failed to load logo for PDF from url:", restaurant.logoUrl, e.message);
                 }
