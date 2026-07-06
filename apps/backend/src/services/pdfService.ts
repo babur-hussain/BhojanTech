@@ -31,10 +31,23 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
             
             if (restaurant.logoUrl) {
                 try {
-                    const response = await axios.get(restaurant.logoUrl, { responseType: 'arraybuffer', timeout: 5000 });
+                    let fetchUrl = restaurant.logoUrl;
+                    if (fetchUrl.startsWith('/')) {
+                        const port = process.env.PORT || 8080;
+                        fetchUrl = `http://localhost:${port}${fetchUrl}`;
+                    } else if (fetchUrl.includes('.s3.amazonaws.com')) {
+                        // Convert S3 URL to proxy URL since direct S3 might have CORS or signature issues
+                        const s3Match = fetchUrl.match(/https?:\/\/[^/]*\.s3[^/]*\.amazonaws\.com\/(.+)$/);
+                        if (s3Match) {
+                            const port = process.env.PORT || 8080;
+                            fetchUrl = `http://localhost:${port}/api/media/${s3Match[1]}`;
+                        }
+                    }
+                    
+                    const response = await axios.get(fetchUrl, { responseType: 'arraybuffer', timeout: 5000 });
                     logoBuffer = Buffer.from(response.data, 'binary');
-                } catch (e) {
-                    console.error("Failed to load logo for PDF:", e);
+                } catch (e: any) {
+                    console.error("Failed to load logo for PDF from url:", restaurant.logoUrl, e.message);
                 }
             }
 
