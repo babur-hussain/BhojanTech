@@ -297,6 +297,14 @@ export const transferStaff = async (req: AuthRequest, res: Response) => {
     );
     if (!staff) return res.status(404).json({ error: 'Staff not found' });
 
+    // Sync branch change to User collection if they have a login
+    if (staff.phone) {
+      await mongoose.model('User').findOneAndUpdate(
+        { phoneNumber: staff.phone },
+        { $set: { branchId: targetBranchId } }
+      );
+    }
+
     // Remove from all future weekly schedules at old branch
     // (schedules at new branch need to be manually assigned)
     return res.json({ success: true, staff });
