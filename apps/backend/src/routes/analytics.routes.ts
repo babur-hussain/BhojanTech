@@ -5,7 +5,8 @@ import * as analytics from '../controllers/analytics.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
-router.use(requirePermission(Permission.REPORTS_VIEW));
+// Allow either REPORTS_VIEW or DASHBOARD_VIEW for these endpoints since the dashboard uses them
+router.use(requirePermission([Permission.REPORTS_VIEW, Permission.DASHBOARD_VIEW]));
 
 router.get('/live-activity', analytics.liveActivity);
 router.get('/dashboard',          analytics.liveDashboard);

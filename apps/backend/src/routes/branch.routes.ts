@@ -11,11 +11,11 @@ router.use(requireAuth);
 // Any authenticated user can save their branch selection (syncs across devices)
 router.put('/select', selectBranch);
 
-// Only users with BRANCH_MANAGE permission can list, create, and update branches
-router.use(requirePermission(Permission.BRANCH_MANAGE));
-
+// Any authenticated user can list branches (results scoped in controller)
 router.get('/', listBranches);
-router.post('/', validate(createBranchSchema), createBranch);
-router.put('/:id', updateBranch);
+
+// Only users with BRANCH_MANAGE permission can create and update branches
+router.post('/', requirePermission(Permission.BRANCH_MANAGE), validate(createBranchSchema), createBranch);
+router.put('/:id', requirePermission(Permission.BRANCH_MANAGE), updateBranch);
 
 export default router;

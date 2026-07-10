@@ -7,8 +7,18 @@ import { User } from '../models/User';
 export const listBranches = async (req: AuthRequest, res: Response) => {
     try {
         const restaurantId = new mongoose.Types.ObjectId(req.user!.restaurantId);
+        
+        let query: any = { restaurantId };
+        
+        if (req.user?.role === 'BRANCH_MANAGER' && req.user.accessibleBranches) {
+            query._id = { $in: req.user.accessibleBranches };
+        } else if (req.user?.role !== 'SUPER_OWNER' && req.user?.role !== 'OWNER' && req.user?.branchId) {
+            // Waiters, Kitchen Staff etc can only see their own branch
+            query._id = req.user.branchId;
+        }
+
         // Include manager info if needed
-        const branches = await Branch.find({ restaurantId }).populate('managerId', 'name email').sort({ createdAt: -1 });
+        const branches = await Branch.find(query).populate('managerId', 'name email').sort({ createdAt: -1 });
         return res.json(branches);
     } catch (err: any) {
         console.error('List Branches Error:', err);

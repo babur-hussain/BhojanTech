@@ -79,18 +79,21 @@ export const requireBranchAccess = (req: AuthRequest, res: Response, next: NextF
   next();
 };
 
-export const requirePermission = (permission: string) => {
+export const requirePermission = (permission: string | string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
 
     // Super owners and owners have all permissions implicitly
     if (req.user.role === 'SUPER_OWNER' || req.user.role === 'OWNER') return next();
 
-    // Check if user has the specific permission
-    if (req.user.permissions && req.user.permissions.includes(permission)) {
-      return next();
+    // Check if user has the specific permission(s)
+    const requiredPerms = Array.isArray(permission) ? permission : [permission];
+    
+    if (req.user.permissions) {
+      const hasPermission = requiredPerms.some(p => req.user!.permissions!.includes(p as any));
+      if (hasPermission) return next();
     }
 
-    return res.status(403).json({ error: `Forbidden: Requires ${permission} permission` });
+    return res.status(403).json({ error: `Forbidden: Requires one of ${requiredPerms.join(', ')} permission(s)` });
   };
 };
