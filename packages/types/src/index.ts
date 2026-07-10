@@ -28,6 +28,47 @@ export interface Integration {
   updatedAt: Date;
 }
 
+export const Permission = {
+  // Inventory & Retail
+  INVENTORY_VIEW: 'INVENTORY_VIEW',
+  INVENTORY_CREATE: 'INVENTORY_CREATE',
+  INVENTORY_EDIT: 'INVENTORY_EDIT',
+  INVENTORY_DELETE: 'INVENTORY_DELETE',
+  RETAIL_VIEW: 'RETAIL_VIEW',
+  RETAIL_CREATE: 'RETAIL_CREATE',
+  RETAIL_EDIT: 'RETAIL_EDIT',
+  RETAIL_DELETE: 'RETAIL_DELETE',
+
+  // Billing & POS
+  POS_ACCESS: 'POS_ACCESS',
+  INVOICE_VIEW: 'INVOICE_VIEW',
+  INVOICE_CREATE: 'INVOICE_CREATE',
+  INVOICE_EDIT: 'INVOICE_EDIT',
+  APPLY_DISCOUNT: 'APPLY_DISCOUNT',
+
+  // Menu & Catalog
+  MENU_VIEW: 'MENU_VIEW',
+  MENU_CREATE: 'MENU_CREATE',
+  MENU_EDIT: 'MENU_EDIT',
+  MENU_DELETE: 'MENU_DELETE',
+
+  // Orders & Tables
+  ORDER_VIEW: 'ORDER_VIEW',
+  ORDER_MANAGE: 'ORDER_MANAGE',
+  TABLE_MANAGE: 'TABLE_MANAGE',
+  KITCHEN_DISPLAY_ACCESS: 'KITCHEN_DISPLAY_ACCESS',
+
+  // Staff, Reports & Settings
+  STAFF_VIEW: 'STAFF_VIEW',
+  STAFF_MANAGE: 'STAFF_MANAGE',
+  PAYROLL_MANAGE: 'PAYROLL_MANAGE',
+  REPORTS_VIEW: 'REPORTS_VIEW',
+  EOD_REPORT_VIEW: 'EOD_REPORT_VIEW',
+  SETTINGS_MANAGE: 'SETTINGS_MANAGE',
+  BRANCH_MANAGE: 'BRANCH_MANAGE',
+} as const;
+export type Permission = typeof Permission[keyof typeof Permission];
+
 export interface User {
   id: string;
   firebaseUid: string;
@@ -37,6 +78,7 @@ export interface User {
   restaurantId?: string;
   branchId?: string; // Set for WAITER, KITCHEN_STAFF
   accessibleBranches?: string[]; // Set for BRANCH_MANAGER
+  permissions?: Permission[]; // Granular RBAC
   name?: string;
   isActive: boolean;
   createdAt: Date;

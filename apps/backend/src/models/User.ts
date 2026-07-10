@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { UserRole } from '@restaurant/types';
+import { UserRole, Permission } from '@restaurant/types';
 
 export interface IUser extends Document {
   firebaseUid: string;
@@ -16,6 +16,7 @@ export interface IUser extends Document {
   isActive: boolean;
   /** FCM push tokens — one per device (web + mobile). Max 10 stored per user. */
   fcmTokens?: string[];
+  permissions?: Permission[];
 }
 
 const UserSchema: Schema = new Schema(
@@ -27,6 +28,7 @@ const UserSchema: Schema = new Schema(
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', index: true },
     branchId: { type: Schema.Types.ObjectId, ref: 'Branch', index: true },
     accessibleBranches: [{ type: Schema.Types.ObjectId, ref: 'Branch' }],
+    permissions: { type: [String], default: [] },
     selectedBranchId: { type: String, default: null },
     name: { type: String },
     isActive: { type: Boolean, default: true },

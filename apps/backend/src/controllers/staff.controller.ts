@@ -134,6 +134,47 @@ export const removeStaff = async (req: AuthRequest, res: Response) => {
   } catch { return res.status(500).json({ error: 'Server error' }); }
 };
 
+// ─── Permissions ─────────────────────────────────────────────────────────────
+
+export const getStaffPermissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const member = await StaffMember.findOne(query);
+    if (!member) return res.status(404).json({ error: 'Staff not found' });
+    
+    // permissions are on both StaffMember and User. They should be in sync.
+    return res.json({ permissions: member.permissions || [] });
+  } catch { return res.status(500).json({ error: 'Server error' }); }
+};
+
+export const updateStaffPermissions = async (req: AuthRequest, res: Response) => {
+  try {
+    const { permissions } = req.body;
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({ error: 'Permissions must be an array' });
+    }
+
+    const query = getBaseQuery(req);
+    query._id = req.params.id;
+    const member = await StaffMember.findOneAndUpdate(query, { permissions }, { new: true });
+    if (!member) return res.status(404).json({ error: 'Staff not found' });
+    
+    // Sync to User model for JWT logic
+    if (member.phone) {
+      await mongoose.model('User').findOneAndUpdate(
+        { phoneNumber: member.phone },
+        { permissions }
+      );
+    }
+
+    return res.json({ success: true, permissions: member.permissions });
+  } catch (err: any) {
+    console.error('Update permissions error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 // ─── Staff Detail ─────────────────────────────────────────────────────────────
 
 export const getStaffDetail = async (req: AuthRequest, res: Response) => {

@@ -1,17 +1,15 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
+import { requireAuth, requirePermission } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { createExpenseSchema } from '../validations/schemas';
-import { UserRole } from '@restaurant/types';
+import { Permission } from '@restaurant/types';
 import { getExpenses, createExpense, deleteExpense } from '../controllers/expense.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
-router.use(requireRole([UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.ACCOUNTANT]));
 
-router.get('/', getExpenses);
-router.post('/', validate(createExpenseSchema), createExpense);
-router.delete('/:id', deleteExpense);
+router.get('/', requirePermission(Permission.REPORTS_VIEW), getExpenses);
+router.post('/', requirePermission(Permission.SETTINGS_MANAGE), validate(createExpenseSchema), createExpense);
+router.delete('/:id', requirePermission(Permission.SETTINGS_MANAGE), deleteExpense);
 
 export default router;

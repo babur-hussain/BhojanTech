@@ -1,14 +1,13 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
-import { UserRole } from '@restaurant/types';
+import { requireAuth, requirePermission } from '../middleware/auth.middleware';
+import { Permission } from '@restaurant/types';
 import { getDashboardMetrics, getGSTR1, getGSTR3B, getProfitAndLoss, getInvoiceRegister } from '../controllers/accounting.controller';
 
 const router: Router = Router();
 
-// Accountant module requires these roles:
+// Accountant module requires REPORTS_VIEW
 router.use(requireAuth);
-router.use(requireRole([UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.ACCOUNTANT]));
+router.use(requirePermission(Permission.REPORTS_VIEW));
 
 router.get('/dashboard', getDashboardMetrics);
 router.get('/gstr1', getGSTR1);

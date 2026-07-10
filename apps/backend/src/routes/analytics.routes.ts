@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
-import { UserRole } from '@restaurant/types';
+import { requireAuth, requirePermission } from '../middleware/auth.middleware';
+import { Permission } from '@restaurant/types';
 import * as analytics from '../controllers/analytics.controller';
 
 const router: Router = Router();
 router.use(requireAuth);
-router.use(requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]));
+router.use(requirePermission(Permission.REPORTS_VIEW));
 
 router.get('/live-activity', analytics.liveActivity);
 router.get('/dashboard',          analytics.liveDashboard);

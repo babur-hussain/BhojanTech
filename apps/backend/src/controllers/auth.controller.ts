@@ -61,6 +61,7 @@ export const login = async (req: Request, res: Response) => {
       restaurantId: user.restaurantId?.toString(),
       branchId: user.branchId?.toString(),
       accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
+      permissions: user.permissions || [],
     };
 
     const tokens = generateTokens(payload);
@@ -295,6 +296,7 @@ export const refreshAccessToken = async (req: Request, res: Response) => {
       restaurantId: user.restaurantId?.toString(),
       branchId: user.branchId?.toString(),
       accessibleBranches: user.accessibleBranches?.map((b: any) => b.toString()),
+      permissions: user.permissions || [],
     };
 
     const tokens = generateTokens(payload);

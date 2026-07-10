@@ -78,3 +78,19 @@ export const requireBranchAccess = (req: AuthRequest, res: Response, next: NextF
   // If no branchId is specified in the request but user is scoped, we might inject it
   next();
 };
+
+export const requirePermission = (permission: string) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Super owners and owners have all permissions implicitly
+    if (req.user.role === 'SUPER_OWNER' || req.user.role === 'OWNER') return next();
+
+    // Check if user has the specific permission
+    if (req.user.permissions && req.user.permissions.includes(permission)) {
+      return next();
+    }
+
+    return res.status(403).json({ error: `Forbidden: Requires ${permission} permission` });
+  };
+};

@@ -20,6 +20,7 @@ export interface IStaffMember extends Document {
   isActive: boolean;
   fcmToken?: string;
   totalAdvances: number;
+  permissions?: string[];
   emergencyContact?: {
     name: string;
     phone: string;
@@ -65,6 +66,7 @@ const StaffMemberSchema = new Schema<IStaffMember>({
   isActive: { type: Boolean, default: true },
   fcmToken: { type: String },
   totalAdvances: { type: Number, default: 0 },
+  permissions: { type: [String], default: [] },
   emergencyContact: { type: EmergencyContactSchema },
   bankDetails: { type: BankDetailsSchema },
 }, { timestamps: true });

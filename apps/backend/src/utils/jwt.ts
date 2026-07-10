@@ -20,6 +20,7 @@ export interface JwtPayload {
   restaurantId?: string;
   branchId?: string; // Set for staff/waiters
   accessibleBranches?: string[]; // Set for branch managers
+  permissions?: string[];
 }
 
 export const generateTokens = (payload: JwtPayload) => {

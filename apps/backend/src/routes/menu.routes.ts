@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { requireAuth } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
+import { requireAuth, requirePermission } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { createMenuItemSchema } from '../validations/schemas';
-import { UserRole } from '@restaurant/types';
+import { Permission } from '@restaurant/types';
 import * as menuCtrl from '../controllers/menu.controller';
 
 const router: Router = Router();
@@ -17,24 +16,24 @@ router.get('/public/:restaurantId', menuCtrl.getPublicMenu);
 router.use(requireAuth);
 
 // Uploads
-router.post('/upload-url', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.getUploadUrl);
-router.post('/upload', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), upload.array('images', 10), menuCtrl.uploadImages);
+router.post('/upload-url', requirePermission(Permission.MENU_CREATE), menuCtrl.getUploadUrl);
+router.post('/upload', requirePermission(Permission.MENU_CREATE), upload.array('images', 10), menuCtrl.uploadImages);
 
 // Categories
-router.get('/categories', menuCtrl.getCategories); // Waiters can read
-router.post('/categories', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.createCategory);
-router.put('/categories/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.updateCategory);
-router.delete('/categories/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.deleteCategory);
-router.patch('/categories/:id/availability', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.updateCategoryAvailability);
+router.get('/categories', requirePermission(Permission.MENU_VIEW), menuCtrl.getCategories); // Waiters can read
+router.post('/categories', requirePermission(Permission.MENU_CREATE), menuCtrl.createCategory);
+router.put('/categories/:id', requirePermission(Permission.MENU_EDIT), menuCtrl.updateCategory);
+router.delete('/categories/:id', requirePermission(Permission.MENU_DELETE), menuCtrl.deleteCategory);
+router.patch('/categories/:id/availability', requirePermission(Permission.MENU_EDIT), menuCtrl.updateCategoryAvailability);
 
 // Items
-router.get('/items', menuCtrl.getMenuItems); // Waiters can read
-router.post('/items', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), validate(createMenuItemSchema), menuCtrl.createMenuItem);
-router.put('/items/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.updateMenuItem);
-router.delete('/items/:id', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.deleteMenuItem);
-router.patch('/items/:id/availability', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER]), menuCtrl.updateItemAvailability);
+router.get('/items', requirePermission(Permission.MENU_VIEW), menuCtrl.getMenuItems); // Waiters can read
+router.post('/items', requirePermission(Permission.MENU_CREATE), validate(createMenuItemSchema), menuCtrl.createMenuItem);
+router.put('/items/:id', requirePermission(Permission.MENU_EDIT), menuCtrl.updateMenuItem);
+router.delete('/items/:id', requirePermission(Permission.MENU_DELETE), menuCtrl.deleteMenuItem);
+router.patch('/items/:id/availability', requirePermission(Permission.MENU_EDIT), menuCtrl.updateItemAvailability);
 
 // Migration — one-time fix for existing S3 URLs
-router.post('/migrate-images', requireRole([UserRole.OWNER]), menuCtrl.migrateImageUrls);
+router.post('/migrate-images', requirePermission(Permission.SETTINGS_MANAGE), menuCtrl.migrateImageUrls);
 
 export default router;

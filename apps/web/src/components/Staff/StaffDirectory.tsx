@@ -8,6 +8,7 @@ import {
 import { useBranchStore } from '../../store/branchStore';
 import { api } from '../../utils/api';
 import StaffLedgerModal from './StaffLedgerModal';
+import { ManagePermissionsModal } from './ManagePermissionsModal';
 
 const ROLE_COLORS: Record<string, string> = {
   SUPER_OWNER: 'bg-purple-100 text-purple-700',
@@ -46,6 +47,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
   const [transferStaffId, setTransferStaffId] = useState<string | null>(null);
   const [showLedgerModal, setShowLedgerModal] = useState<boolean>(false);
   const [ledgerModalAddAdvance, setLedgerModalAddAdvance] = useState<boolean>(false);
+  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [transferStaffName, setTransferStaffName] = useState('');
   const [targetBranchId, setTargetBranchId] = useState('');
   const [branches, setBranches] = useState<any[]>([]);
@@ -473,6 +475,9 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
 
             {/* Actions */}
             <div className="flex gap-2 pt-2">
+              <button onClick={() => setIsPermissionsModalOpen(true)} className="flex-1 text-sm py-2 border rounded-lg text-gray-700 hover:bg-gray-50 font-medium flex items-center justify-center gap-1.5">
+                <Shield size={13} /> Permissions
+              </button>
               <button onClick={() => openEditModal(detailStaff)} className="flex-1 text-sm py-2 border rounded-lg text-gray-700 hover:bg-gray-50 font-medium flex items-center justify-center gap-1.5">
                 <Edit2 size={13} /> Edit
               </button>
@@ -673,6 +678,17 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
           staff={detailStaff} 
           defaultShowAddAdvance={ledgerModalAddAdvance}
           onClose={() => { setShowLedgerModal(false); setLedgerModalAddAdvance(false); }} 
+        />
+      )}
+
+      {/* Permissions Modal */}
+      {isPermissionsModalOpen && detailStaff && (
+        <ManagePermissionsModal
+          isOpen={isPermissionsModalOpen}
+          onClose={() => setIsPermissionsModalOpen(false)}
+          staffId={detailStaff.id || detailStaff._id}
+          staffName={detailStaff.name}
+          staffRole={detailStaff.role}
         />
       )}
     </div>

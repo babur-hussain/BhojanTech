@@ -1,15 +1,14 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/role.middleware';
-import { UserRole } from '@restaurant/types';
+import { requireAuth, requirePermission } from '../middleware/auth.middleware';
+import { Permission } from '@restaurant/types';
 import * as kotCtrl from '../controllers/kot.controller';
 
 const router: Router = Router();
 
 router.use(requireAuth);
 
-router.get('/active', kotCtrl.getActiveKOTs);
-router.patch('/:kotId/items/:itemId/status', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.KITCHEN_STAFF]), kotCtrl.updateKOTItemStatus);
-router.post('/:kotId/notify', requireRole([UserRole.OWNER, UserRole.BRANCH_MANAGER, UserRole.KITCHEN_STAFF]), kotCtrl.notifyWaiter);
+router.get('/active', requirePermission(Permission.KITCHEN_DISPLAY_ACCESS), kotCtrl.getActiveKOTs);
+router.patch('/:kotId/items/:itemId/status', requirePermission(Permission.KITCHEN_DISPLAY_ACCESS), kotCtrl.updateKOTItemStatus);
+router.post('/:kotId/notify', requirePermission(Permission.KITCHEN_DISPLAY_ACCESS), kotCtrl.notifyWaiter);
 
 export default router;
