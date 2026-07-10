@@ -56,6 +56,7 @@ const PERMISSION_GROUPS = [
   {
     title: 'Staff, Reports & Settings',
     permissions: [
+      { id: Permission.DASHBOARD_VIEW, label: 'View Dashboard' },
       { id: Permission.STAFF_VIEW, label: 'View Staff Directory' },
       { id: Permission.STAFF_MANAGE, label: 'Manage Staff' },
       { id: Permission.PAYROLL_MANAGE, label: 'Manage Payroll & Advances' },

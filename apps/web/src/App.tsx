@@ -53,7 +53,7 @@ function App() {
           <Route path="/setup" element={<SetupRestaurant />} />
 
           <Route path="/" element={<DashboardLayout />}>
-            <Route index element={pg([Permission.REPORTS_VIEW], <DashboardHome />)} />
+            <Route index element={pg([Permission.DASHBOARD_VIEW], <DashboardHome />)} />
             <Route path="pos" element={pg([Permission.POS_ACCESS], <DirectPOS />)} />
             <Route path="branches" element={pg([Permission.BRANCH_MANAGE], <BranchManagement />)} />
             <Route path="menu" element={pg([Permission.MENU_VIEW], <MenuManagement />)} />
@@ -70,7 +70,7 @@ function App() {
             <Route path="inventory" element={pg([Permission.INVENTORY_VIEW], <Inventory />)} />
             <Route path="staff" element={pg([Permission.STAFF_VIEW], <StaffManagement />)} />
             <Route path="analytics" element={pg([Permission.REPORTS_VIEW], <LiveAnalytics />)} />
-            <Route path="dashboard" element={pg([Permission.REPORTS_VIEW], <AnalyticsDashboard />)} />
+            <Route path="dashboard" element={pg([Permission.DASHBOARD_VIEW], <AnalyticsDashboard />)} />
             <Route path="customers" element={pg([Permission.REPORTS_VIEW], <Customers />)} />
             <Route path="campaigns" element={pg([Permission.REPORTS_VIEW], <Campaigns />)} />
             <Route path="customer-analytics" element={pg([Permission.REPORTS_VIEW], <CustomerAnalytics />)} />
