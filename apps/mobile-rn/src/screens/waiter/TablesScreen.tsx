@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Colors, Spacing, FontSize, Radius } from '../../constants/theme';
 import { useTablesStore } from '../../store/tablesStore';
 import TableCard from '../../components/TableCard';
@@ -28,7 +28,7 @@ export default function TablesScreen() {
         // In production, use react-native-vision-camera to scan QR on physical table
         // The QR encodes the table number/ID
         // For now, alert as stub
-        alert('QR Scanner: Would open camera to scan table QR code');
+        Alert.alert('QR Scanner: Would open camera to scan table QR code');
     };
 
     return (
