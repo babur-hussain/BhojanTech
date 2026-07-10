@@ -606,11 +606,6 @@ export const eodSummary = async (req: AuthRequest, res: Response) => {
     const end = new Date(year, month - 1, day, 23, 59, 59);
 
     const query = getBaseQuery(req);
-    if (req.query.branchId && req.query.branchId !== 'all') {
-      query.branchId = req.query.branchId;
-    } else if (req.query.branchId === 'all') {
-      delete query.branchId; // allow fetching for all branches
-    }
 
     const invoices = await Invoice.find({
       ...query,

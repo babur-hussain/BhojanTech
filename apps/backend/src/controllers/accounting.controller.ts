@@ -13,11 +13,6 @@ const endOfMonthDate = (y: number, m: number) => new Date(y, m + 1, 0, 23, 59, 5
 export const getDashboardMetrics = async (req: AuthRequest, res: Response) => {
     try {
         const query = getBaseQuery(req);
-        if (req.query.branchId && req.query.branchId !== 'all') {
-            query.branchId = req.query.branchId;
-        } else if (req.query.branchId === 'all') {
-            delete query.branchId;
-        }
 
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -86,12 +81,6 @@ export const getGSTR1 = async (req: AuthRequest, res: Response) => {
         const { branchId, month, year } = req.query; // e.g. month=4, year=2026
         // Use getBaseQuery for consistent restaurant scoping
         const query: any = getBaseQuery(req);
-
-        if (branchId && branchId !== 'all') {
-            query.branchId = branchId;
-        } else if (branchId === 'all') {
-            delete query.branchId;
-        }
 
         const m = parseInt(month as string) - 1;
         const y = parseInt(year as string);
@@ -166,14 +155,7 @@ export const getGSTR3B = async (req: AuthRequest, res: Response) => {
     try {
         const { branchId, month, year } = req.query;
         const query: any = getBaseQuery(req);
-        const expenseQuery: any = { restaurantId: req.user!.restaurantId, isGstEligible: true };
-
-        if (branchId && branchId !== 'all') {
-            query.branchId = branchId;
-            expenseQuery.branchId = branchId;
-        } else if (branchId === 'all') {
-            delete query.branchId;
-        }
+        const expenseQuery: any = { ...query, isGstEligible: true };
 
         const m = parseInt(month as string) - 1;
         const y = parseInt(year as string);
@@ -239,14 +221,7 @@ export const getProfitAndLoss = async (req: AuthRequest, res: Response) => {
         const { branchId, month, year } = req.query;
 
         const query: any = getBaseQuery(req);
-        let expenseQuery: any = { restaurantId: req.user!.restaurantId };
-
-        if (branchId && branchId !== 'all') {
-            query.branchId = branchId;
-            expenseQuery.branchId = branchId;
-        } else if (branchId === 'all') {
-            delete query.branchId;
-        }
+        let expenseQuery: any = { ...query };
 
         const m = parseInt(month as string) - 1;
         const y = parseInt(year as string);
@@ -343,12 +318,6 @@ export const getInvoiceRegister = async (req: AuthRequest, res: Response) => {
     try {
         const { branchId, startDate, endDate, page = '1', limit = '50' } = req.query;
         const query: any = getBaseQuery(req);
-
-        if (branchId && branchId !== 'all') {
-            query.branchId = branchId;
-        } else if (branchId === 'all') {
-            delete query.branchId;
-        }
 
         if (startDate && endDate) {
             query.createdAt = {

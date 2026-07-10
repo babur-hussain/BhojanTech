@@ -147,11 +147,6 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
     const lastWeekSameDay = new Date(todayStart); lastWeekSameDay.setDate(lastWeekSameDay.getDate() - 7);
 
     const query = getBaseQuery(req);
-    if (req.query.branchId && req.query.branchId !== 'all' && req.query.branchId !== 'null') {
-      query.branchId = req.query.branchId;
-    } else if (req.query.branchId === 'all') {
-      delete query.branchId; // allow fetching for all branches
-    }
 
     const [todayInvoices, ydayInvoices, lwInvoices, tables, activeOrders, recentOrders] = await Promise.all([
       Invoice.find({ ...query, createdAt: { $gte: todayStart, $lte: todayEnd } }).lean(),

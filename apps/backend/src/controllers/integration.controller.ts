@@ -245,11 +245,6 @@ export const handleOndcWebhook = async (req: Request, res: Response): Promise<an
 export const getIntegrations = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
         const query = getBaseQuery(req);
-        if (req.query.branchId && req.query.branchId !== 'all') {
-            query.branchId = req.query.branchId;
-        } else if (req.query.branchId === 'all') {
-            delete query.branchId;
-        }
 
         const integrations = await Integration.find(query).select('-webhookSecret -apiSecret');
         return res.json(integrations);
