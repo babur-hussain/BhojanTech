@@ -54,14 +54,19 @@ const PERMISSION_GROUPS = [
     ]
   },
   {
-    title: 'Staff, Reports & Settings',
+    title: 'Dashboard & Reports',
     permissions: [
       { id: Permission.DASHBOARD_VIEW, label: 'View Dashboard' },
+      { id: Permission.REPORTS_VIEW, label: 'View Analytics & Reports' },
+      { id: Permission.EOD_REPORT_VIEW, label: 'View EOD Report' },
+    ]
+  },
+  {
+    title: 'Staff & Settings',
+    permissions: [
       { id: Permission.STAFF_VIEW, label: 'View Staff Directory' },
       { id: Permission.STAFF_MANAGE, label: 'Manage Staff' },
       { id: Permission.PAYROLL_MANAGE, label: 'Manage Payroll & Advances' },
-      { id: Permission.REPORTS_VIEW, label: 'View Analytics & Reports' },
-      { id: Permission.EOD_REPORT_VIEW, label: 'View EOD Report' },
       { id: Permission.SETTINGS_MANAGE, label: 'Manage Settings' },
       { id: Permission.BRANCH_MANAGE, label: 'Manage Branches' },
     ]
