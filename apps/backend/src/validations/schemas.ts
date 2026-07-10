@@ -181,7 +181,7 @@ export const createBranchSchema = z.object({
     address: z.string().min(1).max(500),
     city: z.string().min(1).max(100),
     pincode: z.string().min(1).max(20),
-    phone: z.string().min(1).max(15),
+    phone: z.string().min(1).max(100),
     gstin: z.string().max(20).optional(),
     fssaiNumber: z.string().max(50).optional(),
     invoicePrefix: z.string().min(1).max(10),
