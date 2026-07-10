@@ -178,12 +178,15 @@ export const createMenuItemSchema = z.object({
 export const createBranchSchema = z.object({
   body: z.object({
     name: z.string().min(1).max(200),
-    address: z.string().max(500).optional(),
-    city: z.string().max(100).optional(),
-    phone: z.string().max(15).optional(),
-    gstNumber: z.string().max(20).optional(),
-    invoicePrefix: z.string().max(10).optional(),
+    address: z.string().min(1).max(500),
+    city: z.string().min(1).max(100),
+    pincode: z.string().min(1).max(20),
+    phone: z.string().min(1).max(15),
+    gstin: z.string().max(20).optional(),
+    fssaiNumber: z.string().max(50).optional(),
+    invoicePrefix: z.string().min(1).max(10),
     managerId: z.string().optional(),
+    isActive: z.boolean().optional(),
   }),
 });
 

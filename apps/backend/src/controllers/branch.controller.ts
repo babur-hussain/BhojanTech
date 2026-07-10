@@ -18,7 +18,10 @@ export const listBranches = async (req: AuthRequest, res: Response) => {
 
 export const createBranch = async (req: AuthRequest, res: Response) => {
     try {
-        const restaurantId = new mongoose.Types.ObjectId(req.user!.restaurantId);
+        if (!req.user?.restaurantId) {
+            return res.status(400).json({ error: 'Please set up a restaurant first' });
+        }
+        const restaurantId = new mongoose.Types.ObjectId(req.user.restaurantId);
 
         // Auto-uppercase prefix
         const invoicePrefix = req.body.invoicePrefix?.toUpperCase() || 'BR';

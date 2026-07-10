@@ -61,6 +61,12 @@ export default function BranchManagement() {
             setSaving(true);
             const branchId = editingBranch._id || editingBranch.id;
 
+            if (!editingBranch.name || !editingBranch.invoicePrefix || !editingBranch.address || !editingBranch.city || !editingBranch.pincode || !editingBranch.phone) {
+                alert('Please fill in all required fields (marked with *)');
+                setSaving(false);
+                return;
+            }
+
             // Clean up the managerId payload since it might be an object if populated previously
             const payload = { ...editingBranch };
             if (payload.managerId && typeof payload.managerId === 'object') {
