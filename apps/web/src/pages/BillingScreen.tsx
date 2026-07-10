@@ -99,7 +99,7 @@ export default function BillingScreen() {
         setLoading(true);
         const [prevRes, restRes] = await Promise.all([
           api.get(`/billing/preview/${orderId}`),
-          api.get('/restaurant/info'),
+          api.get('/restaurant/print-info'),
         ]);
         setPreview(prevRes.data);
         setRestaurant(restRes.data);

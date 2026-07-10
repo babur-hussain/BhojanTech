@@ -72,7 +72,7 @@ export default function AllOrders() {
     if (isOwner) {
       api.get('/branches').then(r => setBranches(r.data)).catch(() => {});
     }
-    api.get('/restaurant/info').then(r => setRestaurant(r.data)).catch(() => {});
+    api.get('/restaurant/print-info').then(r => setRestaurant(r.data)).catch(() => {});
   }, [isOwner]);
 
   // Debounced re-fetch on filter changes

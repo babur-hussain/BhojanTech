@@ -231,7 +231,7 @@ export default function Bookings() {
 
   const fetchSettings = async () => {
     try {
-      const { data } = await api.get('/restaurant/info');
+      const { data } = await api.get('/restaurant/print-info');
       const cats = data.bookingCategories?.length ? data.bookingCategories : ['Cake Pre-order', 'Table Reservation'];
       setCategories(cats);
       setFormData(f => ({ ...f, category: data.defaultBookingCategory || cats[0] }));

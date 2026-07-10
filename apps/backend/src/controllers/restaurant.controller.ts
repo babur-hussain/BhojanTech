@@ -64,6 +64,28 @@ export const getRestaurantInfo = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const getRestaurantPrintInfo = async (req: AuthRequest, res: Response) => {
+  try {
+    const restaurant = await Restaurant.findById(req.user!.restaurantId).lean() as any;
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found' });
+
+    // If a branch is selected, override global restaurant details with branch-specific ones
+    if (req.user!.branchId) {
+      const branch = await Branch.findById(req.user!.branchId).lean() as any;
+      if (branch) {
+        restaurant.address = branch.address || restaurant.address;
+        restaurant.contactNumber = branch.phone || restaurant.contactNumber;
+        if (branch.gstin) restaurant.gstin = branch.gstin;
+        if (branch.fssaiNumber) restaurant.fssaiNumber = branch.fssaiNumber;
+      }
+    }
+
+    return res.json(restaurant);
+  } catch (error) {
+    return res.status(500).json({ error: 'Server error' });
+  }
+};
+
 export const updateRestaurantInfo = async (req: AuthRequest, res: Response) => {
   try {
     const { name, address, contactNumber, gstin, fssaiNumber, logoUrl, upiId, printerName, businessType, bookingCategories, defaultBookingCategory } = req.body;

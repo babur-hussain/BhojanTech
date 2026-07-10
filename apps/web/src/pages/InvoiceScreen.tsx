@@ -21,7 +21,7 @@ export default function InvoiceScreen() {
       try {
         const [invRes, restRes] = await Promise.all([
           api.get(`/billing/invoice/${invoiceId}`), // We need to add this endpoint if it doesn't exist!
-          api.get('/restaurant/info'),
+          api.get('/restaurant/print-info'),
         ]);
         setInvoice(invRes.data.invoice || invRes.data);
         setRestaurant(restRes.data);
