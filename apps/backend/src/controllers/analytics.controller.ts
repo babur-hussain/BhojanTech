@@ -147,7 +147,7 @@ export const liveDashboard = async (req: AuthRequest, res: Response) => {
     const lastWeekSameDay = new Date(todayStart); lastWeekSameDay.setDate(lastWeekSameDay.getDate() - 7);
 
     const query = getBaseQuery(req);
-    if (req.query.branchId && req.query.branchId !== 'all') {
+    if (req.query.branchId && req.query.branchId !== 'all' && req.query.branchId !== 'null') {
       query.branchId = req.query.branchId;
     } else if (req.query.branchId === 'all') {
       delete query.branchId; // allow fetching for all branches

@@ -10,10 +10,10 @@ export const listBranches = async (req: AuthRequest, res: Response) => {
         
         let query: any = { restaurantId };
         
-        if (req.user?.role === 'BRANCH_MANAGER' && req.user.accessibleBranches) {
+        if (req.user?.role === 'BRANCH_MANAGER' && req.user.accessibleBranches && req.user.accessibleBranches.length > 0) {
             query._id = { $in: req.user.accessibleBranches };
         } else if (req.user?.role !== 'SUPER_OWNER' && req.user?.role !== 'OWNER' && req.user?.branchId) {
-            // Waiters, Kitchen Staff etc can only see their own branch
+            // Waiters, Kitchen Staff, or Branch Managers without explicit accessibleBranches list
             query._id = req.user.branchId;
         }
 
