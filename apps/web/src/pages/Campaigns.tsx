@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../utils/api';
 import { Target, Users, Megaphone, Plus, Percent, Gift, TrendingUp, Calendar as CalIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useBranchStore } from '../store/branchStore';
 
 export default function Campaigns() {
     const { user } = useAuth();
+    const { selectedBranchId } = useBranchStore();
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -14,7 +16,7 @@ export default function Campaigns() {
 
     useEffect(() => {
         fetchCampaigns();
-    }, []);
+    }, [selectedBranchId]);
 
     useEffect(() => {
         if (modalOpen) {
@@ -24,9 +26,7 @@ export default function Campaigns() {
 
     const fetchCampaigns = async () => {
         try {
-            const res = await axios.get('/api/campaigns', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await api.get('/campaigns');
             setCampaigns(Array.isArray(res.data) ? res.data : (res.data?.campaigns || []));
             setLoading(false);
         } catch (err) {
@@ -37,9 +37,7 @@ export default function Campaigns() {
 
     const previewAudience = async () => {
         try {
-            const res = await axios.get(`/api/campaigns/preview-audience/${formData.targetSegment}`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            const res = await api.get(`/campaigns/preview-audience/${formData.targetSegment}`);
             setAudienceSize(res.data.audienceSize);
         } catch (e) {
             // Mock for local dev
@@ -50,9 +48,7 @@ export default function Campaigns() {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await axios.post('/api/campaigns', { ...formData, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            await api.post('/campaigns', { ...formData, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
             setModalOpen(false);
             fetchCampaigns();
         } catch (e) {
@@ -66,9 +62,7 @@ export default function Campaigns() {
     const sendCampaign = async (id: string) => {
         if (!confirm('Are you sure you want to broadcast this campaign via SMS/WhatsApp?')) return;
         try {
-            await axios.post(`/api/campaigns/${id}/send`, {}, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            await api.post(`/campaigns/${id}/send`, {});
             fetchCampaigns();
         } catch (e) {
             console.error(e);

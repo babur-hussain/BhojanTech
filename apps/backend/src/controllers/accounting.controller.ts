@@ -247,16 +247,17 @@ export const getProfitAndLoss = async (req: AuthRequest, res: Response) => {
         const totalRevenue = dineInRev + onlineRev;
 
         // COGS from actual PurchaseLog data (purchases in the period)
-        const purchaseQuery: any = { restaurantId: req.user!.restaurantId };
-        if (branchId && branchId !== 'all') purchaseQuery.branchId = branchId;
+        const purchaseQuery: any = { ...getBaseQuery(req) };
         purchaseQuery.createdAt = dateRange;
 
         const purchaseAgg = await PurchaseLog.aggregate([
             { $match: purchaseQuery },
             { $group: { _id: null, totalPurchases: { $sum: '$totalCost' } } }
         ]);
+        const wastageQuery: any = { ...getBaseQuery(req) };
+        wastageQuery.createdAt = dateRange;
         const wastageAgg = await WastageLog.aggregate([
-            { $match: purchaseQuery },
+            { $match: wastageQuery },
             { $group: { _id: null, totalWastage: { $sum: '$estimatedCost' } } }
         ]);
 

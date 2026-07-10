@@ -54,7 +54,36 @@ export default function EODReport() {
           >
             {loading ? 'Loading…' : 'Load'}
           </button>
-          <button className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <button
+            onClick={() => {
+              if (!eod) return;
+              const rows = [
+                ['EOD Report', date],
+                [''],
+                ['Total Revenue', eod.totalRevenue],
+                ['Total Orders', eod.totalOrders],
+                ['Cash Collected', eod.cashCollected],
+                ['Card Collected', eod.cardCollected],
+                ['UPI Collected', eod.upiCollected],
+                ['Total GST', eod.totalGSTCollected?.toFixed(2) || 0],
+                ['CGST', eod.cgstCollected?.toFixed(2) || 0],
+                ['SGST', eod.sgstCollected?.toFixed(2) || 0],
+                ['Discounts', eod.totalDiscounts?.toFixed(2) || 0],
+                [''],
+                ['Invoice No', 'Payment Mode', 'Grand Total'],
+                ...(eod.invoices || []).map((inv: any) => [inv.invoiceNumber, inv.mode, inv.grandTotal]),
+              ];
+              const csv = rows.map(r => r.join(',')).join('\n');
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `EOD-Report-${date}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          >
             <Download size={16} /> Export
           </button>
         </div>

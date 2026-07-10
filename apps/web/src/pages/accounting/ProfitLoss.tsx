@@ -57,7 +57,45 @@ export default function ProfitLoss() {
                             <option key={y} value={y}>{y}</option>
                         ))}
                     </select>
-                    <button className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200">
+                    <button
+                        onClick={() => {
+                            if (!data) return;
+                            const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' });
+                            const rows = [
+                                [`Profit & Loss Statement - ${monthName} ${year}`],
+                                [''],
+                                ['REVENUE'],
+                                ['Dine-In & Takeaway', data.revenue?.dineIn?.toFixed(2) || '0.00'],
+                                ['Online Delivery', data.revenue?.online?.toFixed(2) || '0.00'],
+                                ['Total Revenue', data.revenue?.total?.toFixed(2) || '0.00'],
+                                [''],
+                                ['COST OF GOODS SOLD'],
+                                ['Raw Materials', data.cogs?.rawMaterials?.toFixed(2) || '0.00'],
+                                ['Gross Profit', data.cogs?.grossProfit?.toFixed(2) || '0.00'],
+                                [`Gross Margin`, `${data.cogs?.grossMargin?.toFixed(1) || 0}%`],
+                                [''],
+                                ['OPERATING EXPENSES'],
+                                ['Staff Salaries', data.opex?.salaries?.toFixed(2) || '0.00'],
+                                ['Commissions', data.opex?.commissions?.toFixed(2) || '0.00'],
+                                ['Rent', data.opex?.rent?.toFixed(2) || '0.00'],
+                                ['Utilities', data.opex?.utilities?.toFixed(2) || '0.00'],
+                                ['Marketing', data.opex?.marketing?.toFixed(2) || '0.00'],
+                                ['Miscellaneous', data.opex?.miscellaneous?.toFixed(2) || '0.00'],
+                                ['Total OPEX', data.opex?.total?.toFixed(2) || '0.00'],
+                                [''],
+                                ['EBITDA', data.ebitda?.toFixed(2) || '0.00'],
+                            ];
+                            const csv = rows.map(r => r.join(',')).join('\n');
+                            const blob = new Blob([csv], { type: 'text/csv' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `PnL-${monthName}-${year}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }}
+                        className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200"
+                    >
                         <Download className="w-5 h-5" />
                     </button>
                 </div>
