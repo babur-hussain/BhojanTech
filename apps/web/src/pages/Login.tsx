@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, getRedirectResult, signInWithRedirect } from 'firebase/auth';
+import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -9,8 +9,13 @@ import { OTPInput } from '../components/OTPInput';
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  
   const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -138,6 +143,32 @@ export default function Login() {
     }
   };
 
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const token = await result.user.getIdToken();
+      await login(token);
+      navigate('/');
+    } catch (error: any) {
+      console.error('Email sign in error', error);
+      const errorCode = error.code || '';
+      if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/user-not-found' || errorCode === 'auth/wrong-password') {
+        setError('Invalid email or password.');
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cream flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -164,69 +195,121 @@ export default function Login() {
           {/* reCAPTCHA invisible widget mounts here — never manipulate this div directly */}
           <div id="recaptcha-container"></div>
 
-          {!confirmationResult ? (
-            <form className="space-y-6" onSubmit={handleSendOtp}>
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                  Phone Number
-                </label>
-                <div className="mt-1 flex rounded-md shadow-sm">
-                  <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                    +91
-                  </span>
-                  <input
-                    type="tel"
-                    name="phone"
-                    id="phone"
-                    maxLength={10}
-                    className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:ring-saffron focus:border-saffron sm:text-sm"
-                    placeholder="9876543210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                    required
-                  />
+          {/* Login Method Tabs */}
+          <div className="flex border-b mb-6 text-sm">
+            <button
+              onClick={() => { setLoginMethod('phone'); setError(''); }}
+              className={`flex-1 pb-2 font-semibold transition-colors ${loginMethod === 'phone' ? 'text-maroon border-b-2 border-maroon' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Mobile Number
+            </button>
+            <button
+              onClick={() => { setLoginMethod('email'); setError(''); }}
+              className={`flex-1 pb-2 font-semibold transition-colors ${loginMethod === 'email' ? 'text-maroon border-b-2 border-maroon' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              Email & Password
+            </button>
+          </div>
+
+          {loginMethod === 'phone' ? (
+            !confirmationResult ? (
+              <form className="space-y-6" onSubmit={handleSendOtp}>
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                    Phone Number
+                  </label>
+                  <div className="mt-1 flex rounded-md shadow-sm">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
+                      +91
+                    </span>
+                    <input
+                      type="tel"
+                      name="phone"
+                      id="phone"
+                      maxLength={10}
+                      className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:ring-saffron focus:border-saffron sm:text-sm"
+                      placeholder="9876543210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <button
-                  type="submit"
-                  disabled={phone.length !== 10 || loading}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-maroon hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-maroon disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Sending OTP...' : 'Send OTP'}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <button
+                    type="submit"
+                    disabled={phone.length !== 10 || loading}
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-maroon hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-maroon disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Sending OTP...' : 'Send OTP'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form className="space-y-6" onSubmit={handleVerifyOtp}>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 text-center mb-4">
+                    Enter 6-digit OTP sent to +91 {phone}
+                  </label>
+                  <div className="mt-1 flex justify-center">
+                    <OTPInput value={otp} onChange={setOtp} length={6} />
+                  </div>
+                </div>
+                <div>
+                  <button
+                    type="submit"
+                    disabled={otp.length !== 6 || loading}
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-maroon hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-maroon disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Verifying...' : 'Verify & Login'}
+                  </button>
+                </div>
+                <div className="text-center mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmationResult(null);
+                      setOtp('');
+                      setError('');
+                    }}
+                    className="text-sm text-maroon hover:text-saffron font-medium"
+                  >
+                    Change Phone Number
+                  </button>
+                </div>
+              </form>
+            )
           ) : (
-            <form className="space-y-6" onSubmit={handleVerifyOtp}>
+            <form className="space-y-6" onSubmit={handleEmailSignIn}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 text-center mb-4">
-                  Enter 6-digit OTP sent to +91 {phone}
-                </label>
-                <div className="mt-1 flex justify-center">
-                  <OTPInput value={otp} onChange={setOtp} length={6} />
-                </div>
+                <label className="block text-sm font-medium text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-saffron focus:border-saffron sm:text-sm"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="staff@restaurant.com"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Password</label>
+                <input
+                  type="password"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-saffron focus:border-saffron sm:text-sm"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
               </div>
               <div>
                 <button
                   type="submit"
-                  disabled={otp.length !== 6 || loading}
+                  disabled={!email || !password || loading}
                   className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-maroon hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-maroon disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Verifying...' : 'Verify & Login'}
-                </button>
-              </div>
-              <div className="text-center mt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmationResult(null);
-                    setOtp('');
-                    setError('');
-                  }}
-                  className="text-sm text-maroon hover:text-saffron font-medium"
-                >
-                  Change Phone Number
+                  {loading ? 'Signing in...' : 'Sign In'}
                 </button>
               </div>
             </form>

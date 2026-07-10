@@ -8,6 +8,7 @@ import { SalaryRecord } from '../models/SalaryRecord';
 import { AdvancePayment } from '../models/AdvancePayment';
 import { Invoice } from '../models/Invoice';
 import { getBaseQuery, getCreateBranchId } from '../utils/queryHelpers';
+import { firebaseAdmin } from '../config/firebase';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -27,13 +28,32 @@ export const createStaff = async (req: AuthRequest, res: Response) => {
     const branchId = getCreateBranchId(req);
     const {
       name, phone, role, designation, salaryType, salaryAmount, shift, joiningDate,
-      email, address, emergencyContact, bankDetails
+      email, address, emergencyContact, bankDetails, password
     } = req.body;
 
     // First check if phone exists in User collection
     const existingUser = await mongoose.model('User').findOne({ phoneNumber: phone });
     if (existingUser) {
       return res.status(400).json({ error: 'User with this phone number already exists' });
+    }
+
+    let firebaseUid = `pending_${require('crypto').randomUUID()}`;
+
+    // Optionally create a real Firebase Auth user if password is provided
+    if (email && password) {
+      try {
+        const firebaseUser = await firebaseAdmin.auth().createUser({
+          email,
+          password,
+          phoneNumber: phone.startsWith('+') ? phone : `+91${phone}`, // Assume Indian number by default
+          displayName: name,
+        });
+        firebaseUid = firebaseUser.uid;
+      } catch (firebaseErr: any) {
+        console.error('Failed to create Firebase user:', firebaseErr);
+        // If email or phone already exists in Firebase, we should return that error
+        return res.status(400).json({ error: firebaseErr.message || 'Failed to create Firebase credentials' });
+      }
     }
 
     const member = await StaffMember.create({
@@ -45,9 +65,9 @@ export const createStaff = async (req: AuthRequest, res: Response) => {
       branchId,
     });
 
-    // Create the User record so they can login via phone auth
+    // Create the User record so they can login via phone auth or email/password
     await mongoose.model('User').create({
-      firebaseUid: `pending_${require('crypto').randomUUID()}`,
+      firebaseUid,
       phoneNumber: phone,
       email,
       role: role || 'STAFF',
@@ -69,7 +89,7 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
     query._id = req.params.id;
     const {
       name, phone, role, designation, salaryType, salaryAmount, shift, joiningDate,
-      email, address, emergencyContact, bankDetails, isActive, photoUrl
+      email, address, emergencyContact, bankDetails, isActive, photoUrl, password
     } = req.body;
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -101,6 +121,36 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
       if (email !== undefined) userUpdate.email = email;
       if (isActive !== undefined) userUpdate.isActive = isActive;
       
+      const existingUser = await mongoose.model('User').findOne({ phoneNumber: member.phone });
+      
+      if (password && email && existingUser) {
+        // Create or Update Firebase Auth User
+        if (existingUser.firebaseUid && !existingUser.firebaseUid.startsWith('pending_')) {
+          // Update existing Firebase user
+          try {
+             await firebaseAdmin.auth().updateUser(existingUser.firebaseUid, {
+               password,
+               email
+             });
+          } catch (e) {
+             console.error('Failed to update firebase user', e);
+          }
+        } else {
+          // Create new Firebase user and replace pending ID
+          try {
+            const firebaseUser = await firebaseAdmin.auth().createUser({
+              email,
+              password,
+              phoneNumber: member.phone.startsWith('+') ? member.phone : `+91${member.phone}`,
+              displayName: member.name
+            });
+            userUpdate.firebaseUid = firebaseUser.uid;
+          } catch (e) {
+             console.error('Failed to create firebase user on update', e);
+          }
+        }
+      }
+
       if (Object.keys(userUpdate).length > 0) {
         await mongoose.model('User').findOneAndUpdate(
           { phoneNumber: member.phone },
@@ -110,7 +160,10 @@ export const updateStaff = async (req: AuthRequest, res: Response) => {
     }
 
     return res.json(member);
-  } catch { return res.status(500).json({ error: 'Server error' }); }
+  } catch (err) {
+    console.error('update staff error:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
 };
 
 export const removeStaff = async (req: AuthRequest, res: Response) => {

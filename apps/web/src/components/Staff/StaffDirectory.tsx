@@ -57,6 +57,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
     salaryAmount: '', designation: '', email: '', address: '', joiningDate: '',
     emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '',
     bankAccountName: '', bankAccountNumber: '', bankIfsc: '', bankName: '',
+    password: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeFormTab, setActiveFormTab] = useState<'basic' | 'salary' | 'emergency' | 'bank'>('basic');
@@ -85,6 +86,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
       salaryAmount: '', designation: '', email: '', address: '', joiningDate: '',
       emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '',
       bankAccountName: '', bankAccountNumber: '', bankIfsc: '', bankName: '',
+      password: '',
     });
     setEditingStaffId(null);
     setActiveFormTab('basic');
@@ -109,6 +111,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
       bankAccountNumber: s.bankDetails?.accountNumber || '',
       bankIfsc: s.bankDetails?.ifscCode || '',
       bankName: s.bankDetails?.bankName || '',
+      password: '', // Don't pre-fill password for security
     });
     setEditingStaffId(s.id || s._id);
     setActiveFormTab('basic');
@@ -141,6 +144,7 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
         email: form.email || undefined,
         address: form.address || undefined,
         joiningDate: form.joiningDate || undefined,
+        password: form.password || undefined,
       };
 
       if (form.emergencyContactName) {
@@ -532,6 +536,8 @@ export default function StaffDirectory({ staff, fetchStaff }: Props) {
                     onChange={v => setForm(p => ({ ...p, phone: v }))} required />
                   <FormField label="Email" type="email" placeholder="ravi@example.com" value={form.email}
                     onChange={v => setForm(p => ({ ...p, email: v }))} />
+                  <FormField label="Password (for Email Login)" type="password" placeholder="Leave blank to keep unchanged" value={form.password}
+                    onChange={v => setForm(p => ({ ...p, password: v }))} />
                   <FormField label="Address" type="text" placeholder="123 Main Street, Delhi" value={form.address}
                     onChange={v => setForm(p => ({ ...p, address: v }))} />
                   <FormField label="Joining Date" type="date" value={form.joiningDate}
