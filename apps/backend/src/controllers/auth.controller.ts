@@ -74,6 +74,7 @@ export const login = async (req: Request, res: Response) => {
         branchId: user.branchId,
         name: user.name,
         selectedBranchId: user.selectedBranchId || null,
+        permissions: user.permissions || [],
       },
       ...tokens,
     });
