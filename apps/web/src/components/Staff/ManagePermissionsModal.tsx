@@ -49,14 +49,25 @@ const PERMISSION_GROUPS = [
     permissions: [
       { id: Permission.ORDER_VIEW, label: 'View Orders' },
       { id: Permission.ORDER_MANAGE, label: 'Manage Orders (Accept/Cancel)' },
+      { id: Permission.LIVE_ORDERS_VIEW, label: 'View Live Orders' },
+      { id: Permission.BOOKINGS_VIEW, label: 'View Bookings' },
       { id: Permission.TABLE_MANAGE, label: 'Manage Tables' },
       { id: Permission.KITCHEN_DISPLAY_ACCESS, label: 'Access KDS' },
+    ]
+  },
+  {
+    title: 'Marketing & Customers',
+    permissions: [
+      { id: Permission.CUSTOMER_VIEW, label: 'View Customers' },
+      { id: Permission.CAMPAIGN_VIEW, label: 'Manage Campaigns' },
+      { id: Permission.CUSTOMER_ANALYTICS_VIEW, label: 'View Customer Analytics' },
     ]
   },
   {
     title: 'Dashboard & Reports',
     permissions: [
       { id: Permission.DASHBOARD_VIEW, label: 'View Dashboard' },
+      { id: Permission.ANALYTICS_VIEW, label: 'View Live Analytics' },
       { id: Permission.REPORTS_VIEW, label: 'View Analytics & Reports' },
       { id: Permission.EOD_REPORT_VIEW, label: 'View EOD Report' },
     ]

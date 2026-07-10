@@ -64,16 +64,16 @@ function App() {
             <Route path="kds" element={pg([Permission.KITCHEN_DISPLAY_ACCESS], <KDS />)} />
             <Route path="orders" element={pg([Permission.ORDER_VIEW], <AllOrders />)} />
             <Route path="retail" element={pg([Permission.RETAIL_VIEW], <RetailItems />)} />
-            <Route path="bookings" element={pg([Permission.TABLE_MANAGE], <Bookings />)} />
-            <Route path="live-orders" element={pg([Permission.ORDER_VIEW], <LiveOrders />)} />
+            <Route path="bookings" element={pg([Permission.BOOKINGS_VIEW], <Bookings />)} />
+            <Route path="live-orders" element={pg([Permission.LIVE_ORDERS_VIEW], <LiveOrders />)} />
             <Route path="eod" element={pg([Permission.EOD_REPORT_VIEW], <EODReport />)} />
             <Route path="inventory" element={pg([Permission.INVENTORY_VIEW], <Inventory />)} />
             <Route path="staff" element={pg([Permission.STAFF_VIEW], <StaffManagement />)} />
-            <Route path="analytics" element={pg([Permission.REPORTS_VIEW], <LiveAnalytics />)} />
+            <Route path="analytics" element={pg([Permission.ANALYTICS_VIEW], <LiveAnalytics />)} />
             <Route path="dashboard" element={pg([Permission.DASHBOARD_VIEW], <AnalyticsDashboard />)} />
-            <Route path="customers" element={pg([Permission.REPORTS_VIEW], <Customers />)} />
-            <Route path="campaigns" element={pg([Permission.REPORTS_VIEW], <Campaigns />)} />
-            <Route path="customer-analytics" element={pg([Permission.REPORTS_VIEW], <CustomerAnalytics />)} />
+            <Route path="customers" element={pg([Permission.CUSTOMER_VIEW], <Customers />)} />
+            <Route path="campaigns" element={pg([Permission.CAMPAIGN_VIEW], <Campaigns />)} />
+            <Route path="customer-analytics" element={pg([Permission.CUSTOMER_ANALYTICS_VIEW], <CustomerAnalytics />)} />
             <Route path="reports" element={pg([Permission.REPORTS_VIEW], <ReportsPage />)} />
             <Route path="delivery-orders" element={pg([Permission.ORDER_VIEW], <DeliveryOrdersLive />)} />
             <Route path="integrations" element={pg([Permission.SETTINGS_MANAGE], <IntegrationsSettings />)} />
