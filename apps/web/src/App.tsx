@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { PermissionGuard } from './components/Auth/PermissionGuard';
+import { Permission } from '@restaurant/types';
 import Login from './pages/Login';
 import SetupRestaurant from './pages/SetupRestaurant';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -38,6 +40,10 @@ import Bookings from './pages/Bookings';
 
 const DashboardHome = () => <AnalyticsDashboard />;
 
+const pg = (perms: Permission[], component: React.ReactNode) => (
+  <PermissionGuard requiredPermissions={perms}>{component}</PermissionGuard>
+);
+
 function App() {
   return (
     <AuthProvider>
@@ -47,36 +53,36 @@ function App() {
           <Route path="/setup" element={<SetupRestaurant />} />
 
           <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<DashboardHome />} />
-            <Route path="pos" element={<DirectPOS />} />
-            <Route path="branches" element={<BranchManagement />} />
-            <Route path="menu" element={<MenuManagement />} />
-            <Route path="tables" element={<Tables />} />
-            <Route path="order/:tableId" element={<OrderDetails />} />
-            <Route path="bill/:orderId" element={<BillingScreen />} />
-            <Route path="invoice/:invoiceId" element={<InvoiceScreen />} />
-            <Route path="kds" element={<KDS />} />
-            <Route path="orders" element={<AllOrders />} />
-            <Route path="retail" element={<RetailItems />} />
-            <Route path="bookings" element={<Bookings />} />
-            <Route path="live-orders" element={<LiveOrders />} />
-            <Route path="eod" element={<EODReport />} />
-            <Route path="inventory" element={<Inventory />} />
-            <Route path="staff" element={<StaffManagement />} />
-            <Route path="analytics" element={<LiveAnalytics />} />
-            <Route path="dashboard" element={<AnalyticsDashboard />} />
-            <Route path="customers" element={<Customers />} />
-            <Route path="campaigns" element={<Campaigns />} />
-            <Route path="customer-analytics" element={<CustomerAnalytics />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="delivery-orders" element={<DeliveryOrdersLive />} />
-            <Route path="integrations" element={<IntegrationsSettings />} />
-            <Route path="settings" element={<RestaurantSettings />} />
-            <Route path="ca" element={<AccountantDashboard />} />
-            <Route path="ca/gst" element={<GSTFiling />} />
-            <Route path="ca/pnl" element={<ProfitLoss />} />
-            <Route path="ca/expenses" element={<ExpenseTds />} />
-            <Route path="ca/invoices" element={<InvoiceRegister />} />
+            <Route index element={pg([Permission.REPORTS_VIEW], <DashboardHome />)} />
+            <Route path="pos" element={pg([Permission.POS_ACCESS], <DirectPOS />)} />
+            <Route path="branches" element={pg([Permission.BRANCH_MANAGE], <BranchManagement />)} />
+            <Route path="menu" element={pg([Permission.MENU_VIEW], <MenuManagement />)} />
+            <Route path="tables" element={pg([Permission.TABLE_MANAGE], <Tables />)} />
+            <Route path="order/:tableId" element={pg([Permission.ORDER_VIEW], <OrderDetails />)} />
+            <Route path="bill/:orderId" element={pg([Permission.ORDER_VIEW], <BillingScreen />)} />
+            <Route path="invoice/:invoiceId" element={pg([Permission.INVOICE_VIEW], <InvoiceScreen />)} />
+            <Route path="kds" element={pg([Permission.KITCHEN_DISPLAY_ACCESS], <KDS />)} />
+            <Route path="orders" element={pg([Permission.ORDER_VIEW], <AllOrders />)} />
+            <Route path="retail" element={pg([Permission.RETAIL_VIEW], <RetailItems />)} />
+            <Route path="bookings" element={pg([Permission.TABLE_MANAGE], <Bookings />)} />
+            <Route path="live-orders" element={pg([Permission.ORDER_VIEW], <LiveOrders />)} />
+            <Route path="eod" element={pg([Permission.EOD_REPORT_VIEW], <EODReport />)} />
+            <Route path="inventory" element={pg([Permission.INVENTORY_VIEW], <Inventory />)} />
+            <Route path="staff" element={pg([Permission.STAFF_VIEW], <StaffManagement />)} />
+            <Route path="analytics" element={pg([Permission.REPORTS_VIEW], <LiveAnalytics />)} />
+            <Route path="dashboard" element={pg([Permission.REPORTS_VIEW], <AnalyticsDashboard />)} />
+            <Route path="customers" element={pg([Permission.REPORTS_VIEW], <Customers />)} />
+            <Route path="campaigns" element={pg([Permission.REPORTS_VIEW], <Campaigns />)} />
+            <Route path="customer-analytics" element={pg([Permission.REPORTS_VIEW], <CustomerAnalytics />)} />
+            <Route path="reports" element={pg([Permission.REPORTS_VIEW], <ReportsPage />)} />
+            <Route path="delivery-orders" element={pg([Permission.ORDER_VIEW], <DeliveryOrdersLive />)} />
+            <Route path="integrations" element={pg([Permission.SETTINGS_MANAGE], <IntegrationsSettings />)} />
+            <Route path="settings" element={pg([Permission.SETTINGS_MANAGE], <RestaurantSettings />)} />
+            <Route path="ca" element={pg([Permission.REPORTS_VIEW], <AccountantDashboard />)} />
+            <Route path="ca/gst" element={pg([Permission.REPORTS_VIEW], <GSTFiling />)} />
+            <Route path="ca/pnl" element={pg([Permission.REPORTS_VIEW], <ProfitLoss />)} />
+            <Route path="ca/expenses" element={pg([Permission.REPORTS_VIEW], <ExpenseTds />)} />
+            <Route path="ca/invoices" element={pg([Permission.INVOICE_VIEW], <InvoiceRegister />)} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

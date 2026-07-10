@@ -11,6 +11,7 @@ interface AuthUser {
   restaurantId?: string;
   branchId?: string;
   name?: string;
+  permissions?: string[];
 }
 
 interface AuthContextType {
