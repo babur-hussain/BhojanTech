@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { MenuCategory, MenuItem, ItemVariant } from '@restaurant/types';
-import { Plus, GripVertical, Image as ImageIcon, X, Sparkles } from 'lucide-react';
+import { Plus, GripVertical, Image as ImageIcon, X, Sparkles, Share2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api, getMediaUrl } from '../utils/api';
 import ItemModal from '../components/Menu/ItemModal';
 import CategoryModal from '../components/Menu/CategoryModal';
 import MenuIntelligenceModal from '../components/AI/MenuIntelligence';
+import MenuSharingModal from '../components/Menu/MenuSharingModal';
 import { useBranchStore } from '../store/branchStore';
 
 export default function MenuManagement() {
@@ -19,6 +20,7 @@ export default function MenuManagement() {
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [editingCategory, setEditingCategory] = useState<MenuCategory | null>(null);
 
@@ -114,6 +116,15 @@ export default function MenuManagement() {
             {selectedCategoryId ? categories.find(c => ((c as any)._id || c.id) === selectedCategoryId)?.name : 'All Items'}
           </h2>
           <div className="flex gap-2">
+            {!isAllBranches && (
+              <button
+                onClick={() => setIsShareModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 font-medium hover:bg-indigo-100 transition-colors"
+                title="Share menu to other branches"
+              >
+                <Share2 size={16} /> Share Menu
+              </button>
+            )}
             <button
               onClick={() => setIsAIModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 rounded border border-[#F47E3E] text-[#F47E3E] font-medium hover:bg-orange-50"
@@ -273,6 +284,18 @@ export default function MenuManagement() {
         <MenuIntelligenceModal
           onClose={() => setIsAIModalOpen(false)}
           restaurantId="64abcd1234567890abcd1234" // Dummy ID matching FloatingChatWidget for dev
+        />
+      )}
+      {isShareModalOpen && !isAllBranches && (
+        <MenuSharingModal
+          categories={categories}
+          items={items}
+          currentBranchId={branchStoreId!}
+          onClose={() => setIsShareModalOpen(false)}
+          onSuccess={() => {
+            setIsShareModalOpen(false);
+            fetchData();
+          }}
         />
       )}
     </div>

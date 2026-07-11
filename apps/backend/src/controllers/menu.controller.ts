@@ -492,3 +492,86 @@ export const migrateImageUrls = async (req: AuthRequest, res: Response) => {
   }
 };
 
+export const shareMenu = async (req: AuthRequest, res: Response) => {
+  try {
+    const { targetBranchIds, categoryIds, itemIds, overwrite } = req.body;
+    const restaurantId = req.user!.restaurantId;
+
+    if (!targetBranchIds || !Array.isArray(targetBranchIds) || targetBranchIds.length === 0) {
+      return res.status(400).json({ error: 'Target branches required' });
+    }
+
+    const mongoose = require('mongoose');
+
+    // 1. Fetch source categories and items
+    const sourceCategories = await MenuCategory.find({ _id: { $in: categoryIds }, restaurantId }).lean();
+    const sourceItems = await MenuItem.find({ _id: { $in: itemIds }, restaurantId }).lean();
+
+    for (const branchId of targetBranchIds) {
+      // Create a map to link old category IDs to new category IDs for this branch
+      const categoryMap = new Map<string, any>();
+
+      // 2. Process Categories
+      for (const cat of sourceCategories) {
+        let existingCat = await MenuCategory.findOne({ name: cat.name, restaurantId, branchId });
+        
+        if (existingCat) {
+          categoryMap.set(cat._id.toString(), existingCat._id);
+        } else {
+          const newCat = new MenuCategory({
+            ...cat,
+            _id: undefined,
+            createdAt: undefined,
+            updatedAt: undefined,
+            branchId
+          });
+          await newCat.save();
+          categoryMap.set(cat._id.toString(), newCat._id);
+        }
+      }
+
+      // 3. Process Items
+      for (const item of sourceItems) {
+        const targetCategoryId = categoryMap.get(item.categoryId.toString());
+        if (!targetCategoryId) continue;
+
+        let existingItem = await MenuItem.findOne({ name: item.name, restaurantId, branchId });
+
+        const itemData = { ...item };
+        delete (itemData as any)._id;
+        delete (itemData as any).createdAt;
+        delete (itemData as any).updatedAt;
+        delete (itemData as any).__v;
+
+        if (existingItem) {
+          if (overwrite) {
+            await MenuItem.updateOne({ _id: existingItem._id }, {
+              $set: {
+                ...itemData,
+                categoryId: targetCategoryId,
+                branchId
+              }
+            });
+          }
+        } else {
+          const newItem = new MenuItem({
+            ...itemData,
+            categoryId: targetCategoryId,
+            branchId
+          });
+          await newItem.save();
+        }
+      }
+
+      // Clear cache for target branch
+      await clearMenuCache(restaurantId?.toString(), branchId);
+      io.to(`restaurant_${restaurantId}_branch_${branchId}`).emit('menu_update', { timestamp: new Date().toISOString() });
+    }
+
+    res.json({ success: true, message: 'Menu shared successfully' });
+  } catch (error) {
+    console.error('Share Menu Error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+

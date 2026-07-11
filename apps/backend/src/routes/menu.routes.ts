@@ -36,4 +36,7 @@ router.patch('/items/:id/availability', requirePermission(Permission.MENU_EDIT),
 // Migration — one-time fix for existing S3 URLs
 router.post('/migrate-images', requirePermission(Permission.SETTINGS_MANAGE), menuCtrl.migrateImageUrls);
 
+// Menu Sharing
+router.post('/share', requirePermission(Permission.MENU_CREATE), menuCtrl.shareMenu);
+
 export default router;
