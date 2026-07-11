@@ -13,7 +13,7 @@ export const lookupCustomerByPhone = async (req: AuthRequest, res: Response) => 
         const { phone } = req.params;
         const restaurantId = req.user!.restaurantId;
 
-        const customer = await Customer.findOne({ restaurantId, phone });
+        const customer = await Customer.findByPhone(restaurantId, phone);
         if (!customer) return res.status(404).json({ found: false });
 
         // Get last order items for "Welcome back" message

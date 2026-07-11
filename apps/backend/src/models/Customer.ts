@@ -78,4 +78,17 @@ CustomerSchema.plugin(fieldEncryption, {
     saltGenerator: (secret: string) => secret.substring(0, 16),
 });
 
-export const Customer = mongoose.model<ICustomer>('Customer', CustomerSchema);
+export interface ICustomerModel extends mongoose.Model<ICustomer> {
+    findByPhone(restaurantId: any, phone: string): Promise<ICustomer | null>;
+}
+
+CustomerSchema.statics.findByPhone = async function(restaurantId: any, phone: string) {
+    // Because phone is deterministically encrypted by mongoose-field-encryption,
+    // we can instantiate a dummy document to compute the encrypted string,
+    // then use it to query the database.
+    const dummy = new this({ phone });
+    if (dummy.encryptFieldsSync) dummy.encryptFieldsSync();
+    return this.findOne({ restaurantId, phone: dummy.phone });
+};
+
+export const Customer = mongoose.model<ICustomer, ICustomerModel>('Customer', CustomerSchema);

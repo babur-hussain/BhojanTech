@@ -15,7 +15,7 @@ import { io } from '../index';
 export const lookupCustomerForOnlineOrder = async (req: Request, res: Response) => {
     try {
         const { restaurantId, phone } = req.params;
-        const customer = await Customer.findOne({ restaurantId, phone }).select('name');
+        const customer = await Customer.findByPhone(restaurantId, phone);
         if (customer) {
             return res.json({ name: customer.name });
         }

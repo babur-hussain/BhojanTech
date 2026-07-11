@@ -106,7 +106,7 @@ export async function upsertCustomer(
     const settings = await getOrInitSettings(restaurantId);
     const now = new Date();
 
-    let customer = await Customer.findOne({ restaurantId, phone });
+    let customer = await Customer.findByPhone(restaurantId, phone);
     const isFirstVisit = !customer;
 
     if (!customer) {

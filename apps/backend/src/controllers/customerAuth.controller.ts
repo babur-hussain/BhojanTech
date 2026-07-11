@@ -30,7 +30,7 @@ export const sendCustomerOTP = async (req: Request, res: Response) => {
         const hashedOtp = await bcrypt.hash(otp, OTP_HASH_ROUNDS);
 
         // Upsert minimal customer record (first-time users who don't have a full profile yet)
-        let customer = await Customer.findOne({ restaurantId, phone });
+        let customer = await Customer.findByPhone(restaurantId, phone);
         if (!customer) {
             // Generate referral code
             let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -79,7 +79,7 @@ export const verifyCustomerOTP = async (req: Request, res: Response) => {
         const { phone, restaurantId, otp } = req.body;
         if (!phone || !restaurantId || !otp) return res.status(400).json({ error: 'phone, restaurantId, otp required' });
 
-        const customer = await Customer.findOne({ restaurantId, phone });
+        const customer = await Customer.findByPhone(restaurantId, phone);
         if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
         if (!customer.otp || !customer.otpExpiresAt) {

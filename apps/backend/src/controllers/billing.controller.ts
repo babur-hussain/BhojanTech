@@ -116,7 +116,7 @@ export const billingCustomerLookup = async (req: AuthRequest, res: Response) => 
     const restaurantId = req.user!.restaurantId as string;
     const settings = await getOrInitSettings(restaurantId);
 
-    const customer = await Customer.findOne({ restaurantId, phone });
+    const customer = await Customer.findByPhone(restaurantId, phone);
     if (!customer) return res.status(404).json({ found: false });
 
     // Resolve tier config for discount preview
@@ -169,7 +169,7 @@ export const generateBill = async (req: AuthRequest, res: Response) => {
       order.customerPhone = customerPhone;
       
       // Upsert basic customer info without affecting loyalty points
-      let customer = await Customer.findOne({ restaurantId, phone: customerPhone });
+      let customer = await Customer.findByPhone(restaurantId, customerPhone);
       if (!customer) {
         let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
         while (await Customer.findOne({ referralCode })) {
@@ -354,7 +354,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     let loyaltyRedemptionDiscount = 0;
 
     if (customerPhone) {
-      loyaltyCustomer = await Customer.findOne({ restaurantId, phone: customerPhone });
+      loyaltyCustomer = await Customer.findByPhone(restaurantId, customerPhone);
       if (loyaltyCustomer) {
         const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
         tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
@@ -725,7 +725,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     let loyaltyRedemptionDiscount = 0;
 
     if (customerPhone) {
-      const loyaltyCustomer = await Customer.findOne({ restaurantId, phone: customerPhone });
+      const loyaltyCustomer = await Customer.findByPhone(restaurantId, customerPhone);
       if (loyaltyCustomer) {
         const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
         tierDiscountINR = applyTierDiscount(subtotal, tierConfig);

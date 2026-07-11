@@ -25,7 +25,7 @@ export const submitFeedback = async (req: Request, res: Response) => {
 
         // Attach customer
         if (phone) {
-            const customer = await Customer.findOne({ restaurantId: feedback.restaurantId, phone });
+            const customer = await Customer.findByPhone(feedback.restaurantId, phone);
             if (customer) feedback.customerId = customer._id as any;
         }
 

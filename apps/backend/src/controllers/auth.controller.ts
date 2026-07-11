@@ -131,7 +131,7 @@ export const customerLogin = async (req: Request, res: Response) => {
     // Upsert minimal customer record if restaurantId is provided
     let customer = null;
     if (restaurantId) {
-      customer = await Customer.findOne({ restaurantId, phone: phone_number });
+      customer = await Customer.findByPhone(restaurantId, phone_number);
       if (!customer) {
         let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
         while (await Customer.findOne({ referralCode })) {
