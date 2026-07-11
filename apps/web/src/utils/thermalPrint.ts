@@ -1014,11 +1014,33 @@ function popupPrint(receiptEl: HTMLElement | null) {
 </body>
 </html>`;
 
-  const popup = window.open('', '_blank', 'width=340,height=600,toolbar=0,menubar=0,location=0,status=0');
-  if (!popup) { window.print(); return; }
-  popup.document.open();
-  popup.document.write(html);
-  popup.document.close();
+  // Use hidden iframe instead of window.open to prevent popup blockers and new tabs
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.width = '0px';
+  iframe.style.height = '0px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
+  
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    window.print();
+    return;
+  }
+  
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait for images/styles to load before printing
+  setTimeout(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    setTimeout(() => {
+      document.body.removeChild(iframe);
+    }, 1000);
+  }, 250);
 }
 
 // ─── Number-to-words helper (for ESC/POS "amount in words") ─────────────────

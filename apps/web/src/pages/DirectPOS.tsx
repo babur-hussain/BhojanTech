@@ -353,8 +353,8 @@ export default function DirectPOS() {
           additionalMenuItems: [],
         });
 
-        // 3. Open invoice in new tab and reset POS tab
-        window.open(`/invoice/${payRes.data.invoice._id}`, '_blank');
+        // 3. Navigate to invoice page and reset POS tab
+        navigate(`/invoice/${payRes.data.invoice._id}`);
         
         if (tabs.length === 1) {
              const newTab = createEmptyTab();

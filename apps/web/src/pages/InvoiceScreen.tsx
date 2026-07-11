@@ -101,7 +101,7 @@ export default function InvoiceScreen() {
           >
             Edit Invoice
           </button>
-          <button onClick={() => window.close()} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
+          <button onClick={() => navigate('/pos')} className="px-8 py-3 border-2 border-gray-300 rounded-xl font-bold text-gray-700 bg-white shadow-sm hover:bg-gray-50 transition-transform active:scale-95">
             Close
           </button>
         </div>
