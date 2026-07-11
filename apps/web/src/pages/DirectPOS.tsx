@@ -48,7 +48,7 @@ export default function DirectPOS() {
     customerPhone: string;
     customerName: string;
     customerDob: string;
-    paymentMode: 'CASH' | 'UPI' | 'CARD';
+    paymentMode: 'CASH' | 'UPI' | 'CARD' | 'ADVANCE';
     sendWhatsApp: boolean;
   }
 
@@ -83,7 +83,7 @@ export default function DirectPOS() {
   };
 
   const paymentMode = activeTab?.paymentMode || 'CASH';
-  const setPaymentMode = (val: 'CASH' | 'UPI' | 'CARD') => updateActiveTab({ paymentMode: val });
+  const setPaymentMode = (val: 'CASH' | 'UPI' | 'CARD' | 'ADVANCE') => updateActiveTab({ paymentMode: val });
 
   const sendWhatsApp = activeTab?.sendWhatsApp ?? true;
   const setSendWhatsApp = (val: boolean) => updateActiveTab({ sendWhatsApp: val });
