@@ -26,6 +26,7 @@ import {
 import { Feedback } from '../models/Feedback';
 import { RetailItem } from '../models/RetailItem';
 import { sendInvoiceWA } from '../services/whatsappService';
+import { createLedgerEntry } from './customerLedger.controller';
 
 export const getInvoice = async (req: AuthRequest, res: Response) => {
   try {
@@ -562,6 +563,45 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       }).catch(err => {
         console.error('[WhatsApp] Failed to send invoice:', err);
       });
+    }
+
+    // ─ Auto-create Customer Ledger entries ────────────────────────────────────
+    if (customerPhone && invoice) {
+      try {
+        // Find customer by phone
+        const ledgerCustomer = await Customer.findByPhone(restaurantId, customerPhone);
+        if (ledgerCustomer) {
+          const custId = ledgerCustomer._id.toString();
+          const rId = restaurantId as string;
+          const bId = req.user!.branchId?.toString();
+          const staffId = req.user!.userId?.toString();
+          const staffName = req.user!.name || 'Staff';
+
+          // DEBIT: Invoice amount (customer owes)
+          await createLedgerEntry({
+            restaurantId: rId, branchId: bId, customerId: custId,
+            type: 'INVOICE', direction: 'DEBIT', amountINR: invoice.grandTotalINR,
+            referenceType: 'Invoice', referenceId: invoice._id.toString(),
+            invoiceNumber: invoice.invoiceNumber,
+            notes: `Invoice ${invoice.invoiceNumber}`,
+            createdBy: staffId, createdByName: staffName,
+          });
+
+          // CREDIT: Payment received
+          await createLedgerEntry({
+            restaurantId: rId, branchId: bId, customerId: custId,
+            type: 'PAYMENT', direction: 'CREDIT', amountINR: invoice.amountPaidINR,
+            referenceType: 'Invoice', referenceId: invoice._id.toString(),
+            invoiceNumber: invoice.invoiceNumber,
+            paymentMode: invoice.paymentMode,
+            notes: `Payment for ${invoice.invoiceNumber} via ${invoice.paymentMode}`,
+            createdBy: staffId, createdByName: staffName,
+          });
+        }
+      } catch (ledgerErr) {
+        console.error('[Ledger] Error auto-creating ledger entries:', ledgerErr);
+        // Non-fatal — don't fail the billing
+      }
     }
 
     return res.status(201).json({ invoice });

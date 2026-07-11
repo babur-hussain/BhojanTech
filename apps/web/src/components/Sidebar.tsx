@@ -14,6 +14,7 @@ export default function Sidebar() {
     { name: 'Orders', icon: ClipboardList, to: '/orders', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.ORDER_VIEW] },
     { name: 'Bookings', icon: Calendar, to: '/bookings', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.BOOKINGS_VIEW] },
     { name: 'Customers', icon: Users, to: '/customers', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.CUSTOMER_VIEW] },
+    { name: 'Outstanding', icon: Receipt, to: '/reports/outstanding', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.CUSTOMER_VIEW] },
     { name: 'Campaigns', icon: Megaphone, to: '/campaigns', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.CAMPAIGN_VIEW] },
     { name: 'Customer Analytics', icon: BarChart2, to: '/customer-analytics', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.CUSTOMER_ANALYTICS_VIEW] },
     { name: 'Reports', icon: Receipt, to: '/reports', roles: [UserRole.SUPER_OWNER, UserRole.OWNER, UserRole.BRANCH_MANAGER], permissions: [Permission.REPORTS_VIEW] },

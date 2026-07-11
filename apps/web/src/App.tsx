@@ -22,6 +22,8 @@ import ReportsPage from './pages/ReportsPage';
 import DeliveryOrdersLive from './pages/DeliveryOrdersLive';
 import IntegrationsSettings from './pages/IntegrationsSettings';
 import Customers from './pages/Customers';
+import CustomerLedger from './pages/CustomerLedger';
+import OutstandingReport from './pages/OutstandingReport';
 import Campaigns from './pages/Campaigns';
 import CustomerAnalytics from './pages/CustomerAnalytics';
 import LiveAnalytics from './pages/LiveAnalytics';
@@ -72,6 +74,8 @@ function App() {
             <Route path="analytics" element={pg([Permission.ANALYTICS_VIEW], <LiveAnalytics />)} />
             <Route path="dashboard" element={pg([Permission.DASHBOARD_VIEW], <AnalyticsDashboard />)} />
             <Route path="customers" element={pg([Permission.CUSTOMER_VIEW], <Customers />)} />
+            <Route path="customer-ledger/:customerId" element={pg([Permission.CUSTOMER_VIEW], <CustomerLedger />)} />
+            <Route path="reports/outstanding" element={pg([Permission.CUSTOMER_VIEW], <OutstandingReport />)} />
             <Route path="campaigns" element={pg([Permission.CAMPAIGN_VIEW], <Campaigns />)} />
             <Route path="customer-analytics" element={pg([Permission.CUSTOMER_ANALYTICS_VIEW], <CustomerAnalytics />)} />
             <Route path="reports" element={pg([Permission.REPORTS_VIEW], <ReportsPage />)} />

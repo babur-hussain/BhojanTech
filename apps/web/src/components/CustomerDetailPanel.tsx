@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../utils/api';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, User, Phone, Mail, Calendar, Crown, Star, 
   ShoppingBag, Award, Clock, Receipt, IndianRupee,
@@ -12,6 +13,7 @@ interface CustomerDetailPanelProps {
 }
 
 export default function CustomerDetailPanel({ customerId, onClose }: CustomerDetailPanelProps) {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -168,6 +170,12 @@ export default function CustomerDetailPanel({ customerId, onClose }: CustomerDet
                 }`}
               >
                 <Award size={16} /> Points Ledger
+              </button>
+              <button
+                onClick={() => { onClose(); navigate(`/customer-ledger/${customerId}`); }}
+                className="px-6 py-4 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-maroon transition-colors flex items-center gap-2"
+              >
+                <IndianRupee size={16} /> Financial Ledger
               </button>
             </div>
 

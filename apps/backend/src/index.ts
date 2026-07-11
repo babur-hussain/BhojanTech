@@ -272,6 +272,8 @@ app.use('/api/branches', branchRoutes);
 app.use('/api/retail-items', retailItemRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/loyalty', loyaltyRoutes);
+import customerLedgerRoutes from './routes/customerLedger.routes';
+app.use('/api/customer-ledger', customerLedgerRoutes);
 import whatsappWebhookRoutes from './routes/whatsapp.routes';
 app.use('/api/whatsapp', whatsappWebhookRoutes);
 
