@@ -6,7 +6,7 @@ import {
 import {
   ArrowLeft, Printer, MessageSquare, CheckCircle,
   CreditCard, Smartphone, Banknote, Split,
-  Tag, AlertTriangle, UserPlus, Search, Gift, Loader2, ShoppingCart, Plus, Minus, X, Camera, ScanLine
+  Tag, AlertTriangle, UserPlus, Search, Gift, Loader2, ShoppingCart, Plus, Minus, X, Camera, ScanLine, Wallet
 } from 'lucide-react';
 import InvoicePrint from '../components/Billing/InvoicePrint';
 import { api } from '../utils/api';
@@ -1001,6 +1001,7 @@ export default function BillingScreen() {
                 { mode: 'CARD', label: 'Card', Icon: CreditCard },
                 { mode: 'UPI', label: 'UPI', Icon: Smartphone },
                 { mode: 'SPLIT', label: 'Split', Icon: Split },
+                { mode: 'ADVANCE', label: 'Balance', Icon: Wallet },
               ] as const).map(({ mode, label, Icon }) => (
                 <button key={mode} onClick={() => setMode(mode)}
                   className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 font-semibold text-sm transition-all ${paymentMode === mode ? 'border-maroon bg-red-50 text-maroon' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
@@ -1015,6 +1016,16 @@ export default function BillingScreen() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center space-y-2">
               <Banknote size={48} className="text-gray-300 mx-auto" />
               <p className="text-sm text-gray-500">Collect ₹{finalTotal} in Cash</p>
+            </div>
+          )}
+
+          {paymentMode === 'ADVANCE' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center space-y-2">
+              <Wallet size={48} className="text-gray-300 mx-auto" />
+              <p className="text-sm text-gray-500">Deduct ₹{finalTotal} from Customer Balance</p>
+              {!customerPhone && (
+                <p className="text-xs text-red-500 mt-2 font-bold">⚠️ Customer phone required for balance payment</p>
+              )}
             </div>
           )}
 

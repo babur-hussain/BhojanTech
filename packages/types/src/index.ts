@@ -269,7 +269,7 @@ export interface KOT {
 
 // ─── Billing & Invoicing ────────────────────────────────────────────────────
 
-export type PaymentMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT';
+export type PaymentMode = 'CASH' | 'CARD' | 'UPI' | 'SPLIT' | 'ADVANCE';
 
 export interface GSTSlabBreakup {
   slab: 0 | 5 | 12 | 18;
