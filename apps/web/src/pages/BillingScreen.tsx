@@ -55,7 +55,7 @@ export default function BillingScreen() {
   const [paid, setPaid] = useState(false);
   const [paying, setPaying] = useState(false);
   const [generatingBill, setGeneratingBill] = useState(false);
-  const [whatsapp, setWhatsapp] = useState('');
+  const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [invoiceData, setInvoiceData] = useState<any>(null);
   const [restaurant, setRestaurant] = useState<any>(null);
 
@@ -103,6 +103,15 @@ export default function BillingScreen() {
         ]);
         setPreview(prevRes.data);
         setRestaurant(restRes.data);
+
+        if (prevRes.data.order) {
+          if (prevRes.data.order.customerPhone) {
+            setCustomerPhone(prevRes.data.order.customerPhone);
+          }
+          if (prevRes.data.order.customerName) {
+            setCustomerName(prevRes.data.order.customerName);
+          }
+        }
 
         // Load full catalog (menu + retail)
         try {
@@ -411,15 +420,6 @@ export default function BillingScreen() {
 
   // Generate Proforma Bill
   const handleGenerateBill = async () => {
-    if (!customerPhone || customerPhone.length !== 10) {
-      alert('Please provide a valid 10-digit mobile number before generating the bill.');
-      return;
-    }
-    if (!customerName || customerName.trim() === '') {
-      alert('Please provide the customer name before generating the bill.');
-      return;
-    }
-    
     try {
       setGeneratingBill(true);
       
@@ -491,15 +491,6 @@ export default function BillingScreen() {
 
   // Pay — live API call
   const handlePay = async () => {
-    if (!customerPhone || customerPhone.length !== 10) {
-      alert('Please provide a valid 10-digit mobile number before collecting payment.');
-      return;
-    }
-    if (!customerName || customerName.trim() === '') {
-      alert('Please provide the customer name before collecting payment.');
-      return;
-    }
-    
     try {
       setPaying(true);
       const body: any = {
@@ -533,7 +524,7 @@ export default function BillingScreen() {
         }
       }
       if (redeemPoints && +redeemPoints > 0) body.redeemPoints = +redeemPoints;
-      if (whatsapp) body.whatsappNumber = whatsapp;
+      if (sendWhatsApp && customerPhone) body.whatsappNumber = customerPhone;
 
       const res = await api.post('/billing/pay', body);
       const invoiceId = res.data?.invoice?._id;
@@ -1064,16 +1055,17 @@ export default function BillingScreen() {
             </div>
           )}
 
-          {/* WhatsApp */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <MessageSquare size={16} className="text-green-600" /> WhatsApp Receipt (optional)
-            </label>
-            <div className="flex gap-2">
-              <span className="bg-gray-100 border border-r-0 rounded-l px-3 py-2 text-sm text-gray-500">+91</span>
-              <input type="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} maxLength={10} placeholder="9876543210"
-                className="flex-1 border rounded-r px-3 py-2 text-sm" />
+          {/* WhatsApp Toggle */}
+          <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4">
+            <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+              <span className="text-green-600 text-lg">📱</span> WhatsApp Receipt (optional)
             </div>
+            <button 
+              onClick={() => setSendWhatsApp(!sendWhatsApp)}
+              className={`w-11 h-6 rounded-full p-1 transition-colors duration-200 flex items-center ${sendWhatsApp ? 'bg-green-500' : 'bg-gray-300'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${sendWhatsApp ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
           </div>
 
           {/* Action Buttons */}
@@ -1088,9 +1080,6 @@ export default function BillingScreen() {
               >
                 {paying ? <Loader2 size={22} className="animate-spin" /> : null}
                 {paying ? 'Processing…' : `GENERATE INVOICE`}
-              </button>
-              <button onClick={handleGenerateBill} className="px-4 py-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition flex items-center justify-center">
-                <Printer size={24} />
               </button>
             </div>
           </div>
