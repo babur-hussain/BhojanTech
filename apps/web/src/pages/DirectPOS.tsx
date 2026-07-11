@@ -812,8 +812,8 @@ export default function DirectPOS() {
             </div>
 
             {/* Payment Mode */}
-            <div className="grid grid-cols-3 gap-1.5 mt-3">
-              {(['CASH', 'UPI', 'CARD'] as const).map(mode => (
+            <div className="grid grid-cols-4 gap-1.5 mt-3">
+              {(['CASH', 'UPI', 'CARD', 'ADVANCE'] as const).map(mode => (
                 <button
                   key={mode}
                   onClick={() => setPaymentMode(mode)}
@@ -821,11 +821,12 @@ export default function DirectPOS() {
                     paymentMode === mode
                       ? mode === 'CASH' ? 'bg-green-600 text-white border-green-700'
                         : mode === 'UPI' ? 'bg-blue-600 text-white border-blue-700'
-                        : 'bg-purple-600 text-white border-purple-700'
+                        : mode === 'CARD' ? 'bg-purple-600 text-white border-purple-700'
+                        : 'bg-teal-600 text-white border-teal-700'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  {mode === 'CASH' ? '💵 Cash' : mode === 'UPI' ? '📱 UPI' : '💳 Card'}
+                  {mode === 'CASH' ? '💵 Cash' : mode === 'UPI' ? '📱 UPI' : mode === 'CARD' ? '💳 Card' : '💰 Balance'}
                 </button>
               ))}
             </div>
