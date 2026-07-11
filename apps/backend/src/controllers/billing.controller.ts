@@ -391,16 +391,19 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     while (attempts < maxAttempts && !invoice) {
       try {
         attempts++;
-        const branchId = req.user!.branchId;
-        const seq = await (InvoiceSequence as any).getNextSequence(
-          new mongoose.Types.ObjectId(restaurantId as string),
-          branchId ? new mongoose.Types.ObjectId(branchId as string) : undefined
-        );
         let branchPrefix: string | undefined;
-        if (branchId) {
-          const branch = await Branch.findById(branchId).select('invoicePrefix').lean() as any;
+        if (req.user!.branchId) {
+          const branch = await Branch.findById(req.user!.branchId).select('invoicePrefix').lean() as any;
           branchPrefix = branch?.invoicePrefix;
         }
+
+        const sequenceBranchId = branchPrefix ? req.user!.branchId : undefined;
+        const seq = await (InvoiceSequence as any).getNextSequence(
+          new mongoose.Types.ObjectId(restaurantId as string),
+          sequenceBranchId ? new mongoose.Types.ObjectId(sequenceBranchId as string) : undefined
+        );
+        const branchId = req.user!.branchId; // preserve for Invoice.create
+
         const invoiceNumber = generateInvoiceNumber(seq, branchPrefix);
 
         const { english: totalInWords, hindi: totalInWordHindi } = amountInWords(grandTotal);
