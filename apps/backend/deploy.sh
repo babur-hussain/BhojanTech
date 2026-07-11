@@ -81,8 +81,7 @@ DOCKERFILE
 
   # 5. Stop and remove the old container
   echo "🛑 Stopping old container..."
-  sudo docker stop backend-server || true
-  sudo docker rm backend-server || true
+  sudo docker rm -f backend-server || true
 
   # 6. Run the new container
   echo "🔧 Ensuring Redis is running..."
