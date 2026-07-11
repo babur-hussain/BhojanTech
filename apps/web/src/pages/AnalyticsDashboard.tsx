@@ -52,6 +52,7 @@ export default function AnalyticsDashboard() {
   const [monthly, setMonthly] = useState<any[]>([]);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [activeOnlineCount, setActiveOnlineCount] = useState(0);
   const [pendingBookings, setPendingBookings] = useState(0);
 
   const fetchData = async () => {
@@ -99,7 +100,8 @@ export default function AnalyticsDashboard() {
           api.get(`/bookings?date=${new Date().toISOString().split('T')[0]}`)
         ]);
         const allOrders = Array.isArray(ordersRes.data) ? ordersRes.data : [];
-        setLiveOrders(allOrders.filter((o: any) => o.status === 'OPEN' && o.orderType === 'DINE_IN'));
+        setActiveOnlineCount(allOrders.filter((o: any) => o.status === 'OPEN' && (!o.tableNumber || o.tableNumber === 'TAKEAWAY')).length);
+        setLiveOrders(allOrders.filter((o: any) => o.status === 'OPEN' && o.tableNumber && o.tableNumber !== 'TAKEAWAY'));
         const allBookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : [];
         setPendingBookings(allBookings.filter((b: any) => ['PENDING', 'CONFIRMED', 'READY'].includes(b.status)).length);
       } catch (e) {
@@ -287,8 +289,8 @@ export default function AnalyticsDashboard() {
         <KPICard
           title="Active Orders"
           value={String(kpi.activeOrders)}
-          sub={`3 Online · ${kpi.activeOrders - 3} Dine-In`}
-          subColor="text-brand-600 font-bold"
+          sub={`${activeOnlineCount} Online/Takeaway · ${kpi.activeOrders - activeOnlineCount} Dine-In`}
+          subColor="text-orange-600 font-bold"
           icon={<Activity size={22} className="text-orange-500" />}
           accent="border-orange-400"
         />
