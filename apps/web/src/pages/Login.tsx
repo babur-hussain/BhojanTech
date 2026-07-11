@@ -25,25 +25,31 @@ export default function Login() {
   const recaptchaWidgetIdRef = useRef<number | null>(null);
 
   /**
-   * Lazily create the RecaptchaVerifier on first use, then reuse it.
-   * On subsequent calls, reset the existing widget for a fresh token
-   * via grecaptcha.reset() — no DOM manipulation needed.
+   * Robustly create the RecaptchaVerifier by manually recreating the DOM node.
+   * This completely avoids React lifecycle or StrictMode issues with 'already rendered' errors.
    */
   const getVerifier = async (): Promise<RecaptchaVerifier> => {
-    // If we already have a verifier, just reset the widget for a fresh token
     if (recaptchaVerifierRef.current) {
       try {
-        const g = (window as any).grecaptcha;
-        if (g && recaptchaWidgetIdRef.current != null) {
-          g.reset(recaptchaWidgetIdRef.current);
-        }
+        recaptchaVerifierRef.current.clear();
       } catch {
-        // reset failed — will still try to use verifier as-is
+        // ignore
       }
-      return recaptchaVerifierRef.current;
+      recaptchaVerifierRef.current = null;
+      recaptchaWidgetIdRef.current = null;
     }
 
-    // First time: create and render the verifier
+    // Completely remove the old container from the DOM if it exists
+    let oldContainer = document.getElementById('recaptcha-container');
+    if (oldContainer) {
+      oldContainer.remove();
+    }
+
+    // Create a fresh container and append it to the body (outside React's control)
+    const newContainer = document.createElement('div');
+    newContainer.id = 'recaptcha-container';
+    document.body.appendChild(newContainer);
+
     const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
       size: 'invisible',
     });
@@ -191,9 +197,6 @@ export default function Login() {
               {error}
             </div>
           )}
-
-          {/* reCAPTCHA invisible widget mounts here — never manipulate this div directly */}
-          <div id="recaptcha-container"></div>
 
           {/* Login Method Tabs */}
           <div className="flex border-b mb-6 text-sm">
