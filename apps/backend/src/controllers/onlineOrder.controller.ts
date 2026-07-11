@@ -127,21 +127,31 @@ export const createOnlineOrder = async (req: Request, res: Response) => {
 
         // Save/Update Customer Data
         if (customerPhone) {
-            await Customer.findOneAndUpdate(
-                { restaurantId, phone: customerPhone },
-                {
-                    $setOnInsert: { branchId: branchId || undefined },
-                    $set: {
-                        name: customerName || 'Guest',
-                        lastVisit: new Date(),
-                    },
-                    $inc: {
-                        totalOrders: 1,
-                        totalSpent: totalAmountINR
-                    }
-                },
-                { upsert: true, new: true }
-            );
+            let customer = await Customer.findByPhone(restaurantId, customerPhone);
+            if (!customer) {
+                let crypto = require('crypto');
+                let referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+                while (await Customer.findOne({ referralCode })) {
+                    referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+                }
+                customer = await Customer.create({
+                    restaurantId,
+                    phone: customerPhone,
+                    name: customerName || 'Guest',
+                    firstVisitDate: new Date(),
+                    lastVisitDate: new Date(),
+                    referralCode,
+                    tier: 'BRONZE',
+                    totalOrders: 1,
+                    totalSpent: totalAmountINR
+                });
+            } else {
+                if (customerName) customer.name = customerName;
+                customer.lastVisitDate = new Date();
+                customer.totalVisits = (customer.totalVisits || 0) + 1;
+                customer.totalSpend = (customer.totalSpend || 0) + totalAmountINR;
+                await customer.save();
+            }
         }
 
         if (paymentMode === 'RAZORPAY' && razorpay) {
