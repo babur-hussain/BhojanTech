@@ -76,7 +76,7 @@ export const uploadImages = async (req: AuthRequest, res: Response) => {
 // CATEGORIES
 export const getCategories = async (req: AuthRequest, res: Response) => {
   try {
-    const branchId = req.user!.branchId || 'all';
+    const branchId = req.user!.branchId || (typeof req.query.branchId === 'string' ? req.query.branchId : 'all');
     const cacheKey = `menu_categories_v3:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
@@ -204,7 +204,7 @@ export const updateCategoryAvailability = async (req: AuthRequest, res: Response
 // ITEMS
 export const getMenuItems = async (req: AuthRequest, res: Response) => {
   try {
-    const branchId = req.user!.branchId || 'all';
+    const branchId = req.user!.branchId || (typeof req.query.branchId === 'string' ? req.query.branchId : 'all');
     const cacheKey = `menu_items_v3:${req.user!.restaurantId}:${branchId}`;
     const cached = await redis.get(cacheKey);
     if (cached) return res.json(JSON.parse(cached));
