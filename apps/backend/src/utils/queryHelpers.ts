@@ -3,7 +3,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 export const getBaseQuery = (req: AuthRequest) => {
   const query: any = { restaurantId: req.user!.restaurantId };
   
-  const requestedBranchId = req.query.branchId as string;
+  const requestedBranchId = (req.query.branchId as string) || (req.query._b as string) || (req.headers['x-branch-id'] as string);
   const isSpecificBranchRequested = requestedBranchId && requestedBranchId !== 'all' && requestedBranchId !== 'null';
 
   if (req.user!.role === 'SUPER_OWNER' || req.user!.role === 'OWNER') {
