@@ -108,9 +108,9 @@ export const createRazorpayOrderSchema = z.object({
 
 export const finalizeBillSchema = z.object({
   body: z.object({
-    paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'RAZORPAY', 'SPLIT']),
+    paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'RAZORPAY', 'SPLIT', 'ADVANCE']),
     splitDetails: z.array(z.object({
-      mode: z.enum(['CASH', 'UPI', 'CARD']),
+      mode: z.enum(['CASH', 'UPI', 'CARD', 'ADVANCE']),
       amount: z.number().min(0),
     })).optional(),
     redeemPoints: z.number().int().min(0).optional(),
