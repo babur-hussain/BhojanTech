@@ -42,7 +42,7 @@ export interface IInvoice extends Document {
     amountINR: number;
     transactionRef?: string;
   }[];
-  paymentMode: 'CASH' | 'CARD' | 'UPI' | 'SPLIT';
+  paymentMode: 'CASH' | 'CARD' | 'UPI' | 'SPLIT' | 'ADVANCE';
   amountPaidINR: number;
   changeINR: number;
   totalInWords: string;
@@ -71,7 +71,7 @@ const InvoiceSchema: Schema = new Schema(
     roundOff: { type: Number, default: 0 },
     grandTotalINR: { type: Number, required: true },
     payments: [{ mode: String, amountINR: Number, transactionRef: String }],
-    paymentMode: { type: String, enum: ['CASH', 'CARD', 'UPI', 'SPLIT'], required: true },
+    paymentMode: { type: String, enum: ['CASH', 'CARD', 'UPI', 'SPLIT', 'ADVANCE'], required: true },
     amountPaidINR: { type: Number, required: true },
     changeINR: { type: Number, default: 0 },
     totalInWords: { type: String },
