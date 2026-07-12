@@ -53,8 +53,7 @@ export default function BranchSelector() {
     // Only show for users who can switch branches
     const canSwitch = user && (
         user.role === UserRole.SUPER_OWNER ||
-        user.role === UserRole.OWNER ||
-        user.role === UserRole.BRANCH_MANAGER
+        user.role === UserRole.OWNER
     );
 
     if (!canSwitch || branches.length === 0) return null;

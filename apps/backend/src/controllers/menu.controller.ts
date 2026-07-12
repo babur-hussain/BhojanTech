@@ -83,16 +83,6 @@ export const getCategories = async (req: AuthRequest, res: Response) => {
 
     const query = getBaseQuery(req);
     
-    // If fetching for a specific branch, also include global categories
-    if (query.branchId) {
-      query.$or = [
-        { branchId: query.branchId },
-        { branchId: { $exists: false } },
-        { branchId: null }
-      ];
-      delete query.branchId;
-    }
-
     const categories = await MenuCategory.find(query).sort('order').lean();
 
     await redis.set(cacheKey, JSON.stringify(categories), 'EX', 3600);
@@ -221,16 +211,6 @@ export const getMenuItems = async (req: AuthRequest, res: Response) => {
 
     const query = getBaseQuery(req);
     
-    // If fetching for a specific branch, also include global items
-    if (query.branchId) {
-      query.$or = [
-        { branchId: query.branchId },
-        { branchId: { $exists: false } },
-        { branchId: null }
-      ];
-      delete query.branchId;
-    }
-
     const items = await MenuItem.find(query).lean();
 
     await redis.set(cacheKey, JSON.stringify(items), 'EX', 3600);
