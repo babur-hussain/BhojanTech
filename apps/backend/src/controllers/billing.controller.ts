@@ -231,6 +231,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       customerDob,
       sendWhatsApp = true,
       redeemPoints: pointsToRedeem,
+      applyTierDiscount: shouldApplyTierDiscount = false, // only apply tier discount when explicitly requested
       razorpayOrderId,
       razorpayPaymentId,
       retailItems = [],    // [{ _id, quantity }]
@@ -357,8 +358,11 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
     if (customerPhone) {
       loyaltyCustomer = await Customer.findByPhone(restaurantId, customerPhone);
       if (loyaltyCustomer) {
-        const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
-        tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
+        // Only apply tier discount when explicitly requested by frontend
+        if (shouldApplyTierDiscount) {
+          const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
+          tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
+        }
 
         // Redeem points if requested
         if (pointsToRedeem && pointsToRedeem >= loyaltySettings.minimumRedemptionPoints) {
@@ -367,7 +371,7 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    // Discount (manual staff discount)
+    // Discount (manual staff discount + optional tier/loyalty discounts)
     let flatDiscount = tierDiscountINR + loyaltyRedemptionDiscount;
     if (discount) {
       flatDiscount += discount.type === 'FLAT'
@@ -421,8 +425,13 @@ export const processPayment = async (req: AuthRequest, res: Response) => {
           subtotalINR: allSubtotal,
           gstBreakup,
           totalGSTINR: totalGST,
-          discount: discount
-            ? { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy }
+          discount: flatDiscount > 0
+            ? {
+                type: discount?.type || 'FLAT',
+                value: discount?.value || flatDiscount,
+                flatAmount: flatDiscount,
+                approvedBy: discount?.approvedBy || (tierDiscountINR > 0 ? 'LOYALTY_TIER' : 'SYSTEM'),
+              }
             : undefined,
           roundOff,
           grandTotalINR: grandTotal,
@@ -704,6 +713,7 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       customerDob,
       sendWhatsApp = true,
       redeemPoints: pointsToRedeem,
+      applyTierDiscount: shouldApplyTierDiscount = false, // only apply tier discount when explicitly requested
     } = req.body;
 
     const restaurantId = req.user!.restaurantId;
@@ -770,8 +780,11 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
     if (customerPhone) {
       const loyaltyCustomer = await Customer.findByPhone(restaurantId, customerPhone);
       if (loyaltyCustomer) {
-        const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
-        tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
+        // Only apply tier discount when explicitly requested by frontend
+        if (shouldApplyTierDiscount) {
+          const tierConfig = resolveTier(loyaltyCustomer.totalSpend, loyaltySettings.tiers);
+          tierDiscountINR = applyTierDiscount(subtotal, tierConfig);
+        }
 
         if (pointsToRedeem && pointsToRedeem >= loyaltySettings.minimumRedemptionPoints) {
           loyaltyRedemptionDiscount = +(pointsToRedeem / loyaltySettings.pointsPerRupeeRedemption).toFixed(2);
@@ -819,8 +832,13 @@ export const createDirectBill = async (req: AuthRequest, res: Response) => {
       subtotalINR: subtotal,
       gstBreakup,
       totalGSTINR: totalGST,
-      discount: discount
-        ? { type: discount.type, value: discount.value, flatAmount: flatDiscount, approvedBy: discount.approvedBy }
+      discount: flatDiscount > 0
+        ? {
+            type: discount?.type || 'FLAT',
+            value: discount?.value || flatDiscount,
+            flatAmount: flatDiscount,
+            approvedBy: discount?.approvedBy || (tierDiscountINR > 0 ? 'LOYALTY_TIER' : 'SYSTEM'),
+          }
         : undefined,
       roundOff,
       grandTotalINR: grandTotal,
