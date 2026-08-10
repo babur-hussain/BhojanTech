@@ -15,13 +15,24 @@ export const Endpoints = {
     // Menu
     MENU_CATEGORIES: '/api/menu/categories',
     MENU_ITEMS: '/api/menu/items',
+    MENU_ITEM_BY_ID: (itemId: string) => `/api/menu/items/${itemId}`,
+    MENU_ITEM_AVAILABILITY: (itemId: string) => `/api/menu/items/${itemId}/availability`,
+    MENU_CATEGORY_BY_ID: (catId: string) => `/api/menu/categories/${catId}`,
     MENU_UPLOAD_URL: '/api/menu/upload-url',
 
     // Tables
     TABLES: '/api/tables',
+    TABLE_BY_ID: (tableId: string) => `/api/tables/${tableId}`,
+    TABLE_MERGE: '/api/tables/merge',
+    TABLE_TRANSFER: '/api/tables/transfer',
+    TABLE_RESERVE: (tableId: string) => `/api/tables/${tableId}/reserve`,
+    TABLE_CLEAR: (tableId: string) => `/api/tables/${tableId}/clear`,
 
     // Orders
     ORDERS: '/api/orders',
+    ORDER_BY_ID: (orderId: string) => `/api/orders/${orderId}`,
+    ORDERS_ACTIVE: '/api/orders?status=OPEN',
+    ORDERS_BY_WAITER: (waiterId: string) => `/api/orders?waiterId=${waiterId}`,
 
     // KOT
     KOT_ACTIVE: '/api/kots/active',
@@ -44,12 +55,17 @@ export const Endpoints = {
 
     // Staff
     STAFF: '/api/staff',
+    STAFF_BY_ID: (staffId: string) => `/api/staff/${staffId}`,
+    STAFF_TOGGLE_ACTIVE: (staffId: string) => `/api/staff/${staffId}/toggle-active`,
     STAFF_CLOCK_IN: '/api/staff/attendance/clock-in',
     STAFF_CLOCK_OUT: '/api/staff/attendance/clock-out',
     STAFF_TODAY_DUTY: '/api/staff/duty/today',
+    STAFF_ATTENDANCE_HISTORY: (staffId: string) => `/api/staff/${staffId}/attendance`,
+    STAFF_ATTENDANCE_TODAY: '/api/staff/attendance/today',
     STAFF_SCHEDULE: (weekStart: string) => `/api/staff/schedule/${weekStart}`,
     STAFF_PAYROLL: (month: string) => `/api/staff/payroll/${month}`,
     STAFF_PERFORMANCE: (month: string) => `/api/staff/performance/${month}`,
+    STAFF_MY_STATS: '/api/staff/me/stats',
 
     // Analytics
     ANALYTICS_DASHBOARD: '/api/analytics/dashboard',

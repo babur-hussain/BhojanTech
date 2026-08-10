@@ -5,7 +5,7 @@ export type IntegrationStatus = 'ACTIVE' | 'PAUSED' | 'ERROR';
 
 export interface IIntegration extends Document {
     restaurantId: mongoose.Types.ObjectId;
-    branchId: mongoose.Types.ObjectId;
+    branchId?: mongoose.Types.ObjectId | null;
     platform: IntegrationPlatform;
     restaurantIdOnPlatform: string;
     webhookSecret?: string;
@@ -27,7 +27,7 @@ export interface IIntegration extends Document {
 const IntegrationSchema: Schema = new Schema(
     {
         restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
-        branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true, index: true },
+        branchId: { type: Schema.Types.ObjectId, ref: 'Branch', default: null, index: true },
         platform: { type: String, enum: ['ZOMATO', 'SWIGGY', 'ONDC', 'MANUAL', 'LOOMIFLOW'], required: true },
         restaurantIdOnPlatform: { type: String, required: true },
         webhookSecret: { type: String },
@@ -53,6 +53,11 @@ const IntegrationSchema: Schema = new Schema(
     { timestamps: true }
 );
 
-IntegrationSchema.index({ branchId: 1, platform: 1 }, { unique: true });
+// Sparse compound index: allows multiple restaurant-wide integrations (branchId=null)
+// while still preventing duplicate branch+platform combos
+IntegrationSchema.index(
+    { restaurantId: 1, branchId: 1, platform: 1 },
+    { unique: true, sparse: true }
+);
 
 export const Integration = mongoose.model<IIntegration>('Integration', IntegrationSchema);

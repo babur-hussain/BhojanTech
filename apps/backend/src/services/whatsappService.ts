@@ -299,8 +299,8 @@ export const sendStaffInviteWA = async (phone: string, restaurantName: string, i
 };
 
 export const sendInvoiceWA = async (
-    phone: string, 
-    invoiceUrl: string, 
+    phone: string,
+    invoiceUrl: string,
     invoiceNumber: string,
     context?: { restaurantId?: string, branchId?: string, customerName?: string, amount?: number, date?: Date, restaurantName?: string, paymentStatus?: string }
 ) => {
@@ -309,12 +309,21 @@ export const sendInvoiceWA = async (
 
     if (context?.restaurantId) {
         try {
-            const integration = await Integration.findOne({ 
-                restaurantId: context.restaurantId, 
-                branchId: context.branchId, 
-                platform: 'LOOMIFLOW', 
-                status: 'ACTIVE' 
+            let integration = await Integration.findOne({
+                restaurantId: context.restaurantId,
+                branchId: context.branchId,
+                platform: 'LOOMIFLOW',
+                status: 'ACTIVE'
             });
+
+            // Fallback: if no branch-specific integration, try restaurant-level
+            if (!integration) {
+                integration = await Integration.findOne({
+                    restaurantId: context.restaurantId,
+                    platform: 'LOOMIFLOW',
+                    status: 'ACTIVE'
+                });
+            }
 
             if (integration) {
                 apiKey = integration.apiKey;
@@ -324,7 +333,7 @@ export const sendInvoiceWA = async (
             if (integration && integration.whatsappConfig?.invoiceTemplateName) {
                 const config = integration.whatsappConfig;
                 const mapping = config.invoiceTemplateMapping || {};
-                
+
                 // Map the variables based on the DB mapping config
                 const parameters = [];
                 for (let i = 1; i <= 10; i++) {
@@ -332,7 +341,7 @@ export const sendInvoiceWA = async (
                     const mappingAny = mapping as any;
                     const mappedField = typeof mappingAny.get === 'function' ? mappingAny.get(i.toString()) : mappingAny[i.toString()];
                     if (!mappedField) break;
-                    
+
                     let text = '';
                     switch (mappedField) {
                         case 'CustomerName': text = context.customerName || 'Customer'; break;
@@ -349,7 +358,7 @@ export const sendInvoiceWA = async (
                 }
 
                 let components: any[] = [];
-                
+
                 // Invoice templates generally require a document header
                 if (invoiceUrl) {
                     components.push({
@@ -383,7 +392,7 @@ export const sendInvoiceWA = async (
                     if (templateRes && templateRes.success === false) {
                         logger.warn(`[WhatsApp] Invoice template sending failed: ${templateRes.error}`);
                     }
-                    
+
                     return templateRes;
                 } catch (templateError: any) {
                     logger.warn(`[WhatsApp] Template sending threw error: ${templateError.message}`);
@@ -400,21 +409,30 @@ export const sendInvoiceWA = async (
 };
 
 export const sendBookingWA = async (
-    phone: string, 
+    phone: string,
     context: { restaurantId: string, branchId: string, customerName?: string, bookingDate?: Date, bookingTime?: string, guests?: number, tableNumber?: string, restaurantName?: string, bookingStatus?: string }
 ) => {
     try {
-        const integration = await Integration.findOne({ 
-            restaurantId: context.restaurantId, 
-            branchId: context.branchId, 
-            platform: 'LOOMIFLOW', 
-            status: 'ACTIVE' 
+        let integration = await Integration.findOne({
+            restaurantId: context.restaurantId,
+            branchId: context.branchId,
+            platform: 'LOOMIFLOW',
+            status: 'ACTIVE'
         });
+
+        // Fallback: if no branch-specific integration, try restaurant-level
+        if (!integration) {
+            integration = await Integration.findOne({
+                restaurantId: context.restaurantId,
+                platform: 'LOOMIFLOW',
+                status: 'ACTIVE'
+            });
+        }
 
         if (integration && integration.whatsappConfig?.bookingTemplateName) {
             const config = integration.whatsappConfig;
             const mapping = config.bookingTemplateMapping || {};
-            
+
             // Map the variables based on the DB mapping config
             const parameters = [];
             for (let i = 1; i <= 10; i++) {
@@ -422,7 +440,7 @@ export const sendBookingWA = async (
                 const mappingAny = mapping as any;
                 const mappedField = typeof mappingAny.get === 'function' ? mappingAny.get(i.toString()) : mappingAny[i.toString()];
                 if (!mappedField) break;
-                
+
                 let text = '';
                 switch (mappedField) {
                     case 'CustomerName': text = context.customerName || 'Customer'; break;

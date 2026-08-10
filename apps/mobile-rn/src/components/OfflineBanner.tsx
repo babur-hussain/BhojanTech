@@ -1,14 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, FontSize, Spacing } from '../constants/theme';
-// import { useNetInfo } from '@react-native-community/netinfo';
+import { useNetInfo } from '@react-native-community/netinfo';
 
 interface OfflineBannerProps {
     isConnected?: boolean;
 }
 
-function OfflineBanner({ isConnected = true }: OfflineBannerProps) {
-    if (isConnected) return null;
+function OfflineBanner({ isConnected }: OfflineBannerProps) {
+    const netInfo = useNetInfo();
+    const connected = isConnected !== undefined ? isConnected : (netInfo.isConnected ?? true);
+
+    if (connected) return null;
 
     return (
         <View style={styles.banner}>

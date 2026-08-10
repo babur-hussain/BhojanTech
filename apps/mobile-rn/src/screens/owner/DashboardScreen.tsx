@@ -98,6 +98,19 @@ export default function DashboardScreen() {
                     </View>
                 </View>
 
+                {/* Animated Chart Section */}
+                <View style={styles.chartCard}>
+                    <Text style={styles.sectionTitle}>Weekly Revenue Trend</Text>
+                    <View style={styles.chartRow}>
+                        {[40, 60, 30, 80, 50, 90, 70].map((height, i) => (
+                            <View key={i} style={styles.barContainer}>
+                                <View style={[styles.bar, { height: `${height}%` }]} />
+                                <Text style={styles.barLabel}>{['M','T','W','T','F','S','S'][i]}</Text>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
                 {/* Low Inventory Alerts */}
                 {lowStockItems.length > 0 && (
                     <View style={styles.alertSection}>
@@ -129,5 +142,10 @@ const styles = StyleSheet.create({
     alertQty: { fontSize: FontSize.base, color: Colors.error, fontWeight: '700' },
     headerArea: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Spacing.md },
     branchPill: { backgroundColor: Colors.cream, borderWidth: 1, borderColor: Colors.maroon, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: 16 },
-    branchPillText: { fontSize: FontSize.xs, color: Colors.maroon, fontWeight: 'bold' }
+    branchPillText: { fontSize: FontSize.xs, color: Colors.maroon, fontWeight: 'bold' },
+    chartCard: { backgroundColor: Colors.white, borderRadius: 12, padding: Spacing.lg, marginTop: Spacing.md },
+    chartRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, paddingTop: Spacing.md },
+    barContainer: { alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
+    bar: { width: 12, backgroundColor: Colors.saffron, borderRadius: 6, marginBottom: Spacing.xs },
+    barLabel: { fontSize: FontSize.xs, color: Colors.gray500, fontWeight: '600' }
 });

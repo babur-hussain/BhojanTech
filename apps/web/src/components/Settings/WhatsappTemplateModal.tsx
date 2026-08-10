@@ -11,7 +11,7 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
     const [templates, setTemplates] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    
+
     // Config state
     const [invoiceTemplateName, setInvoiceTemplateName] = useState('');
     const [invoiceMapping, setInvoiceMapping] = useState<Record<string, string>>({});
@@ -83,15 +83,15 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
     };
 
     const renderMappingForm = (
-        type: 'Invoice' | 'Booking', 
-        templateName: string, 
-        setTemplateName: any, 
-        mapping: Record<string, string>, 
+        type: 'Invoice' | 'Booking',
+        templateName: string,
+        setTemplateName: any,
+        mapping: Record<string, string>,
         setMapping: any
     ) => {
         const mappableFields = type === 'Invoice' ? INVOICE_FIELDS : BOOKING_FIELDS;
         const selectedTemplate = templates.find(t => t.name === templateName);
-        
+
         let requiredVariables = 0;
         if (selectedTemplate) {
             // Find body component and count variables like {{1}}
@@ -107,7 +107,7 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
         return (
             <div className="bg-gray-50 p-4 rounded-xl border mb-4">
                 <h3 className="font-bold mb-3">{type} Template</h3>
-                <select 
+                <select
                     value={templateName}
                     onChange={(e) => {
                         setTemplateName(e.target.value);
@@ -160,14 +160,14 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
                         <X size={20} />
                     </button>
                 </div>
-                
+
                 <div className="p-6 overflow-y-auto flex-1">
                     <div className="flex justify-between items-center mb-6">
                         <p className="text-gray-600">
                             Map LoomiFlow templates to RestaurantOS events. Ensure your API keys are correct.
                         </p>
-                        <button 
-                            onClick={fetchTemplates} 
+                        <button
+                            onClick={fetchTemplates}
                             disabled={loading}
                             className="flex items-center gap-2 text-sm font-bold text-maroon hover:bg-maroon hover:text-white px-3 py-1.5 border border-maroon rounded-lg transition disabled:opacity-50"
                         >
@@ -184,8 +184,8 @@ export default function WhatsappTemplateModal({ integrationId, onClose }: Props)
                     <button onClick={onClose} className="px-6 py-2.5 font-bold text-gray-600 hover:bg-gray-200 rounded-lg transition">
                         Cancel
                     </button>
-                    <button 
-                        onClick={handleSave} 
+                    <button
+                        onClick={handleSave}
                         disabled={saving}
                         className="flex items-center gap-2 px-6 py-2.5 font-bold text-white bg-maroon hover:bg-opacity-90 rounded-lg transition disabled:opacity-50"
                     >

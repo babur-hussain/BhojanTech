@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Colors, Spacing, FontSize, Radius } from '../constants/theme';
 import { KOT, KOTItem } from '../types';
 import { timeAgo } from '../utils/formatters';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const ITEM_STATUS_COLORS = {
     PENDING: Colors.kdsPending,
@@ -16,32 +17,56 @@ interface KOTCardProps {
 }
 
 function KOTCard({ kot, onItemPress }: KOTCardProps) {
+    const [isLate, setIsLate] = useState(false);
+
+    useEffect(() => {
+        const checkTime = () => {
+            const diff = Date.now() - new Date(kot.createdAt).getTime();
+            setIsLate(diff > 15 * 60 * 1000); // 15 mins
+        };
+        checkTime();
+        const interval = setInterval(checkTime, 60000);
+        return () => clearInterval(interval);
+    }, [kot.createdAt]);
+
+    const renderRightActions = (progress: any, dragX: any, item: KOTItem) => {
+        return (
+            <TouchableOpacity style={styles.swipeAction} onPress={() => onItemPress(kot.id, item)}>
+                <Text style={styles.swipeText}>BUMP</Text>
+            </TouchableOpacity>
+        );
+    };
+
     return (
-        <View style={styles.card}>
+        <View style={[styles.card, isLate && styles.cardLate]}>
             <View style={styles.header}>
                 <Text style={styles.tableNumber}>Table {kot.tableNumber}</Text>
-                <Text style={styles.time}>{timeAgo(kot.createdAt)}</Text>
+                <Text style={[styles.time, isLate && styles.timeLate]}>{timeAgo(kot.createdAt)}</Text>
             </View>
             <Text style={styles.waiter}>Waiter: {kot.waiterName}</Text>
 
             {kot.items.map((item) => (
-                <TouchableOpacity
+                <Swipeable
                     key={item._id || item.orderItemId}
-                    style={[styles.itemRow, { borderLeftColor: ITEM_STATUS_COLORS[item.status] }]}
-                    onPress={() => onItemPress(kot.id, item)}
-                    activeOpacity={0.7}
+                    renderRightActions={(p, d) => renderRightActions(p, d, item)}
                 >
-                    <View style={styles.itemInfo}>
-                        <Text style={styles.itemName}>
-                            {item.quantity}× {item.name}
-                            {item.variantName ? ` (${item.variantName})` : ''}
-                        </Text>
-                        {item.notes && <Text style={styles.itemNotes}>📝 {item.notes}</Text>}
-                    </View>
-                    <View style={[styles.statusBadge, { backgroundColor: ITEM_STATUS_COLORS[item.status] + '30', borderColor: ITEM_STATUS_COLORS[item.status] }]}>
-                        <Text style={[styles.statusText, { color: ITEM_STATUS_COLORS[item.status] }]}>{item.status}</Text>
-                    </View>
-                </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.itemRow, { borderLeftColor: ITEM_STATUS_COLORS[item.status] }]}
+                        onPress={() => onItemPress(kot.id, item)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.itemInfo}>
+                            <Text style={styles.itemName}>
+                                {item.quantity}× {item.name}
+                                {item.variantName ? ` (${item.variantName})` : ''}
+                            </Text>
+                            {item.notes && <Text style={styles.itemNotes}>📝 {item.notes}</Text>}
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: ITEM_STATUS_COLORS[item.status] + '30', borderColor: ITEM_STATUS_COLORS[item.status] }]}>
+                            <Text style={[styles.statusText, { color: ITEM_STATUS_COLORS[item.status] }]}>{item.status}</Text>
+                        </View>
+                    </TouchableOpacity>
+                </Swipeable>
             ))}
         </View>
     );
@@ -61,4 +86,8 @@ const styles = StyleSheet.create({
     itemNotes: { fontSize: FontSize.sm, color: Colors.warning, marginTop: 2 },
     statusBadge: { borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: Spacing.sm, paddingVertical: 2 },
     statusText: { fontSize: FontSize.xs, fontWeight: '800' },
+    cardLate: { borderLeftColor: Colors.error, backgroundColor: '#3f1111' },
+    timeLate: { color: Colors.error, fontWeight: 'bold' },
+    swipeAction: { backgroundColor: Colors.kdsReady, justifyContent: 'center', alignItems: 'center', width: 80, height: '100%' },
+    swipeText: { color: Colors.white, fontWeight: '900' },
 });

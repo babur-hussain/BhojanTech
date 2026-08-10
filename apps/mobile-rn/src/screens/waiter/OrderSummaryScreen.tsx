@@ -6,7 +6,7 @@ import { OrderItem } from '../../types';
 import { inrFormat } from '../../utils/formatters';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-// import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 export default function OrderSummaryScreen() {
     const route = useRoute<any>();
@@ -27,7 +27,7 @@ export default function OrderSummaryScreen() {
             await addItemsToOrder(oid, cart);
             await sendKOT(oid);
             // Strong haptic tap on KOT sent
-            // ReactNativeHapticFeedback.trigger('notificationSuccess');
+            ReactNativeHapticFeedback.trigger('notificationSuccess');
             Alert.alert('KOT Sent! 🎉', 'Order has been sent to the kitchen.', [
                 { text: 'OK', onPress: () => navigation.popToTop() },
             ]);

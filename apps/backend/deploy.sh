@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Configuration
-SERVER_IP="3.110.159.12"
+SERVER_IP="35.154.70.105"
 USER="ec2-user"
-PEM_KEY="RestaurantOS.pem"
+PEM_KEY="RestroOS.pem"
 REMOTE_DIR="~/restaurant-app-deployment"
 
 echo "====================================="

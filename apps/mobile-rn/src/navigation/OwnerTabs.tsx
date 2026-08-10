@@ -7,6 +7,7 @@ import { useNotificationsStore } from '../store/notificationsStore';
 import DashboardScreen from '../screens/owner/DashboardScreen';
 import LiveOrdersScreen from '../screens/owner/LiveOrdersScreen';
 import MenuManageScreen from '../screens/owner/MenuManageScreen';
+import TableManageScreen from '../screens/owner/TableManageScreen';
 import StaffScreen from '../screens/owner/StaffScreen';
 import ReportsScreen from '../screens/owner/ReportsScreen';
 import AIChatScreen from '../screens/owner/AIChatScreen';
@@ -15,12 +16,12 @@ const Tab = createBottomTabNavigator();
 
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
     const icons: Record<string, string> = {
-        Dashboard: '📊', Orders: '📋', Menu: '🍽️', Staff: '👥', Reports: '📈', 'AI Chat': '🤖',
+        Dashboard: '📊', Orders: '📋', Tables: '🪑', Menu: '🍽️', Staff: '👥', Reports: '📈', 'AI Chat': '🤖',
     };
     return (
         <View style={{ alignItems: 'center' }}>
             <Text style={{ fontSize: 20 }}>{icons[label] || '•'}</Text>
-            <Text style={{ fontSize: 10, color: focused ? Colors.saffron : Colors.gray400, fontWeight: focused ? '700' : '400' }}>
+            <Text style={{ fontSize: 9, color: focused ? Colors.saffron : Colors.gray400, fontWeight: focused ? '700' : '400' }}>
                 {label}
             </Text>
         </View>
@@ -45,6 +46,7 @@ export default function OwnerTabs() {
         >
             <Tab.Screen name="Dashboard" component={DashboardScreen} />
             <Tab.Screen name="Orders" component={LiveOrdersScreen} />
+            <Tab.Screen name="Tables" component={TableManageScreen} />
             <Tab.Screen name="Menu" component={MenuManageScreen} />
             <Tab.Screen name="Staff" component={StaffScreen} />
             <Tab.Screen name="Reports" component={ReportsScreen} />

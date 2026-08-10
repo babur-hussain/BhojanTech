@@ -12,3 +12,10 @@ export function isValidIndianPhone(phone: string): boolean {
 export function isValidOTP(otp: string): boolean {
     return /^\d{6}$/.test(otp.trim());
 }
+
+/**
+ * Validates email address format
+ */
+export function isValidEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}

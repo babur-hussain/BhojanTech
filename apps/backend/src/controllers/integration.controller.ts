@@ -47,7 +47,7 @@ export const handleZomatoWebhook = async (req: Request, res: Response): Promise<
             const normalizedData = await normalizeZomatoOrder(
                 payload,
                 integration.restaurantId.toString(),
-                integration.branchId.toString()
+                integration.branchId!.toString()
             );
 
             const newOrder = await Order.create(normalizedData);
@@ -127,7 +127,7 @@ export const handleSwiggyWebhook = async (req: Request, res: Response): Promise<
             const normalizedData = await normalizeSwiggyOrder(
                 payload,
                 integration.restaurantId.toString(),
-                integration.branchId.toString()
+                integration.branchId!.toString()
             );
 
             const newOrder = await Order.create(normalizedData);
@@ -199,7 +199,7 @@ export const handleOndcWebhook = async (req: Request, res: Response): Promise<an
             const normalizedData = await normalizeOndcOrder(
                 payload,
                 integration.restaurantId.toString(),
-                integration.branchId.toString()
+                integration.branchId!.toString()
             );
 
             const newOrder = await Order.create(normalizedData);
@@ -244,9 +244,25 @@ export const handleOndcWebhook = async (req: Request, res: Response): Promise<an
 
 export const getIntegrations = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
-        const query = getBaseQuery(req);
+        const restaurantId = req.user!.restaurantId;
+        const requestedBranchId = (req.query.branchId as string) || (req.query._b as string);
+        
+        let query: any = { restaurantId };
+        
+        if (requestedBranchId && requestedBranchId !== 'all') {
+            // Show both branch-specific AND restaurant-wide (branchId=null) integrations
+            query.$or = [
+                { branchId: requestedBranchId },
+                { branchId: null }
+            ];
+        }
+        // If 'all', show everything (no branchId filter)
 
-        const integrations = await Integration.find(query).select('-webhookSecret -apiSecret');
+        const integrations = await Integration.find(query)
+            .select('-webhookSecret -apiSecret')
+            .populate('branchId', 'name')
+            .sort({ platform: 1, createdAt: -1 });
+
         return res.json(integrations);
     } catch (error) {
         return res.status(500).json({ error: 'Server error' });
@@ -281,22 +297,63 @@ export const syncMenu = async (req: AuthRequest, res: Response): Promise<any> =>
 
 export const createIntegration = async (req: AuthRequest, res: Response): Promise<any> => {
     try {
-        const { platform, branchId, apiKey, apiSecret, webhookSecret, restaurantIdOnPlatform, storeId, isActive, whatsappConfig } = req.body;
-        const integration = await Integration.create({
+        const { platform, branchId, branchIds, scope, apiKey, apiSecret, webhookSecret, restaurantIdOnPlatform, storeId, isActive, whatsappConfig, autoAccept, prepTimeMinutes } = req.body;
+        const restaurantId = req.user!.restaurantId;
+
+        const baseData = {
             platform,
-            branchId,
             apiKey,
             apiSecret,
             webhookSecret,
             restaurantIdOnPlatform: restaurantIdOnPlatform || storeId,
             storeId,
             whatsappConfig,
+            autoAccept: autoAccept ?? true,
+            prepTimeMinutes: prepTimeMinutes ?? 30,
             isActive: isActive ?? true,
-            status: 'ACTIVE',
-            restaurantId: req.user!.restaurantId,
-        });
+            status: 'ACTIVE' as const,
+            restaurantId,
+        };
+
+        // Scope: 'all' — restaurant-wide integration (branchId = null)
+        if (scope === 'all') {
+            const existing = await Integration.findOne({ restaurantId, branchId: null, platform });
+            if (existing) {
+                return res.status(409).json({ error: `A restaurant-wide ${platform} integration already exists` });
+            }
+            const integration = await Integration.create({ ...baseData, branchId: null });
+            return res.status(201).json(integration);
+        }
+
+        // Scope: 'multiple' — create one per selected branch
+        if (scope === 'multiple' && Array.isArray(branchIds) && branchIds.length > 0) {
+            const created = [];
+            const skipped = [];
+            for (const bid of branchIds) {
+                const existing = await Integration.findOne({ restaurantId, branchId: bid, platform });
+                if (existing) {
+                    skipped.push(bid);
+                    continue;
+                }
+                const integration = await Integration.create({ ...baseData, branchId: bid });
+                created.push(integration);
+            }
+            return res.status(201).json({ created, skipped, message: `Created ${created.length} integration(s)${skipped.length ? `, ${skipped.length} already existed` : ''}` });
+        }
+
+        // Scope: 'specific' (default) — single branch
+        const targetBranchId = branchId;
+        if (!targetBranchId) {
+            return res.status(400).json({ error: 'branchId is required for specific scope' });
+        }
+        const existing = await Integration.findOne({ restaurantId, branchId: targetBranchId, platform });
+        if (existing) {
+            return res.status(409).json({ error: `${platform} integration already exists for this branch` });
+        }
+        const integration = await Integration.create({ ...baseData, branchId: targetBranchId });
         return res.status(201).json(integration);
     } catch (error) {
+        console.error('createIntegration error:', error);
         return res.status(500).json({ error: 'Server error' });
     }
 };

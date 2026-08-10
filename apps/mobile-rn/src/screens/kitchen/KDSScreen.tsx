@@ -8,7 +8,7 @@ import { SocketEvents } from '../../constants/socketEvents';
 import { KOT, KOTItem } from '../../types';
 import KOTCard from '../../components/KOTCard';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 export default function KDSScreen() {
     const [kots, setKots] = useState<KOT[]>([]);
@@ -34,7 +34,7 @@ export default function KDSScreen() {
             ));
             // Vibrate phone when new order arrives
             Vibration.vibrate([0, 200, 100, 200]); // Pattern: wait, vibrate, wait, vibrate
-            // ReactNativeHapticFeedback.trigger('notificationWarning');
+            ReactNativeHapticFeedback.trigger('notificationWarning');
         });
 
         return unsub;
@@ -48,7 +48,7 @@ export default function KDSScreen() {
                 method: 'PATCH',
                 body: { status: nextStatus },
             });
-            // ReactNativeHapticFeedback.trigger('impactMedium');
+            ReactNativeHapticFeedback.trigger('impactMedium');
             // Refresh
             fetchKots();
         } catch (err) {

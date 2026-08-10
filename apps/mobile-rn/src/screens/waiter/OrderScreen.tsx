@@ -8,7 +8,9 @@ import { MenuItem, OrderItem } from '../../types';
 import { inrFormat } from '../../utils/formatters';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-// import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import ItemBottomSheet from '../../components/ItemBottomSheet';
 
 export default function OrderScreen() {
     const route = useRoute<any>();
@@ -19,6 +21,7 @@ export default function OrderScreen() {
     const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
     const [cart, setCart] = useState<OrderItem[]>([]);
     const [orderId, setOrderId] = useState<string | null>(existingOrderId || null);
+    const [selectedItemForSheet, setSelectedItemForSheet] = useState<MenuItem | null>(null);
 
     useEffect(() => { fetchMenu(); }, []);
 
@@ -29,16 +32,18 @@ export default function OrderScreen() {
     }, [selectedCatId, items]);
 
     const handleItemPress = (item: MenuItem) => {
-        // Light haptic tap
-        // ReactNativeHapticFeedback.trigger('impactLight');
+        ReactNativeHapticFeedback.trigger('impactLight');
+        setSelectedItemForSheet(item);
+    };
 
-        // Add first variant by default (for speed); in production, open bottom sheet for variant/notes
-        const variant = item.variants[0];
+    const handleAddItem = (variant: any, quantity: number, notes: string) => {
+        const item = selectedItemForSheet!;
+        ReactNativeHapticFeedback.trigger('impactLight');
         const existing = cart.find((c) => c.menuItemId === item.id && c.variantName === variant.name);
         if (existing) {
             setCart(cart.map((c) =>
                 c.menuItemId === item.id && c.variantName === variant.name
-                    ? { ...c, quantity: c.quantity + 1 }
+                    ? { ...c, quantity: c.quantity + quantity }
                     : c
             ));
         } else {
@@ -47,7 +52,7 @@ export default function OrderScreen() {
                 menuItemId: item.id,
                 name: item.name,
                 variantName: variant.name,
-                quantity: 1,
+                quantity: quantity,
                 priceAtOrderTime: variant.priceINR,
                 sentToKitchen: false,
             }]);
@@ -105,10 +110,22 @@ export default function OrderScreen() {
 
             {/* Cart Footer */}
             {cart.length > 0 && (
-                <TouchableOpacity style={styles.cartBar} onPress={handleProceed}>
-                    <Text style={styles.cartCount}>{cart.reduce((s, c) => s + c.quantity, 0)} items</Text>
-                    <Text style={styles.cartTotal}>{inrFormat(cartTotal)} → Review Order</Text>
-                </TouchableOpacity>
+                <Animated.View entering={SlideInDown.duration(300)} exiting={SlideOutDown.duration(300)} style={styles.cartBarWrapper}>
+                    <TouchableOpacity style={styles.cartBar} onPress={handleProceed}>
+                        <Text style={styles.cartCount}>{cart.reduce((s, c) => s + c.quantity, 0)} items</Text>
+                        <Text style={styles.cartTotal}>{inrFormat(cartTotal)} → Review Order</Text>
+                    </TouchableOpacity>
+                </Animated.View>
+            )}
+
+            {/* Bottom Sheet for Variants */}
+            {selectedItemForSheet && (
+                <ItemBottomSheet
+                    item={selectedItemForSheet}
+                    visible={!!selectedItemForSheet}
+                    onClose={() => setSelectedItemForSheet(null)}
+                    onAdd={handleAddItem}
+                />
             )}
         </SafeAreaView>
     );
@@ -126,7 +143,8 @@ const styles = StyleSheet.create({
     catTextActive: { color: Colors.white, fontWeight: '700' },
     row: { justifyContent: 'space-between' },
     cardWrapper: { width: '48%', marginBottom: Spacing.md },
-    cartBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: Colors.saffron, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: Spacing.xxl, paddingVertical: Spacing.lg, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
+    cartBarWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+    cartBar: { backgroundColor: Colors.saffron, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: Spacing.xxl, paddingVertical: Spacing.lg, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
     cartCount: { color: Colors.white, fontWeight: '600', fontSize: FontSize.base },
     cartTotal: { color: Colors.white, fontWeight: '800', fontSize: FontSize.md },
 });

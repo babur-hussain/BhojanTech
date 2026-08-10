@@ -17,6 +17,12 @@ import OrderScreen from '../screens/waiter/OrderScreen';
 import OrderSummaryScreen from '../screens/waiter/OrderSummaryScreen';
 import BillingScreen from '../screens/waiter/BillingScreen';
 
+// Owner sub-screens (pushed on top of tabs)
+import TableManageScreen from '../screens/owner/TableManageScreen';
+import InviteStaffScreen from '../screens/owner/InviteStaffScreen';
+import StaffDetailScreen from '../screens/owner/StaffDetailScreen';
+import AttendanceScreen from '../screens/owner/AttendanceScreen';
+
 const RootStack = createNativeStackNavigator();
 
 function AppContent() {
@@ -31,7 +37,7 @@ function AppContent() {
     switch (user.role) {
         case 'OWNER':
         case 'MANAGER':
-            return <OwnerTabs />;
+            return <OwnerStack />;
         case 'WAITER':
             return <WaiterStack />;
         case 'KITCHEN_STAFF':
@@ -39,6 +45,25 @@ function AppContent() {
         default:
             return <AuthStack />;
     }
+}
+
+// Owner gets a stack wrapping tabs to push management screens
+function OwnerStack() {
+    return (
+        <RootStack.Navigator screenOptions={{ headerShown: false }}>
+            <RootStack.Screen name="OwnerHome" component={OwnerTabs} />
+            {/* Table Management */}
+            <RootStack.Screen name="TableManage" component={TableManageScreen} />
+            {/* Staff Management */}
+            <RootStack.Screen name="InviteStaff" component={InviteStaffScreen} />
+            <RootStack.Screen name="StaffDetail" component={StaffDetailScreen} />
+            <RootStack.Screen name="Attendance" component={AttendanceScreen} />
+            {/* Owner can also view orders/billing */}
+            <RootStack.Screen name="OrderScreen" component={OrderScreen} />
+            <RootStack.Screen name="OrderSummary" component={OrderSummaryScreen} />
+            <RootStack.Screen name="Billing" component={BillingScreen} />
+        </RootStack.Navigator>
+    );
 }
 
 // Waiter gets a stack wrapping the tabs to allow pushing order/billing screens

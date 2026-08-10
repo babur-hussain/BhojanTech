@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
 import { Colors, Spacing, FontSize, Radius } from '../../constants/theme';
 import { api } from '../../services/api';
 import { Endpoints } from '../../constants/api';
@@ -99,13 +99,35 @@ export default function BillingScreen() {
             </ScrollView>
 
             <View style={styles.footer}>
-                <TouchableOpacity
-                    style={[styles.payBtn, loading && styles.payBtnDisabled]}
-                    onPress={handlePay}
-                    disabled={loading || !preview}
-                >
-                    <Text style={styles.payBtnText}>{loading ? 'Processing...' : `Pay ${inrFormat(preview?.grandTotalINR || 0)}`}</Text>
-                </TouchableOpacity>
+                {paymentMode === 'UPI' ? (
+                    <TouchableOpacity
+                        style={[styles.payBtn, { backgroundColor: Colors.upi }, loading && styles.payBtnDisabled]}
+                        onPress={async () => {
+                            const upiLink = `upi://pay?pa=restaurant@upi&pn=Restaurant&am=${preview?.grandTotalINR}&cu=INR`;
+                            try {
+                                await Linking.openURL(upiLink);
+                                // After successful redirect, we would ideally verify. For now, we proceed to handlePay.
+                                handlePay();
+                            } catch {
+                                Alert.alert('UPI Error', 'No UPI app found on your phone. Please verify payment manually.', [
+                                    { text: 'Verify Manually', onPress: handlePay },
+                                    { text: 'Cancel', style: 'cancel' }
+                                ]);
+                            }
+                        }}
+                        disabled={loading || !preview}
+                    >
+                        <Text style={styles.payBtnText}>{loading ? 'Processing...' : `Open UPI App & Pay ${inrFormat(preview?.grandTotalINR || 0)}`}</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <TouchableOpacity
+                        style={[styles.payBtn, loading && styles.payBtnDisabled]}
+                        onPress={handlePay}
+                        disabled={loading || !preview}
+                    >
+                        <Text style={styles.payBtnText}>{loading ? 'Processing...' : `Pay ${inrFormat(preview?.grandTotalINR || 0)}`}</Text>
+                    </TouchableOpacity>
+                )}
             </View>
         </SafeAreaView>
     );

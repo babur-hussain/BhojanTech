@@ -4,7 +4,9 @@ import sharp from 'sharp';
 import { IInvoice } from '../models/Invoice';
 import { IRestaurant } from '../models/Restaurant';
 
-export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): Promise<Buffer> => {
+import { IBranch } from '../models/Branch';
+
+export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant, branch?: IBranch | null): Promise<Buffer> => {
     return new Promise(async (resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
@@ -64,13 +66,26 @@ export const generateInvoicePDF = (invoice: IInvoice, restaurant: IRestaurant): 
                 doc.moveDown(0.5);
             }
 
+            const displayName = branch ? `${restaurant.name} - ${branch.name}` : `${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`;
+            const displayAddress = branch?.address || restaurant.address || 'Address Not Available';
+            const displayPhone = branch?.phone || restaurant.contactNumber || 'NA';
+
             doc.font('Helvetica-Bold').fontSize(12).fillColor('#374151');
-            doc.text(`${restaurant.name} - ${invoice.branchId ? 'Branch' : 'HQ'}`, 50, doc.y, { align: 'center' });
+            doc.text(displayName, 50, doc.y, { align: 'center' });
             doc.moveDown(0.2);
             doc.font('Helvetica').fontSize(9).fillColor('#6B7280');
-            doc.text(restaurant.address || 'Address Not Available', 50, doc.y, { align: 'center' });
+            doc.text(displayAddress, 50, doc.y, { align: 'center' });
             doc.moveDown(0.2);
-            doc.text(`Contact: ${restaurant.contactNumber || 'NA'}`, 50, doc.y, { align: 'center' });
+            doc.text(`Contact: ${displayPhone}`, 50, doc.y, { align: 'center' });
+
+            if (branch?.gstin) {
+                 doc.moveDown(0.1);
+                 doc.text(`GSTIN: ${branch.gstin}`, 50, doc.y, { align: 'center' });
+            }
+            if (branch?.fssaiNumber) {
+                 doc.moveDown(0.1);
+                 doc.text(`FSSAI: ${branch.fssaiNumber}`, 50, doc.y, { align: 'center' });
+            }
 
             // --- Black Banner ---
             doc.moveDown(1.5);

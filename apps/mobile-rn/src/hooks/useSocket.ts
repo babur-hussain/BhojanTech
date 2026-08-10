@@ -4,7 +4,7 @@ import { SocketEvents } from '../constants/socketEvents';
 import { useOrdersStore } from '../store/ordersStore';
 import { useTablesStore } from '../store/tablesStore';
 import { useNotificationsStore } from '../store/notificationsStore';
-// import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 export function useSocket() {
     const addOrder = useOrdersStore((s) => s.addOrder);
@@ -17,7 +17,7 @@ export function useSocket() {
             onSocketEvent(SocketEvents.NEW_ORDER, (data: any) => {
                 addOrder(data);
                 incrementUnread();
-                // ReactNativeHapticFeedback.trigger('notificationSuccess');
+                ReactNativeHapticFeedback.trigger('notificationSuccess');
             }),
             onSocketEvent(SocketEvents.ORDER_UPDATED, (data: any) => {
                 updateOrder(data);
@@ -28,7 +28,7 @@ export function useSocket() {
             onSocketEvent(SocketEvents.ITEM_STATUS_CHANGED, (data: any) => {
                 // Kitchen or waiter notification
                 incrementUnread();
-                // ReactNativeHapticFeedback.trigger('notificationWarning');
+                ReactNativeHapticFeedback.trigger('notificationWarning');
             }),
             onSocketEvent(SocketEvents.INVENTORY_ALERT, (data: any) => {
                 incrementUnread();

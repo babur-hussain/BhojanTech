@@ -3,6 +3,8 @@ import { Invoice } from '../models/Invoice';
 import { Restaurant } from '../models/Restaurant';
 import { generateInvoicePDF } from '../services/pdfService';
 
+import { Branch } from '../models/Branch';
+
 /**
  * Public route to download an invoice as a PDF.
  * This is used so that Meta / LoomiFlow can fetch the document to send via WhatsApp.
@@ -25,7 +27,12 @@ export const downloadInvoicePDF = async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Restaurant not found' });
         }
 
-        const pdfBuffer = await generateInvoicePDF(invoice, restaurant);
+        let branch = null;
+        if (invoice.branchId) {
+            branch = await Branch.findById(invoice.branchId);
+        }
+
+        const pdfBuffer = await generateInvoicePDF(invoice, restaurant, branch);
 
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);

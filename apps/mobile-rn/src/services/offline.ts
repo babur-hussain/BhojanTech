@@ -6,10 +6,10 @@
  * - Queues offline actions and syncs when online
  */
 
-// import NetInfo from '@react-native-community/netinfo';
-// import { MMKV } from 'react-native-mmkv';
+import NetInfo from '@react-native-community/netinfo';
+import { MMKV } from 'react-native-mmkv';
 
-// const storage = new MMKV();
+const storage = new MMKV();
 
 const OFFLINE_QUEUE_KEY = 'offline_action_queue';
 
@@ -25,16 +25,15 @@ export interface OfflineAction {
 
 export function cacheSet(key: string, value: any) {
     try {
-        // storage.set(key, JSON.stringify(value));
+        storage.set(key, JSON.stringify(value));
         console.log(`[Offline] Cache set: ${key}`);
     } catch { }
 }
 
 export function cacheGet<T = any>(key: string): T | null {
     try {
-        // const raw = storage.getString(key);
-        // return raw ? JSON.parse(raw) : null;
-        return null;
+        const raw = storage.getString(key);
+        return raw ? JSON.parse(raw) : null;
     } catch {
         return null;
     }
@@ -84,11 +83,9 @@ export function getIsConnected() {
 }
 
 export function setupConnectivityListener(onChange: (connected: boolean) => void) {
-    // return NetInfo.addEventListener(state => {
-    //   const connected = state.isConnected ?? true;
-    //   isConnected = connected;
-    //   onChange(connected);
-    // });
-    console.log('[Offline] Connectivity listener stub');
-    return () => { };
+    return NetInfo.addEventListener(state => {
+        const connected = state.isConnected ?? true;
+        isConnected = connected;
+        onChange(connected);
+    });
 }

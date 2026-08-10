@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "546344163655",
+    "project_id": "bhojantech-c2aae",
+    "storage_bucket": "bhojantech-c2aae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:546344163655:android:e0a0b34e5209f7a6701462",
+        "android_client_info": {
+          "package_name": "com.bhojantech.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "546344163655-o5b9645chs8s0tubd087046djrspb1cf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKpdBuzuUrEJQ1APmvqQKE_3ajToNTJs8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "546344163655-o5b9645chs8s0tubd087046djrspb1cf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
