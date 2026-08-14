@@ -9,8 +9,8 @@ const openai = new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY || 'dummy_key'
 });
 
-const getModel = () => process.env.OPENROUTER_MODEL || 'google/gemma-4-31b-it:free';
-const FALLBACK_MODEL = 'minimax/minimax-m2.5:free';
+const getModel = () => process.env.OPENROUTER_MODEL || 'meta-llama/llama-3-8b-instruct:free';
+const FALLBACK_MODEL = 'meta-llama/llama-3-8b-instruct:free';
 
 export const gatherRestaurantContext = async (restaurantId: mongoose.Types.ObjectId) => {
     const startOfDay = new Date();
@@ -94,8 +94,8 @@ export const handleAIChatStream = async (restaurantId: mongoose.Types.ObjectId, 
             }
         }
     } catch (err: any) {
-        if (err.status === 429) {
-            console.log("Primary model rate limited, retrying with fallback model:", FALLBACK_MODEL);
+        console.log(`Primary model error (${err.status || err.message}), retrying with fallback model:`, FALLBACK_MODEL);
+        try {
             const fallbackStream = await openai.chat.completions.create({
                 model: FALLBACK_MODEL,
                 max_tokens: 1024,
@@ -110,8 +110,9 @@ export const handleAIChatStream = async (restaurantId: mongoose.Types.ObjectId, 
                     onUpdate(text);
                 }
             }
-        } else {
-            throw err;
+        } catch (fallbackErr: any) {
+            console.error("Fallback model also failed:", fallbackErr);
+            throw fallbackErr;
         }
     }
 
@@ -164,8 +165,8 @@ export const generateDailyInsights = async (restaurantId: mongoose.Types.ObjectI
             ],
         });
     } catch (err: any) {
-        if (err.status === 429) {
-            console.log("Primary model rate limited, retrying insights with fallback model:", FALLBACK_MODEL);
+        console.log(`Primary model error (${err.status || err.message}), retrying insights with fallback model:`, FALLBACK_MODEL);
+        try {
             response = await openai.chat.completions.create({
                 model: FALLBACK_MODEL,
                 max_tokens: 500,
@@ -174,8 +175,9 @@ export const generateDailyInsights = async (restaurantId: mongoose.Types.ObjectI
                     { role: 'user', content: prompt }
                 ],
             });
-        } else {
-            throw err;
+        } catch (fallbackErr: any) {
+            console.error("Fallback model also failed:", fallbackErr);
+            throw fallbackErr;
         }
     }
 
@@ -209,8 +211,8 @@ export const generateMenuSuggestions = async (restaurantId: mongoose.Types.Objec
             ],
         });
     } catch (err: any) {
-        if (err.status === 429) {
-            console.log("Primary model rate limited, retrying menu suggestions with fallback model:", FALLBACK_MODEL);
+        console.log(`Primary model error (${err.status || err.message}), retrying menu suggestions with fallback model:`, FALLBACK_MODEL);
+        try {
             response = await openai.chat.completions.create({
                 model: FALLBACK_MODEL,
                 max_tokens: 800,
@@ -219,8 +221,9 @@ export const generateMenuSuggestions = async (restaurantId: mongoose.Types.Objec
                     { role: 'user', content: prompt }
                 ],
             });
-        } else {
-            throw err;
+        } catch (fallbackErr: any) {
+            console.error("Fallback model also failed:", fallbackErr);
+            throw fallbackErr;
         }
     }
 

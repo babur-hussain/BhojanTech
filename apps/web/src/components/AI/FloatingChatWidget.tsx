@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MessageSquare, X, Send, Mic, RefreshCw, Menu, PlusCircle, Clock } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 interface Message {
     id: string;
@@ -22,6 +23,11 @@ const QUICK_PROMPTS = [
 const DUMMY_RESTAURANT_ID = '64abcd1234567890abcd1234';
 
 export default function FloatingChatWidget() {
+    const { user } = useAuth();
+    const API_URL = import.meta.env.VITE_API_URL || 'https://server.bhojantech.lfvs.in/api';
+    const currentRestaurantId = user?.restaurantId || DUMMY_RESTAURANT_ID;
+    const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -33,7 +39,9 @@ export default function FloatingChatWidget() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const fetchSessions = () => {
-        fetch(`https://server.bhojantech.lfvs.in/api/ai/chat/sessions?restaurantId=${DUMMY_RESTAURANT_ID}`)
+        fetch(`${API_URL}/ai/chat/sessions?restaurantId=${currentRestaurantId}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        })
             .then(r => r.json())
             .then(data => {
                 if (Array.isArray(data)) setSessions(data);
@@ -49,7 +57,9 @@ export default function FloatingChatWidget() {
         setSessionId(sid);
         setShowSidebar(false);
         try {
-            const res = await fetch(`https://server.bhojantech.lfvs.in/api/ai/chat/sessions/${sid}`);
+            const res = await fetch(`${API_URL}/ai/chat/sessions/${sid}`, {
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            });
             const data = await res.json();
             if (Array.isArray(data)) {
                 setMessages(data.map((m: any, i: number) => ({
@@ -122,11 +132,14 @@ export default function FloatingChatWidget() {
         setMessages(prev => [...prev, { id: assistantMsgId, role: 'assistant', content: '' }]);
 
         try {
-            const response = await fetch('https://server.bhojantech.lfvs.in/api/ai/chat', {
+            const response = await fetch(`${API_URL}/ai/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` })
+                },
                 body: JSON.stringify({
-                    restaurantId: DUMMY_RESTAURANT_ID, // Use real restaurantId from user context in prod
+                    restaurantId: currentRestaurantId,
                     messages: apiMessages,
                     sessionId: sessionId
                 }),
